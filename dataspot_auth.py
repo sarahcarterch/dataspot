@@ -1,8 +1,9 @@
 import os
 import requests
-import ods_utils_py as ods_utils
+import base64
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
+from src.common import requests_post
 
 
 class DataspotAuth:
@@ -11,9 +12,9 @@ class DataspotAuth:
     def __init__(self):
         load_dotenv()
         self.token_url = os.getenv("DATASPOT_AUTHENTICATION_TOKEN_URL")
-        self.client_id = os.getenv("DATASPOT_EDITOR_CLIENT_ID")
-        self.username = os.getenv("DATASPOT_EDITOR_USERNAME")
-        self.password = os.getenv("DATASPOT_EDITOR_PASSWORD")
+        self.client_id = os.getenv("DATASPOT_CLIENT_ID")
+        self.username = os.getenv("DATASPOT_ADMIN_USERNAME")
+        self.password = os.getenv("DATASPOT_ADMIN_PASSWORD")
         self.token = None
         self.token_expires_at = None
 
@@ -32,7 +33,7 @@ class DataspotAuth:
         return datetime.now() < self.token_expires_at - timedelta(minutes=5)
 
     def _request_new_bearer_token(self):
-        """Request a new bearer token from Azure AD."""
+        """Request a new bearer token."""
         data = {
             'client_id': self.client_id,
             'grant_type': 'password',
@@ -42,11 +43,11 @@ class DataspotAuth:
         }
 
         try:
-            response = ods_utils._requests_utils.requests_post(self.token_url, data=data)
+            response = requests_post(self.token_url, data=data)
             response.raise_for_status()
             
             token_data = response.json()
-            self.token = token_data['access_token']
+            self.token = token_data['id_token']
             # Calculate token expiration time
             expires_in = int(token_data.get('expires_in', 3600))
             self.token_expires_at = datetime.now() + timedelta(seconds=expires_in)
@@ -55,6 +56,15 @@ class DataspotAuth:
 
         except requests.exceptions.RequestException as e:
             raise Exception(f"Failed to obtain authentication token: {str(e)}")
+
+    def get_headers(self):
+        """Get all required authentication headers."""
+        token = self.get_bearer_token()
+        
+        return {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json'
+        }
 
 if __name__=="__main__":
     auth = DataspotAuth()
