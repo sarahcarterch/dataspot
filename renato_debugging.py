@@ -15,17 +15,20 @@ def main():
     client = DataspotClient(base_url)
 
     # Settings for download
-    relative_path = '/datasets/e190b4a9-5b56-4ad0-ad04-82b990c91fb6?language=de&format=json'
+    relative_path = '/schemes/0f16581d-ddff-4815-a423-3628baa326cc/download'
+    params = {'language': 'de',
+              'format': 'json'}
 
     # Debug: Print headers and URL
     headers = client.auth.get_headers()
     full_url = f"{base_url}{relative_path}"
     print("Making request to:", full_url)
+    print("Also passing parameters:", params)
     print("Headers:", {k: v if k != 'Authorization' else 'Bearer [REDACTED]' for k, v in headers.items()})
 
     # Test download
     try:
-        data = client.download_from_dataspot(relative_path)
+        data = client.download_from_dataspot(relative_path, params)
         print("Successfully downloaded data:")
         print(json.dumps(data, indent=2))
     except Exception as e:

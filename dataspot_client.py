@@ -9,12 +9,13 @@ class DataspotClient:
         self.base_url = base_url
         self.auth = DataspotAuth()
     
-    def download_from_dataspot(self, relative_path):
+    def download_from_dataspot(self, relative_path, params: dict[str, str] = None):
         """
         Download data from Dataspot API.
         
         Args:
             relative_path (str): The relative path for the API endpoint including query parameters
+            params (dict[str, str]): The parameters that should be passed in the url, i.e. everything after the ? in the url
             
         Returns:
             dict: JSON response from the API
@@ -26,7 +27,7 @@ class DataspotClient:
         endpoint = f"{self.base_url}{relative_path}"
         headers = self.auth.get_headers()
         
-        response = requests_get(endpoint, headers=headers)
+        response = requests_get(endpoint, headers=headers, params=params)
         
         try:
             return response.json()
