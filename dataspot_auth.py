@@ -1,6 +1,5 @@
 import os
 import requests
-import base64
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from src.common import requests_post
