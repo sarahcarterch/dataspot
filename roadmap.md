@@ -17,11 +17,23 @@
  - Implement basic error handling
  - Add logging for API operations
 
+### TODO: Datennutzungskatalog (DNK) Workflow
+ - Download from d.
+ - Download and save from d.
+ - TODO: Upload to d.
+ - TODO: Download from ods
+ - TODO: Transform ods to d. format
+
+### TODO: Technisches Datenmodell (TDM) Workflow
+ - Download from d.
+ - TODO: Download and save from d.
+ - TODO: Upload to d.
+ - TODO: Download from ods
+ - TODO: Transform ods to d. format
+
 ### TODO: Implement data retrieval methods
  - Create method to list available datasets
  - Implement method to get dataset metadata
- - Add method to download specific dataset
- - Handle pagination if applicable
  - Add response validation
 
 ### TODO: Add data transformation layer (for future ODS integration)

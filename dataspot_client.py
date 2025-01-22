@@ -1,6 +1,10 @@
 from dataspot_auth import DataspotAuth
 from src.common import requests_get
 import json
+import os
+
+def url_join(*parts: str) -> str:
+    return "/".join([part.strip("/") for part in parts])
 
 class DataspotClient:
     """Client for interacting with the Dataspot API."""
@@ -8,14 +12,15 @@ class DataspotClient:
     def __init__(self, base_url):
         self.base_url = base_url
         self.auth = DataspotAuth()
+        self.dnk_scheme_id = "0f16581d-ddff-4815-a423-3628baa326cc"
     
-    def download_from_dataspot(self, relative_path, params: dict[str, str] = None):
+    def download(self, relative_path, params: dict[str, str] = None) -> list[dict[str, str]]:
         """
         Download data from Dataspot API.
         
         Args:
-            relative_path (str): The relative path for the API endpoint including query parameters
-            params (dict[str, str]): The parameters that should be passed in the url, i.e. everything after the ? in the url
+            relative_path (str): The relative path for the API endpoint
+            params (dict[str, str]): The query parameters that should be passed in the url, i.e. everything after the ? in the url
             
         Returns:
             dict: JSON response from the API
@@ -24,7 +29,7 @@ class DataspotClient:
             requests.exceptions.RequestException: If the request fails
             json.JSONDecodeError: If the response is not valid JSON
         """
-        endpoint = f"{self.base_url}{relative_path}"
+        endpoint = url_join(self.base_url, relative_path)
         headers = self.auth.get_headers()
         
         response = requests_get(endpoint, headers=headers, params=params)
@@ -37,3 +42,41 @@ class DataspotClient:
                 e.doc, 
                 e.pos
             )
+
+    def download_dnk(self, language: str = "de") -> list[dict[str, str]]:
+        """
+        Download the Datennutzungskatalog (DNK) from Dataspot.
+        
+        Args:
+            language (str): Language code for the DNK (default: "de")
+            
+        Returns:
+            dict: The DNK data in JSON format
+        """
+        relative_path = url_join('schemes', self.dnk_scheme_id, 'download')
+        params = {
+            'language': language,
+            'format': 'json'
+        }
+        return self.download(relative_path, params)
+    
+    def save_dnk(self, output_dir: str = "tmp", language: str = "de") -> str:
+        """
+        Download and save the DNK to a file.
+        
+        Args:
+            output_dir (str): Directory to save the file (default: "tmp")
+            language (str): Language code for the DNK (default: "de")
+            
+        Returns:
+            str: Path to the saved file
+        """
+        os.makedirs(output_dir, exist_ok=True)
+        
+        dnk_data = self.download_dnk(language)
+        
+        output_path = os.path.join(output_dir, "Datennutzungskatalog.json")
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(dnk_data, f, ensure_ascii=False, indent=2)
+            
+        return output_path
