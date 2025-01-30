@@ -1,5 +1,7 @@
+import logging
+
 from dataspot_auth import DataspotAuth
-from src.common import requests_get
+from src.common import requests_get, requests_delete
 import json
 import os
 
@@ -12,7 +14,9 @@ class DataspotClient:
     def __init__(self, base_url):
         self.base_url = base_url
         self.auth = DataspotAuth()
-        self.dnk_scheme_id = "0f16581d-ddff-4815-a423-3628baa326cc"
+        self.api_type = 'rest'
+        self.database_name = 'test-api-renato'
+        self.dnk_scheme_name = 'Datennutzungskatalog'
     
     def download(self, relative_path, params: dict[str, str] = None) -> list[dict[str, str]]:
         """
@@ -53,7 +57,7 @@ class DataspotClient:
         Returns:
             dict: The DNK data in JSON format
         """
-        relative_path = url_join('schemes', self.dnk_scheme_id, 'download')
+        relative_path = url_join('schemes', self.dnk_scheme_name, 'download')
         params = {
             'language': language,
             'format': 'json'
@@ -80,3 +84,26 @@ class DataspotClient:
             json.dump(dnk_data, f, ensure_ascii=False, indent=2)
             
         return output_path
+
+    def teardown_dnk(self) -> None:
+        """
+        Delete all collections from the DNK scheme, but keep the empty DNK.
+        
+        Raises:
+            requests.exceptions.RequestException: If the request fails
+        """
+        relative_path = url_join(self.api_type, self.database_name, 'schemes', self.dnk_scheme_name, 'collections')
+        endpoint = url_join(self.base_url, relative_path)
+        headers = self.auth.get_headers()
+        
+        # Get all collections
+        response = requests_get(endpoint, headers=headers)
+        response_json = response.json()
+        response_json_collections = response_json.get('_embedded', {}).get('collections', {})
+        collections = [item['_links']['self']['href'] for item in response_json_collections]
+
+        # Delete each collection
+        for collection_relative_path in collections:
+            collection_url = url_join(self.base_url, collection_relative_path)
+            logging.debug(f"Deleting collection: {collection_url}")
+            requests_delete(collection_url, headers=headers)
