@@ -7,7 +7,7 @@ Frequent updates of details of already published datasets (e.g. last_updated fie
 
 The columns should be (so far): uuid,lastactl,lastpub
 
-This is put on hold for the moment, as lastactl does not really need to be in dataspot.
+This is put on hold for the moment, as lastactl does not really need to be in dataspot. (?)
 
 ## How to integrate an `int` environment into `prod` (work-in-progress)
 When integrating a `dev` into `prod`, first we need to clone the `dev` into an `int`. 
