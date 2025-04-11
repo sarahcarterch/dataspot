@@ -1425,3 +1425,12 @@ Deployment:
         EXKL:
           label: exkludiert
           labelEn: excluded
+
+Theme:
+  instances:
+    DARK:
+      appBarBackgroundColor: ff0000
+      colorScheme: DARK
+    LIGHT:
+      appBarBackgroundColor: ff0000
+      colorScheme: LIGHT
