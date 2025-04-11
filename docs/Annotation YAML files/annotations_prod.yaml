@@ -448,7 +448,7 @@ Dataset:
               cardinality: MANY
               literals:
                 "001":
-                  label: Basiskarten
+                  label: Basiskarten, Landschaftsmodelle
                 "002":
                   label: Bodenbedeckung, Bodennutzung
                 "003":
@@ -458,11 +458,11 @@ Dataset:
                 "005":
                   label: Höhen
                 "006":
-                  label: Politische und Administrative Grenzen
+                  label: Politische und administrative Grenzen
                 "007":
                   label: Raumplanung, Raumentwicklung
                 "008":
-                  label: Grundstückkataster
+                  label: Grundstückskataster
                 "009":
                   label: Geologie
                 "010":
@@ -672,7 +672,7 @@ Dataset:
               cardinality: MANY
               literals:
                 "001":
-                  label: Basiskarten
+                  label: Basiskarten, Landschaftsmodelle
                 "002":
                   label: Bodenbedeckung, Bodennutzung
                 "003":
@@ -682,11 +682,11 @@ Dataset:
                 "005":
                   label: Höhen
                 "006":
-                  label: Politische und Administrative Grenzen
+                  label: Politische und administrative Grenzen
                 "007":
                   label: Raumplanung, Raumentwicklung
                 "008":
-                  label: Grundstückkataster
+                  label: Grundstückskataster
                 "009":
                   label: Geologie
                 "010":
