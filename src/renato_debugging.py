@@ -337,7 +337,7 @@ def main_6_analyze_ods_metadata():
     logging.info("ODS metadata analysis completed")
     return dataset
 
-def main_7_test_bulk_few_ods_datasets_upload():
+def main_7_test_bulk_few_ods_datasets_upload(cleanup_after_test=True):
     """
     Test the bulk upload of specific ODS datasets to Dataspot.
     
@@ -347,7 +347,10 @@ def main_7_test_bulk_few_ods_datasets_upload():
     3. Creates a list of transformed datasets
     4. Calls bulk_create_or_update_datasets with this list
     5. Includes sleep statements for manual verification
-    6. Cleans up datasets at the end
+    6. Cleans up datasets at the end if cleanup_after_test is True
+
+    Args:
+        cleanup_after_test (bool, optional): Whether to delete datasets after testing. Defaults to True.
     
     Returns:
         List[str]: The list of dataset IDs that were uploaded
@@ -435,20 +438,21 @@ def main_7_test_bulk_few_ods_datasets_upload():
         return dataset_ids
         
     finally:
-        # Clean up: Delete all test datasets
-        logging.info("Cleaning up: Deleting uploaded datasets...")
-        for dataset_id in dataset_ids:
-            try:
-                delete_success = dataspot_client.delete_dataset(
-                    ods_id=dataset_id,
-                    fail_if_not_exists=False
-                )
-                logging.info(f"Deleted dataset {dataset_id}: {delete_success}")
-            except Exception as e:
-                logging.warning(f"Failed to delete dataset {dataset_id}: {str(e)}")
-        logging.info("Cleanup completed")
+        if cleanup_after_test:
+            # Clean up: Delete all test datasets
+            logging.info("Cleaning up: Deleting uploaded datasets...")
+            for dataset_id in dataset_ids:
+                try:
+                    delete_success = dataspot_client.delete_dataset(
+                        ods_id=dataset_id,
+                        fail_if_not_exists=False
+                    )
+                    logging.info(f"Deleted dataset {dataset_id}: {delete_success}")
+                except Exception as e:
+                    logging.warning(f"Failed to delete dataset {dataset_id}: {str(e)}")
+            logging.info("Cleanup completed")
 
-def main_8_test_bulk_ods_datasets_upload():
+def main_8_test_bulk_ods_datasets_upload(cleanup_after_test=True):
     """
     Test the bulk upload of all public ODS datasets to Dataspot.
     
@@ -458,6 +462,9 @@ def main_8_test_bulk_ods_datasets_upload():
     3. Collects all datasets and uploads them at once
     4. Includes progress reporting with counters
     5. Provides options to limit the number of datasets processed
+
+    Args:
+        cleanup_after_test (bool, optional): Whether to delete datasets after testing. Defaults to True.
     
     Returns:
         List[str]: The list of dataset IDs that were uploaded
@@ -470,7 +477,6 @@ def main_8_test_bulk_ods_datasets_upload():
     # Configuration
     max_datasets = None  # Maximum number of datasets to process (set to None for all)
     request_delay = 1.0  # Delay in seconds between API calls
-    cleanup_after_test = True  # Whether to delete datasets after testing
     
     # Get all public dataset IDs
     logging.info("Retrieving all public dataset IDs...")
