@@ -77,7 +77,7 @@ class DNKClient(BaseDataspotClient):
                 for dataset in datasets:
 
                     # Extract the ID from customProperties
-                    ods_id = dataset.get('ID')
+                    ods_id = dataset.get('ODS_ID')
                     
                     # Skip if this dataset doesn't have an ODS ID
                     if not ods_id:
@@ -137,10 +137,10 @@ class DNKClient(BaseDataspotClient):
         self.preload_mapping_from_dnk()
         
         # Get ODS ID from dataset
-        ods_id = dataset.to_json().get('customProperties', {}).get('ID')
+        ods_id = dataset.to_json().get('customProperties', {}).get('ODS_ID')
         if not ods_id:
-            logging.error("Dataset missing 'ID' property required for ODS ID")
-            raise ValueError("Dataset must have an 'ID' property to use as ODS ID")
+            logging.error("Dataset missing 'ODS_ID' property required for ODS ID")
+            raise ValueError("Dataset must have an 'ODS_ID' property to use as ODS ID")
         
         # Check if dataset with this ODS ID already exists
         existing_entry = self.mapping.get_entry(ods_id)
@@ -231,10 +231,10 @@ class DNKClient(BaseDataspotClient):
         ods_ids = []
         for dataset in datasets:
             # Get ODS ID from dataset
-            ods_id = dataset.to_json().get('customProperties', {}).get('ID')
+            ods_id = dataset.to_json().get('customProperties', {}).get('ODS_ID')
             if not ods_id:
-                logging.error("Dataset missing 'ID' property required for ODS ID")
-                raise ValueError("All datasets must have an 'ID' property to use as ODS ID")
+                logging.error("Dataset missing 'ODS_ID' property required for ODS ID")
+                raise ValueError("All datasets must have an 'ODS_ID' property to use as ODS ID")
             
             ods_ids.append(ods_id)
             
@@ -317,7 +317,7 @@ class DNKClient(BaseDataspotClient):
                 updated_count = 0
                 for dataset in datasets:
                     # Extract the ID from customProperties
-                    ods_id = dataset.get('ID')
+                    ods_id = dataset.get('ODS_ID')
                     
                     # Skip if this dataset doesn't have an ODS ID or isn't in our target list
                     if not ods_id or ods_id not in ods_ids:
@@ -376,10 +376,10 @@ class DNKClient(BaseDataspotClient):
             json.JSONDecodeError: If response parsing fails
         """
         # Get ODS ID from dataset
-        ods_id = dataset.to_json().get('customProperties', {}).get('ID')
+        ods_id = dataset.to_json().get('customProperties', {}).get('ODS_ID')
         if not ods_id:
-            logging.error("Dataset missing 'ID' property required for ODS ID")
-            raise ValueError("Dataset must have an 'ID' property to use as ODS ID")
+            logging.error("Dataset missing 'ODS_ID' property required for ODS ID")
+            raise ValueError("Dataset must have an 'ODS_ID' property to use as ODS ID")
         
         # Read the dataset title
         title = dataset.to_json()['label']
@@ -444,10 +444,10 @@ class DNKClient(BaseDataspotClient):
             raise ValueError(f"Invalid update_strategy: {update_strategy}. Must be one of {valid_strategies}")
         
         # Get ODS ID from dataset
-        ods_id = dataset.to_json().get('customProperties', {}).get('ID')
+        ods_id = dataset.to_json().get('customProperties', {}).get('ODS_ID')
         if not ods_id:
-            logging.error("Dataset missing 'ID' property required for ODS ID")
-            raise ValueError("Dataset must have an 'ID' property to use as ODS ID")
+            logging.error("Dataset missing 'ODS_ID' property required for ODS ID")
+            raise ValueError("Dataset must have an 'ODS_ID' property to use as ODS ID")
         
         # Read the dataset title
         title = dataset.to_json()['label']

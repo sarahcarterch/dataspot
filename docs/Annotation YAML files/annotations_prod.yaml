@@ -494,7 +494,7 @@ Dataset:
               baseType: STRING
               group: OGD
               order: 70
-            ID:
+            ODS_ID:
               label: Datenportal-Identifikation
               title:
               baseType: STRING
@@ -793,7 +793,7 @@ Dataset:
               baseType: STRING
               group: OGD
               order: 70
-            ID:
+            ODS_ID:
               label: Datenportal-Identifikation
               title:
               baseType: STRING
