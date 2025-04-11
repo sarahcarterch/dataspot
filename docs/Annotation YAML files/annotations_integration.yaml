@@ -30,7 +30,7 @@ Dataset:
     PERSOND:
       label: Personendaten
       order: 20
-      icon: person    
+      icon: person
     AUFBEW:
       label: Archivierung
       order: 30
@@ -60,13 +60,12 @@ Dataset:
       title: Schlüsselwörter, die den Inhalt beschreiben (können für die Suche genutzt werden) (GEMET, Weitere)
     temporalStart:
       title: Datum, an dem der Datensatz ursprünglich erstellt wurde
-    accrualPeriodicity: 
+    accrualPeriodicity:
       label: Aktualisierungszyklus
       labelEn: Accrual periodicity
       title: Frequenz der Aktualisierung der Attribute im Datensatz
       titleEn: The frequency at which dataset is published
       cardinality: ONE
-       
       literals:
         001:
           label: deprecated-001
@@ -307,9 +306,9 @@ Dataset:
         http://publications.europa.eu/resource/authority/frequency/NEVER:
           label: niemals
           title: Die Daten werden niemals aktualisiert
-          order: 39       
+          order: 39
 
-## DATENSATZ-TYP ##             
+## DATENSATZ-TYP ##
     stereotype:
       label: Datensatztyp
       title: Der Datensatztyp unterstützt verschiedene Anwendungsfälle und bestimmt damit den Umfang der Metadatenfelder.
@@ -330,7 +329,7 @@ Dataset:
                 "001":
                   label: CC0 1.0
                 "002":
-                  label: CC BY                  
+                  label: CC BY
                 "003":
                   label: CC BY 3.0 CH
                 "004":
@@ -338,10 +337,10 @@ Dataset:
                 "005":
                   label: CC BY 4.0
                 "006":
-                  label: CC BY 4.0 + OpenStreetMap                  
+                  label: CC BY 4.0 + OpenStreetMap
             RECHT:
               label: Rechte
-              title: 
+              title:
               group: OGD
               order: 30
               literals:
@@ -355,7 +354,7 @@ Dataset:
                   label: http://dcat-ap.ch/vocabulary/licenses/terms_by_ask
             THEMA:
               label: Themen
-              title: 
+              title:
               group: OGD
               order: 40
               cardinality: MANY
@@ -379,7 +378,7 @@ Dataset:
                 "009":
                   label: Arbeit, Erwerb
                 "010":
-                  label: Volkswirtschaft 
+                  label: Volkswirtschaft
                 "011":
                   label: Verwaltung
                 "012":
@@ -410,13 +409,13 @@ Dataset:
                   label: Tourismus
             REF:
               label: Referenz
-              title: 
+              title:
               baseType: STRING
               group: OGD
               order: 60
             ZUSCH:
               label: Zuschreibungen
-              title: 
+              title:
               baseType: STRING
               group: OGD
               order: 70
