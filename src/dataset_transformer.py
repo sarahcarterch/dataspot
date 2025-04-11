@@ -148,19 +148,21 @@ def transform_ods_to_dnk(ods_metadata: Dict[str, Any], ods_dataset_id: str) -> O
     if 'dcat_ap_ch' in ods_metadata and 'rights' in ods_metadata['dcat_ap_ch']:
         rechte_wert = get_field_value(ods_metadata['dcat_ap_ch']['rights'])
         if rechte_wert and rechte_wert not in RECHTE_MAP:
+            logging.error(f"Unknown rights value: {rechte_wert}")
             raise ValueError(f"Unknown rights value: {rechte_wert}")
         elif rechte_wert:
             rechte = RECHTE_MAP[rechte_wert]
-            logging.info(f"Found rights value: {rechte}")
+            logging.debug(f"Found rights value: {rechte}")
 
     # Get Lizenz from internal.license_id
     if 'internal' in ods_metadata and 'license_id' in ods_metadata['internal']:
         license_id = get_field_value(ods_metadata['internal']['license_id'])
         if license_id and license_id not in LICENSE_MAP:
+            logging.error(f"Unknown license ID: {license_id}")
             raise ValueError(f"Unknown license ID: {license_id}")
         elif license_id:
             license = LICENSE_MAP[license_id]
-            logging.info(f"Mapped license ID '{license_id}' to '{license}'")
+            logging.debug(f"Mapped license ID '{license_id}' to '{license}'")
     
     # TODO (Renato): Map temporal coverage information (example: "1939-08-01/2025-03-31" or "2024-02-10/2032-08-08")
     
