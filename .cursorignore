@@ -4,3 +4,4 @@
 !**/*.yml
 !**/*.yaml
 !**/dataspot_requirements.txt
+!**/_basic_annotations.yaml
