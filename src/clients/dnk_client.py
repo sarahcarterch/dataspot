@@ -30,6 +30,93 @@ class DNKClient(BaseDataspotClient):
         
         # Set up mapping
         self.mapping = ODSDataspotMapping(mapping_file)
+        
+    def preload_mapping_from_dnk(self) -> None:
+        """
+        Preloads the ODS ID to Dataspot UUID/href mapping from the DNK system.
+        This ensures that the mapping is up-to-date before any upload operations,
+        which is especially important when working from different computers.
+        
+        Returns:
+            None
+            
+        Raises:
+            HTTPError: If API requests fail
+        """
+        logging.info("Preloading ODS ID to Dataspot mappings from DNK system")
+        
+        try:
+            # Use the download API to retrieve datasets from the scheme
+            download_path = f"/api/{self.database_name}/schemes/{self.scheme_name}/download?format=JSON"
+            full_url = url_join(self.base_url, download_path)
+            
+            logging.debug(f"Downloading datasets from: {full_url}")
+            response = requests_get(full_url, headers=self.auth.get_headers())
+            
+            # Parse the JSON response
+            try:
+                datasets = response.json()
+                
+                # If we got a list directly, use it
+                if isinstance(datasets, list):
+                    # Filter to only include datasets
+                    datasets = [item for item in datasets if item.get('_type') == 'Dataset']
+                    logging.info(f"Downloaded {len(datasets)} datasets from scheme for mapping preload")
+                else:
+                    # We might have received a job ID instead
+                    logging.warning("Received unexpected response format during mapping preload. Expected a list of datasets.")
+                    logging.debug(f"Response: {datasets}")
+                    return
+                
+                if not datasets:
+                    logging.warning("No datasets found in download response during mapping preload")
+                    return
+                
+                # Process each dataset and update the mapping
+                updated_count = 0
+                for dataset in datasets:
+
+                    # Extract the ID from customProperties
+                    ods_id = dataset.get('ID')
+                    
+                    # Skip if this dataset doesn't have an ODS ID
+                    if not ods_id:
+                        continue
+                    
+                    # The dataset from download API won't have the _links structure needed by get_uuid_and_href_from_response
+                    # So we need to fetch the full dataset by its id to get the proper response structure
+                    uuid = dataset.get('id')
+                    if not uuid:
+                        logging.warning(f"Dataset with ODS ID {ods_id} missing UUID, skipping")
+                        continue
+                        
+                    # Get the full dataset resource to extract proper href
+                    dataset_path = url_join('rest', self.database_name, 'datasets', uuid)
+                    dataset_response = self.get_resource_if_exists(dataset_path)
+                    
+                    if not dataset_response:
+                        logging.warning(f"Could not fetch full dataset for ODS ID {ods_id} with UUID {uuid}, skipping")
+                        continue
+                    
+                    # Use the helper function to extract UUID and href
+                    uuid, href = get_uuid_and_href_from_response(dataset_response)
+                    
+                    if uuid and href:
+                        logging.debug(f"Adding mapping entry for ODS ID {ods_id} with UUID {uuid} and href {href}")
+                        self.mapping.add_entry(ods_id, uuid, href)
+                        updated_count += 1
+                    else:
+                        logging.warning(f"Missing UUID or href for dataset with ODS ID: {ods_id}")
+                
+                logging.info(f"Preloaded mappings for {updated_count} datasets from DNK system")
+                
+            except Exception as e:
+                logging.error(f"Error parsing download response during mapping preload: {str(e)}")
+                raise
+                
+        except Exception as e:
+            logging.error(f"Error preloading mappings: {str(e)}")
+            raise
 
     def create_dataset(self, dataset: Dataset) -> dict:
         """
@@ -46,11 +133,21 @@ class DNKClient(BaseDataspotClient):
             HTTPError: If API requests fail
             json.JSONDecodeError: If response parsing fails
         """
+        # Preload mapping from DNK to ensure we have the latest mapping data
+        self.preload_mapping_from_dnk()
+        
         # Get ODS ID from dataset
         ods_id = dataset.to_json().get('customProperties', {}).get('ID')
         if not ods_id:
             logging.error("Dataset missing 'ID' property required for ODS ID")
             raise ValueError("Dataset must have an 'ID' property to use as ODS ID")
+        
+        # Check if dataset with this ODS ID already exists
+        existing_entry = self.mapping.get_entry(ods_id)
+        if existing_entry:
+            uuid, href = existing_entry
+            logging.info(f"Dataset with ODS ID {ods_id} already exists (UUID: {uuid}). Use update_dataset method to update.")
+            raise ValueError(f"Dataset with ODS ID {ods_id} already exists. Use update_dataset or create_or_update_dataset method.")
         
         # Read the dataset title
         title = dataset.to_json()['label']
@@ -113,6 +210,9 @@ class DNKClient(BaseDataspotClient):
             ValueError: If any dataset is missing required properties
             HTTPError: If API requests fail
         """
+        # Preload mapping from DNK to ensure we have the latest mapping data
+        self.preload_mapping_from_dnk()
+        
         # Ensure ODS-Imports collection exists and get its UUID
         logging.debug(f"Ensuring ODS-Imports collection exists")
         collection_data = self.ensure_ods_imports_collection_exists()
@@ -216,10 +316,6 @@ class DNKClient(BaseDataspotClient):
                 # Process each dataset and update the mapping
                 updated_count = 0
                 for dataset in datasets:
-                    # Only consider datasets of stereotype 'OGD'
-                    if dataset.get('stereotype') != 'OGD':
-                        continue
-
                     # Extract the ID from customProperties
                     ods_id = dataset.get('ID')
                     
@@ -227,11 +323,23 @@ class DNKClient(BaseDataspotClient):
                     if not ods_id or ods_id not in ods_ids:
                         continue
                     
-                    # Extract UUID and href
+                    # The dataset from download API won't have the _links structure needed by get_uuid_and_href_from_response
+                    # So we need to fetch the full dataset by its id to get the proper response structure
                     uuid = dataset.get('id')
+                    if not uuid:
+                        logging.warning(f"Missing UUID for dataset with ODS ID: {ods_id}, skipping")
+                        continue
                     
-                    # The REST API href is in the format /rest/<database>/datasets/<uuid>
-                    href = f"/rest/{self.database_name}/datasets/{uuid}"
+                    # Get the full dataset resource to extract proper href
+                    dataset_path = url_join('rest', self.database_name, 'datasets', uuid)
+                    dataset_response = self.get_resource_if_exists(dataset_path)
+                    
+                    if not dataset_response:
+                        logging.warning(f"Could not fetch full dataset for ODS ID {ods_id} with UUID {uuid}, skipping")
+                        continue
+                    
+                    # Use the helper function to extract UUID and href
+                    uuid, href = get_uuid_and_href_from_response(dataset_response)
                     
                     if uuid and href:
                         logging.debug(f"Adding mapping entry for ODS ID {ods_id} with UUID {uuid} and href {href}")
@@ -326,6 +434,9 @@ class DNKClient(BaseDataspotClient):
             HTTPError: If API requests fail
             json.JSONDecodeError: If response parsing fails
         """
+        # Preload mapping from DNK to ensure we have the latest mapping data
+        self.preload_mapping_from_dnk()
+        
         # Validate update strategy
         valid_strategies = ['create_only', 'update_only', 'create_or_update']
         if update_strategy not in valid_strategies:
