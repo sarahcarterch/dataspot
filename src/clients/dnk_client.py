@@ -12,7 +12,7 @@ from src.dataspot_dataset import Dataset
 from src.common import requests_get # BUT DO NOT IMPORT THESE: requests_post, requests_put, requests_patch
 from src.ods_dataspot_mapping import ODSDataspotMapping
 
-
+# TODO: BUG: When a dataset has been moved, it will be moved back to ODS-Imports since we set its inCollection to that.
 class DNKClient(BaseDataspotClient):
     """Client for interacting with the DNK (Datennutzungskatalog)."""
     
