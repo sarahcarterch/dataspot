@@ -3,7 +3,7 @@ import os
 import tempfile
 import csv
 from unittest.mock import patch
-from src.dataspot_uuid_cache import DataspotUUIDCache
+from src.deprecated_dataspot_uuid_cache import DataspotUUIDCache
 
 class TestDataspotUUIDCache(unittest.TestCase):
     def setUp(self):

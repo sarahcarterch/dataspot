@@ -2,7 +2,7 @@ from typing import Dict, Any
 import pytz
 from dateutil import parser
 
-from src.dataspot_client import DataspotClient
+from src.deprecated_files.deprecated_dataspot_client import DataspotClient
 from src.dataspot_dataset import OGDDataset
 
 
