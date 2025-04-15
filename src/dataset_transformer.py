@@ -92,30 +92,30 @@ def transform_ods_to_dnk(ods_metadata: Dict[str, Any], ods_dataset_id: str) -> O
         OGDDataset: A dataset object containing the metadata in Dataspot format.
     """
     # Extract basic metadata fields
-    title = get_field_value(ods_metadata['default']['title'])
-    description = get_field_value(ods_metadata['default'].get('description', {}))
-    keywords = get_field_value(ods_metadata['default'].get('keyword', {}))
-    tags = get_field_value(ods_metadata.get('custom', {}).get('tags', {}))
+    title = _get_field_value(ods_metadata['default']['title'])
+    description = _get_field_value(ods_metadata['default'].get('description', {}))
+    keywords = _get_field_value(ods_metadata['default'].get('keyword', {}))
+    tags = _get_field_value(ods_metadata.get('custom', {}).get('tags', {}))
     
     # Get the dataset timezone if available, otherwise default to UTC
     dataset_timezone = None
     if 'default' in ods_metadata and 'timezone' in ods_metadata['default']:
-        dataset_timezone = get_field_value(ods_metadata['default']['timezone'])
+        dataset_timezone = _get_field_value(ods_metadata['default']['timezone'])
     
     # Extract update and publication information
-    accrualperiodicity = get_field_value(
+    accrualperiodicity = _get_field_value(
         ods_metadata.get('dcat', {}).get('accrualperiodicity', {'value': None})
     )
     
-    publication_date = iso_8601_to_unix_timestamp(
-        get_field_value(ods_metadata.get('dcat', {}).get('issued')), 
+    publication_date = _iso_8601_to_unix_timestamp(
+        _get_field_value(ods_metadata.get('dcat', {}).get('issued')),
         dataset_timezone
     )
     
     # Extract geographical/spatial information
     geographical_dimension = None
     if 'default' in ods_metadata and 'geographic_reference' in ods_metadata['default']:
-        geo_refs = get_field_value(ods_metadata['default']['geographic_reference'])
+        geo_refs = _get_field_value(ods_metadata['default']['geographic_reference'])
         if geo_refs and isinstance(geo_refs, list) and len(geo_refs) > 0:
             # Check if all codes are in the map
             all_codes_in_map = True
@@ -146,7 +146,7 @@ def transform_ods_to_dnk(ods_metadata: Dict[str, Any], ods_dataset_id: str) -> O
 
     # Get Nutzungsrechte from dcat_ap_ch.rights
     if 'dcat_ap_ch' in ods_metadata and 'rights' in ods_metadata['dcat_ap_ch']:
-        rechte_wert = get_field_value(ods_metadata['dcat_ap_ch']['rights'])
+        rechte_wert = _get_field_value(ods_metadata['dcat_ap_ch']['rights'])
         if rechte_wert and rechte_wert not in RECHTE_MAP:
             logging.error(f"Unknown rights value: {rechte_wert}")
             raise ValueError(f"Unknown rights value: {rechte_wert}")
@@ -156,7 +156,7 @@ def transform_ods_to_dnk(ods_metadata: Dict[str, Any], ods_dataset_id: str) -> O
 
     # Get Lizenz from internal.license_id
     if 'internal' in ods_metadata and 'license_id' in ods_metadata['internal']:
-        license_id = get_field_value(ods_metadata['internal']['license_id'])
+        license_id = _get_field_value(ods_metadata['internal']['license_id'])
         if license_id and license_id not in LICENSE_MAP:
             logging.error(f"Unknown license ID: {license_id}")
             raise ValueError(f"Unknown license ID: {license_id}")
@@ -208,7 +208,7 @@ def transform_ods_to_dnk(ods_metadata: Dict[str, Any], ods_dataset_id: str) -> O
     return ogd_dataset
 
 
-def iso_8601_to_unix_timestamp(datetime_str: str, dataset_timezone: str = None) -> Optional[int]:
+def _iso_8601_to_unix_timestamp(datetime_str: str, dataset_timezone: str = None) -> Optional[int]:
     """
     Converts an ISO 8601 formatted datetime string to a Unix timestamp in milliseconds.
     
@@ -255,7 +255,7 @@ def iso_8601_to_unix_timestamp(datetime_str: str, dataset_timezone: str = None) 
         return None
 
 
-def get_field_value(field: Dict[str, Any] | Any) -> Any:
+def _get_field_value(field: Dict[str, Any] | Any) -> Any:
     """
     Extracts the value for a metadata field based on the 'override_remote_value' flag.
     
