@@ -66,7 +66,8 @@ class DNKClient(BaseDataspotClient):
             # If we got a list directly, use it
             if isinstance(datasets, list):
                 # Filter to only include datasets
-                datasets = [item for item in datasets if item.get('_type') == 'Dataset']
+                datasets = [item for item in datasets if item.get('_type') == 'Dataset' and item.get('ODS_ID')]
+                datasets.sort(key=lambda x: x.get('ODS_ID'))
                 logging.info(f"Downloaded {len(datasets)} datasets from scheme")
             else:
                 # We might have received a job ID instead
