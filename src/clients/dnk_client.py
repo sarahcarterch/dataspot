@@ -79,48 +79,97 @@ class DNKClient(BaseDataspotClient):
                 logging.warning("No datasets found in download response")
                 return 0
             
+            # Create a lookup dictionary for faster access
+            dataset_by_ods_id = {}
+            for dataset in datasets:
+                ods_id = dataset.get('ODS_ID')
+                if ods_id:
+                    dataset_by_ods_id[ods_id] = dataset
+            
             # Process each dataset and update the mapping
             updated_count = 0
-            for dataset in datasets:
-                # Extract the ID from customProperties
-                ods_id = dataset.get('ODS_ID')
-                
-                # Skip if this dataset doesn't have an ODS ID
-                if not ods_id:
-                    continue
+            
+            # If we have target IDs, prioritize those
+            if target_ods_ids and len(target_ods_ids) > 0:
+                total_targets = len(target_ods_ids)
+                target_ods_ids.sort()
+                for idx, ods_id in enumerate(target_ods_ids, 1):
+                    logging.info(f"[{idx}/{total_targets}] Updating mapping for dataset with ODS ID: {ods_id}")
                     
-                # Skip if we have a target list and this ID is not in it
-                if target_ods_ids is not None and ods_id not in target_ods_ids:
-                    continue
-                
-                # The dataset from download API won't have the _links structure needed by get_uuid_and_href_from_response
-                # So we need to fetch the full dataset by its id to get the proper response structure
-                uuid = dataset.get('id')
-                if not uuid:
-                    logging.warning(f"Dataset with ODS ID {ods_id} missing UUID, skipping")
-                    continue
-                    
-                # Get the full dataset resource to extract proper href
-                dataset_path = url_join('rest', self.database_name, 'datasets', uuid)
-                try:
-                    dataset_response = self.get_resource_if_exists(dataset_path)
-                    
-                    if not dataset_response:
-                        logging.warning(f"Could not fetch full dataset for ODS ID {ods_id} with UUID {uuid}, skipping")
+                    # Find this ODS ID in our downloaded datasets
+                    dataset = dataset_by_ods_id.get(ods_id)
+                    if not dataset:
+                        logging.warning(f"Could not find dataset with ODS ID {ods_id} in downloaded data, skipping")
                         continue
                     
-                    # Use the helper function to extract UUID and href
-                    uuid, href = get_uuid_and_href_from_response(dataset_response)
+                    # Get the UUID
+                    uuid = dataset.get('id')
+                    if not uuid:
+                        logging.warning(f"Dataset with ODS ID {ods_id} missing UUID, skipping")
+                        continue
                     
-                    if uuid and href:
-                        logging.debug(f"Adding mapping entry for ODS ID {ods_id} with UUID {uuid} and href {href}")
-                        self.mapping.add_entry(ods_id, uuid, href)
-                        updated_count += 1
-                    else:
-                        logging.warning(f"Missing UUID or href for dataset with ODS ID: {ods_id}")
-                except HTTPError as e:
-                    logging.warning(f"Error fetching dataset {uuid} for ODS ID {ods_id}: {str(e)}")
-                    continue
+                    # Get the full dataset resource to extract proper href
+                    dataset_path = url_join('rest', self.database_name, 'datasets', uuid)
+                    try:
+                        dataset_response = self.get_resource_if_exists(dataset_path)
+                        
+                        if not dataset_response:
+                            logging.warning(f"Could not fetch full dataset for ODS ID {ods_id} with UUID {uuid}, skipping")
+                            continue
+                        
+                        # Use the helper function to extract UUID and href
+                        uuid, href = get_uuid_and_href_from_response(dataset_response)
+                        
+                        if uuid and href:
+                            logging.debug(f"Adding mapping entry for ODS ID {ods_id} with UUID {uuid} and href {href}")
+                            self.mapping.add_entry(ods_id, uuid, href)
+                            updated_count += 1
+                        else:
+                            logging.warning(f"Missing UUID or href for dataset with ODS ID: {ods_id}")
+                    except HTTPError as e:
+                        logging.warning(f"Error fetching dataset {uuid} for ODS ID {ods_id}: {str(e)}")
+                        continue
+            else:
+                # No target IDs, process all datasets
+                total_datasets = len(datasets)
+                for idx, dataset in enumerate(datasets, 1):
+                    # Extract the ID from customProperties
+                    ods_id = dataset.get('ODS_ID')
+                    
+                    # Skip if this dataset doesn't have an ODS ID
+                    if not ods_id:
+                        continue
+                    
+                    logging.info(f"[{idx}/{total_datasets}] Updating mapping for dataset with ODS ID: {ods_id}")
+                    
+                    # The dataset from download API won't have the _links structure needed by get_uuid_and_href_from_response
+                    # So we need to fetch the full dataset by its id to get the proper response structure
+                    uuid = dataset.get('id')
+                    if not uuid:
+                        logging.warning(f"Dataset with ODS ID {ods_id} missing UUID, skipping")
+                        continue
+                        
+                    # Get the full dataset resource to extract proper href
+                    dataset_path = url_join('rest', self.database_name, 'datasets', uuid)
+                    try:
+                        dataset_response = self.get_resource_if_exists(dataset_path)
+                        
+                        if not dataset_response:
+                            logging.warning(f"Could not fetch full dataset for ODS ID {ods_id} with UUID {uuid}, skipping")
+                            continue
+                        
+                        # Use the helper function to extract UUID and href
+                        uuid, href = get_uuid_and_href_from_response(dataset_response)
+                        
+                        if uuid and href:
+                            logging.debug(f"Adding mapping entry for ODS ID {ods_id} with UUID {uuid} and href {href}")
+                            self.mapping.add_entry(ods_id, uuid, href)
+                            updated_count += 1
+                        else:
+                            logging.warning(f"Missing UUID or href for dataset with ODS ID: {ods_id}")
+                    except HTTPError as e:
+                        logging.warning(f"Error fetching dataset {uuid} for ODS ID {ods_id}: {str(e)}")
+                        continue
             
             logging.info(f"Updated mappings for {updated_count} datasets")
             return updated_count
