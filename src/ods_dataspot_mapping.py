@@ -39,10 +39,12 @@ class ODSDataspotMapping:
     
     def _save_mapping(self) -> None:
         """Save the current mapping to the CSV file."""
+        # Sort the items by ods_id
+        sorted_mapping = sorted(self.mapping.items(), key=lambda x: x[0])
         with open(self.csv_file_path, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow(['ods_id', 'uuid', 'href'])
-            for ods_id, (uuid, href) in self.mapping.items():
+            for ods_id, (uuid, href) in sorted_mapping:
                 writer.writerow([ods_id, uuid, href])
     
     def get_entry(self, ods_id: str) -> Optional[Tuple[str, str]]:
