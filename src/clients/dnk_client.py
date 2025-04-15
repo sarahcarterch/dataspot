@@ -26,7 +26,7 @@ class DNKClient(BaseDataspotClient):
         self.database_name = config.database_name
         self.scheme_name = config.dnk_scheme_name
 
-        mapping_file = f"ods_dataspot_mapping_{self.database_name}.csv"
+        mapping_file = f"ods-dataspot-mapping_{self.database_name}.csv"
         
         # Set up mapping
         self.mapping = ODSDataspotMapping(mapping_file)
