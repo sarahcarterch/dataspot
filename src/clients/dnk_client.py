@@ -76,7 +76,7 @@ class DNKClient(BaseDataspotClient):
                 return 0
             
             if not datasets:
-                logging.warning("No datasets found in download response")
+                logging.warning(f"No datasets with ods_ids found in {self.scheme_name}")
                 return 0
             
             # Create a lookup dictionary for faster access
@@ -89,12 +89,23 @@ class DNKClient(BaseDataspotClient):
             # Process each dataset and update the mapping
             updated_count = 0
             
+            # Check for datasets in mapping that are not in downloaded datasets
+            if not target_ods_ids:
+                removed_count = 0
+                for ods_id, (uuid, href) in list(self.mapping.mapping.items()):
+                    if ods_id not in dataset_by_ods_id:
+                        logging.warning(f"Dataset {ods_id} exists in local mapping but not in dataspot. Removing from local mapping.")
+                        logging.debug(f"    - uuid: {uuid}, href: {href}")
+                        removed_count += 1
+                if removed_count > 0:
+                    logging.info(f"Found {removed_count} datasets that exist locally but not in dataspot.")
+            
             # If we have target IDs, prioritize those
             if target_ods_ids and len(target_ods_ids) > 0:
                 total_targets = len(target_ods_ids)
                 target_ods_ids.sort()
                 for idx, ods_id in enumerate(target_ods_ids, 1):
-                    logging.info(f"[{idx}/{total_targets}] Updating mapping for dataset with ODS ID: {ods_id}")
+                    logging.info(f"[{idx}/{total_targets}] Processing dataset with ODS ID: {ods_id}")
                     
                     # Find this ODS ID in our downloaded datasets
                     dataset = dataset_by_ods_id.get(ods_id)
@@ -121,9 +132,22 @@ class DNKClient(BaseDataspotClient):
                         uuid, href = get_uuid_and_href_from_response(dataset_response)
                         
                         if uuid and href:
-                            logging.debug(f"Adding mapping entry for ODS ID {ods_id} with UUID {uuid} and href {href}")
-                            self.mapping.add_entry(ods_id, uuid, href)
-                            updated_count += 1
+                            # Check if the mapping has changed before updating
+                            existing_entry = self.mapping.get_entry(ods_id)
+                            if existing_entry and existing_entry == (uuid, href):
+                                logging.info(f"No changes in dataset {ods_id}. Skipping")
+                                logging.debug(f"    - uuid: {uuid}, href: {href}")
+                            elif existing_entry:
+                                old_uuid, old_href = existing_entry
+                                logging.warning(f"Update dataset {ods_id} uuid from {old_uuid} to {uuid}")
+                                logging.debug(f"    - old_uuid: {old_uuid}, old_href: {old_href}, new_uuid: {uuid}, new_href: {href}")
+                                self.mapping.add_entry(ods_id, uuid, href)
+                                updated_count += 1
+                            else:
+                                logging.info(f"Add dataset {ods_id} with uuid {uuid}")
+                                logging.debug(f"    - uuid: {uuid}, href: {href}")
+                                self.mapping.add_entry(ods_id, uuid, href)
+                                updated_count += 1
                         else:
                             logging.warning(f"Missing UUID or href for dataset with ODS ID: {ods_id}")
                     except HTTPError as e:
@@ -140,7 +164,7 @@ class DNKClient(BaseDataspotClient):
                     if not ods_id:
                         continue
                     
-                    logging.info(f"[{idx}/{total_datasets}] Updating mapping for dataset with ODS ID: {ods_id}")
+                    logging.info(f"[{idx}/{total_datasets}] Processing dataset with ODS ID: {ods_id}")
                     
                     # The dataset from download API won't have the _links structure needed by get_uuid_and_href_from_response
                     # So we need to fetch the full dataset by its id to get the proper response structure
@@ -162,16 +186,29 @@ class DNKClient(BaseDataspotClient):
                         uuid, href = get_uuid_and_href_from_response(dataset_response)
                         
                         if uuid and href:
-                            logging.debug(f"Adding mapping entry for ODS ID {ods_id} with UUID {uuid} and href {href}")
-                            self.mapping.add_entry(ods_id, uuid, href)
-                            updated_count += 1
+                            # Check if the mapping has changed before updating
+                            existing_entry = self.mapping.get_entry(ods_id)
+                            if existing_entry and existing_entry == (uuid, href):
+                                logging.info(f"No changes in dataset {ods_id}. Skipping")
+                                logging.debug(f"    - uuid: {uuid}, href: {href}")
+                            elif existing_entry:
+                                old_uuid, old_href = existing_entry
+                                logging.warning(f"Update dataset {ods_id} uuid from {old_uuid} to {uuid}")
+                                logging.debug(f"    - old_uuid: {old_uuid}, old_href: {old_href}, new_uuid: {uuid}, new_href: {href}")
+                                self.mapping.add_entry(ods_id, uuid, href)
+                                updated_count += 1
+                            else:
+                                logging.info(f"Add dataset {ods_id} with uuid {uuid}")
+                                logging.debug(f"    - uuid: {uuid}, href: {href}")
+                                self.mapping.add_entry(ods_id, uuid, href)
+                                updated_count += 1
                         else:
                             logging.warning(f"Missing UUID or href for dataset with ODS ID: {ods_id}")
                     except HTTPError as e:
                         logging.warning(f"Error fetching dataset {uuid} for ODS ID {ods_id}: {str(e)}")
                         continue
             
-            logging.info(f"Updated mappings for {updated_count} datasets")
+            logging.info(f"Updated mappings for {updated_count} datasets. Did not update mappings for {len(datasets) - updated_count} datasets.")
             return updated_count
             
         except Exception as e:
