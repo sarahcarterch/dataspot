@@ -10,7 +10,6 @@ from src.clients.helpers import url_join
 
 from requests import HTTPError
 
-# TODO (Renato): Add at least one @abstractmethod to properly enforce this class as abstract and prevent direct instantiation.
 class BaseDataspotClient(ABC):
     """Base class for Dataspot API clients with common functionality."""
 
@@ -24,6 +23,22 @@ class BaseDataspotClient(ABC):
         self.base_url = config.base_url
         self.database_name = config.database_name
         self.ods_imports_collection_name = config.ods_imports_collection_name
+
+    @abstractmethod
+    def require_scheme_exists(self) -> str:
+        """
+        Verify that the client's scheme exists and return its href.
+        
+        This method must be implemented by subclasses to ensure that the scheme
+        they're intended to work with actually exists in the Dataspot system.
+        
+        Returns:
+            str: The href of the scheme
+            
+        Raises:
+            ValueError: If the scheme doesn't exist
+        """
+        pass
 
     def create_resource(self, endpoint: str, data: Dict[str, Any], _type: str = "Asset") -> Dict[str, Any]:
         """
