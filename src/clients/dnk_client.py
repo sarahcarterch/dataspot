@@ -298,7 +298,7 @@ class DNKClient(BaseDataspotClient):
             logging.warning("No valid datasets to upload after validation")
             return {"status": "error", "message": "No valid datasets to upload"}
             
-        logging.info(f"Bulk creating {num_datasets} datasets (operation: {operation}, dry_run: {dry_run})")
+        logging.info(f"Bulk creating {num_datasets} datasets (operation: {operation}, dry_run: {dry_run})...")
         
         # Bulk create datasets using the scheme name
         try:
@@ -309,7 +309,9 @@ class DNKClient(BaseDataspotClient):
                 operation=operation,
                 dry_run=dry_run
             )
-            
+
+            logging.info(f"Bulk creation complete")
+
             # Update mapping for each dataset (only for non-dry runs)
             if not dry_run:
                 try:
