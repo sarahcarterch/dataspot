@@ -16,17 +16,17 @@ from src.ods_dataspot_mapping import ODSDataspotMapping
 class DNKClient(BaseDataspotClient):
     """Client for interacting with the DNK (Datennutzungskatalog)."""
     
-    def __init__(self, mapping_file: str = "ods_dataspot_mapping.csv"):
+    def __init__(self):
         """
         Initialize the DNK client.
-        
-        Args:
-            mapping_file (str, optional): Path to the CSV file for ODS-Dataspot mapping. Default is "ods_dataspot_mapping.csv".
         """
         super().__init__()
         
         # Load scheme name from config
+        self.database_name = config.database_name
         self.scheme_name = config.dnk_scheme_name
+
+        mapping_file = f"ods_dataspot_mapping_{self.database_name}.csv"
         
         # Set up mapping
         self.mapping = ODSDataspotMapping(mapping_file)
