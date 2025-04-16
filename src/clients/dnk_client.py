@@ -96,6 +96,7 @@ class DNKClient(BaseDataspotClient):
                     if ods_id not in dataset_by_ods_id:
                         logging.warning(f"Dataset {ods_id} exists in local mapping but not in dataspot. Removing from local mapping.")
                         logging.debug(f"    - uuid: {uuid}, href: {href}")
+                        self.mapping.remove_entry(ods_id)
                         removed_count += 1
                 if removed_count > 0:
                     logging.info(f"Found {removed_count} datasets that exist locally but not in dataspot.")
