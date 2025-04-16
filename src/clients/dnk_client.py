@@ -223,7 +223,7 @@ class DNKClient(BaseDataspotClient):
                     else:
                         logging.warning(f"Missing UUID or href for dataset with ODS ID: {ods_id}")
             
-            logging.info(f"Updated mappings for {updated_count} datasets. Did not update mappings for {len(datasets) - updated_count} datasets.")
+            logging.info(f"Updated mappings for {updated_count} datasets. Did not update mappings for the other {len(datasets) - updated_count} datasets.")
             return updated_count
             
         except Exception as e:

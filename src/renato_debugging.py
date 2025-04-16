@@ -479,8 +479,8 @@ def main_8_test_bulk_ods_datasets_upload(cleanup_after_test=True):
     request_delay = 1.0  # Delay in seconds between API calls
     
     # Get all public dataset IDs
-    logging.info("Retrieving all public dataset IDs...")
-    ods_ids = ods_utils.get_all_dataset_ids(include_restricted=False)
+    logging.info(f"Step 1: Retrieving {max_datasets or 'all'} public dataset IDs from ODS...")
+    ods_ids = ods_utils.get_all_dataset_ids(include_restricted=False, max_datasets=max_datasets, cooldown=request_delay)
     
     if max_datasets:
         ods_ids = ods_ids[:max_datasets]
@@ -522,7 +522,7 @@ def main_8_test_bulk_ods_datasets_upload(cleanup_after_test=True):
     if all_datasets:
         try:
             # Bulk create all datasets
-            logging.info(f"Bulk uploading all {len(all_datasets)} datasets...")
+            logging.info(f"Step 2: Bulk uploading all {len(all_datasets)} datasets to dataspot...") # Comment: This line is confusing, as it we do not upload right here and there, but before that there is more setup.
             
             # Perform the bulk upload
             create_response = dataspot_client.bulk_create_or_update_datasets(
