@@ -37,7 +37,7 @@ class ODSDataspotMapping:
         if not os.path.exists(self.csv_file_path):
             # Create the file with headers if it doesn't exist
             try:
-                with open(self.csv_file_path, 'w', newline='') as csvfile:
+                with open(self.csv_file_path, 'w', newline='', encoding='utf-8') as csvfile:
                     writer = csv.writer(csvfile)
                     writer.writerow(['ods_id', 'uuid', 'href', 'inCollection'])
             except (IOError, PermissionError) as e:
@@ -45,7 +45,7 @@ class ODSDataspotMapping:
             return
         
         try:
-            with open(self.csv_file_path, 'r', newline='') as csvfile:
+            with open(self.csv_file_path, 'r', newline='', encoding='utf-8') as csvfile:
                 reader = csv.DictReader(csvfile)
                 self.mapping = {
                     row['ods_id']: (
@@ -65,7 +65,7 @@ class ODSDataspotMapping:
         try:
             # Sort the items by ods_id
             sorted_mapping = sorted(self.mapping.items(), key=lambda x: x[0])
-            with open(self.csv_file_path, 'w', newline='') as csvfile:
+            with open(self.csv_file_path, 'w', newline='', encoding='utf-8') as csvfile:
                 writer = csv.writer(csvfile)
                 writer.writerow(['ods_id', 'uuid', 'href', 'inCollection'])
                 for ods_id, (uuid, href, inCollection) in sorted_mapping:
