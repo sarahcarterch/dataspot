@@ -9,16 +9,24 @@ class ODSDataspotMapping:
     Stores the mapping in a CSV file for persistence.
     """
 
-    def __init__(self, csv_file_path: str = "ods_dataspot_mapping.csv"):
+    def __init__(self, database_name: str = None, csv_file_path: str = None):
         """
         Initialize the mapping table.
-        # TODO (large language model): Instead of csv_fiule_path, I want to just give it the database_name, and then name the file f"ods-dataspot-mapping_{database_name}.csv"
         
         Args:
-            csv_file_path (str): Path to the CSV file for storing the mapping.
-                                Default is "ods_dataspot_mapping.csv" in the current directory.
+            database_name (str, optional) (Recommended): Name of the database to use for file naming.
+                                          If provided, the file will be named "ods-dataspot-mapping_{database_name}.csv".
+            csv_file_path (str, optional): Path to the CSV file for storing the mapping.
+                                          Default is "ods_dataspot_mapping.csv" in the current directory.
+                                          This parameter is ignored if database_name is provided.
         """
-        self.csv_file_path = csv_file_path
+        self.logger = logging.getLogger(__name__)
+        
+        if database_name:
+            self.csv_file_path = f"ods-dataspot-mapping_{database_name}.csv"
+        else:
+            self.csv_file_path = csv_file_path or "ods-dataspot-mapping.csv"
+        
         self.mapping: Dict[str, Tuple[str, str]] = {}
         self._load_mapping()
     

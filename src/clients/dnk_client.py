@@ -25,11 +25,9 @@ class DNKClient(BaseDataspotClient):
         # Load scheme name from config
         self.database_name = config.database_name
         self.scheme_name = config.dnk_scheme_name
-
-        mapping_file = f"ods-dataspot-mapping_{self.database_name}.csv"
         
         # Set up mapping
-        self.mapping = ODSDataspotMapping(mapping_file)
+        self.mapping = ODSDataspotMapping(database_name=self.database_name)
         
     def _download_and_update_mappings(self, target_ods_ids: List[str] = None) -> int:
         """
