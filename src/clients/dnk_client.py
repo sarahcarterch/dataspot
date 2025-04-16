@@ -145,7 +145,11 @@ class DNKClient(BaseDataspotClient):
                                 old_href = existing_entry[1] if len(existing_entry) > 1 else None
                                 old_inCollection = existing_entry[2] if len(existing_entry) > 2 else None
                                 
-                                logging.warning(f"Update dataset {ods_id} uuid from {old_uuid} to {uuid}")
+                                # Only log UUID update warning if the UUID actually changed
+                                if old_uuid != uuid:
+                                    logging.warning(f"Update dataset {ods_id} uuid from {old_uuid} to {uuid}")
+                                else:
+                                    logging.info(f"Updating dataset {ods_id} metadata")
                                 
                                 # Log a more meaningful message if inCollection has changed
                                 if old_inCollection != inCollection_key and old_inCollection and inCollection_key:
@@ -215,7 +219,11 @@ class DNKClient(BaseDataspotClient):
                                 old_href = existing_entry[1] if len(existing_entry) > 1 else None
                                 old_inCollection = existing_entry[2] if len(existing_entry) > 2 else None
                                 
-                                logging.warning(f"Update dataset {ods_id} uuid from {old_uuid} to {uuid}")
+                                # Only log UUID update warning if the UUID actually changed
+                                if old_uuid != uuid:
+                                    logging.warning(f"Update dataset {ods_id} uuid from {old_uuid} to {uuid}")
+                                else:
+                                    logging.info(f"Updating dataset {ods_id} metadata")
                                 
                                 # Log a more meaningful message if inCollection has changed
                                 if old_inCollection != inCollection_key and old_inCollection and inCollection_key:
