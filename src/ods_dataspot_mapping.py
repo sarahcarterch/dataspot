@@ -12,6 +12,7 @@ class ODSDataspotMapping:
     def __init__(self, csv_file_path: str = "ods_dataspot_mapping.csv"):
         """
         Initialize the mapping table.
+        # TODO (large language model): Instead of csv_fiule_path, I want to just give it the database_name, and then name the file f"ods-dataspot-mapping_{database_name}.csv"
         
         Args:
             csv_file_path (str): Path to the CSV file for storing the mapping.
