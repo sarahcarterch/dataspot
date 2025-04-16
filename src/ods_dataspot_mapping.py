@@ -7,7 +7,7 @@ from typing import Tuple, Optional, Dict, List
 
 class ODSDataspotMapping:
     """
-    A lookup table that maps ODS IDs to Dataspot UUIDs and HREFs.
+    A lookup table that maps ODS IDs to Dataspot UUIDs, HREFs, and inCollection.
     Stores the mapping in a CSV file for persistence.
     """
 
@@ -29,7 +29,7 @@ class ODSDataspotMapping:
         else:
             self.csv_file_path = csv_file_path or "ods-dataspot-mapping.csv"
         
-        self.mapping: Dict[str, Tuple[str, str]] = {}
+        self.mapping: Dict[str, Tuple[str, str, Optional[str]]] = {}
         self._load_mapping()
     
     def _load_mapping(self) -> None:
@@ -39,7 +39,7 @@ class ODSDataspotMapping:
             try:
                 with open(self.csv_file_path, 'w', newline='') as csvfile:
                     writer = csv.writer(csvfile)
-                    writer.writerow(['ods_id', 'uuid', 'href'])
+                    writer.writerow(['ods_id', 'uuid', 'href', 'inCollection'])
             except (IOError, PermissionError) as e:
                 self.logger.warning("Could not create mapping file: %s", str(e))
             return
@@ -48,7 +48,11 @@ class ODSDataspotMapping:
             with open(self.csv_file_path, 'r', newline='') as csvfile:
                 reader = csv.DictReader(csvfile)
                 self.mapping = {
-                    row['ods_id']: (row['uuid'], row['href'])
+                    row['ods_id']: (
+                        row['uuid'],
+                        row['href'],
+                        row.get('inCollection')  # This might be None for older mapping files
+                    )
                     for row in reader
                 }
         except (IOError, PermissionError) as e:
@@ -63,9 +67,9 @@ class ODSDataspotMapping:
             sorted_mapping = sorted(self.mapping.items(), key=lambda x: x[0])
             with open(self.csv_file_path, 'w', newline='') as csvfile:
                 writer = csv.writer(csvfile)
-                writer.writerow(['ods_id', 'uuid', 'href'])
-                for ods_id, (uuid, href) in sorted_mapping:
-                    writer.writerow([ods_id, uuid, href])
+                writer.writerow(['ods_id', 'uuid', 'href', 'inCollection'])
+                for ods_id, (uuid, href, inCollection) in sorted_mapping:
+                    writer.writerow([ods_id, uuid, href, inCollection or ''])
         except (IOError, PermissionError) as e:
             self.logger.warning("Could not write to mapping file: %s", str(e))
     
@@ -86,19 +90,19 @@ class ODSDataspotMapping:
         except (ValueError, AttributeError):
             return False
     
-    def get_entry(self, ods_id: str) -> Optional[Tuple[str, str]]:
+    def get_entry(self, ods_id: str) -> Optional[Tuple[str, str, Optional[str]]]:
         """
-        Get the UUID and HREF for an ODS ID if it exists.
+        Get the UUID, HREF, and inCollection for an ODS ID if it exists.
         
         Args:
             ods_id (str): The ODS ID to look up
             
         Returns:
-            Optional[Tuple[str, str]]: A tuple of (uuid, href) if found, None otherwise
+            Optional[Tuple[str, str, Optional[str]]]: A tuple of (uuid, href, inCollection) if found, None otherwise
         """
         return self.mapping.get(ods_id)
     
-    def add_entry(self, ods_id: str, uuid_str: str, href: str) -> bool:
+    def add_entry(self, ods_id: str, uuid_str: str, href: str, inCollection: str = None) -> bool:
         """
         Add a new mapping entry or update an existing one.
         
@@ -106,6 +110,7 @@ class ODSDataspotMapping:
             ods_id (str): The ODS ID
             uuid_str (str): The Dataspot UUID
             href (str): The Dataspot HREF
+            inCollection (str, optional): The business key of the collection containing this dataset
             
         Returns:
             bool: True if the entry was added successfully, False otherwise
@@ -131,7 +136,7 @@ class ODSDataspotMapping:
             self.logger.warning("UUID must match the format: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' (8-4-4-4-12 hex digits)")
             return False
         
-        self.mapping[ods_id] = (uuid_str, href)
+        self.mapping[ods_id] = (uuid_str, href, inCollection)
         self._save_mapping()
         return True
     
@@ -177,12 +182,25 @@ class ODSDataspotMapping:
         entry = self.get_entry(ods_id)
         return entry[1] if entry else None
     
-    def get_all_entries(self) -> Dict[str, Tuple[str, str]]:
+    def get_inCollection(self, ods_id: str) -> Optional[str]:
+        """
+        Get just the inCollection UUID for an ODS ID.
+        
+        Args:
+            ods_id (str): The ODS ID to look up
+            
+        Returns:
+            Optional[str]: The inCollection UUID if found, None otherwise
+        """
+        entry = self.get_entry(ods_id)
+        return entry[2] if entry and len(entry) > 2 else None
+    
+    def get_all_entries(self) -> Dict[str, Tuple[str, str, Optional[str]]]:
         """
         Get all mapping entries.
         
         Returns:
-            Dict[str, Tuple[str, str]]: Dictionary of all ODS ID to (UUID, HREF) mappings
+            Dict[str, Tuple[str, str, Optional[str]]]: Dictionary of all ODS ID to (UUID, HREF, inCollection) mappings
         """
         return dict(self.mapping)
     

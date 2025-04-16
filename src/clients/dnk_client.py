@@ -12,7 +12,6 @@ from src.dataspot_dataset import Dataset
 from src.common import requests_get # BUT DO NOT IMPORT THESE: requests_post, requests_put, requests_patch
 from src.ods_dataspot_mapping import ODSDataspotMapping
 
-# TODO: BUG: When a dataset has been moved, it will be moved back to ODS-Imports since we set its inCollection to that.
 class DNKClient(BaseDataspotClient):
     """Client for interacting with the DNK (Datennutzungskatalog)."""
     
@@ -90,10 +89,12 @@ class DNKClient(BaseDataspotClient):
             # Check for datasets in mapping that are not in downloaded datasets
             if not target_ods_ids:
                 removed_count = 0
-                for ods_id, (uuid, href) in list(self.mapping.mapping.items()):
+                for ods_id, entry in list(self.mapping.mapping.items()):
                     if ods_id not in dataset_by_ods_id:
                         logging.warning(f"Dataset {ods_id} exists in local mapping but not in dataspot. Removing from local mapping.")
-                        logging.debug(f"    - uuid: {uuid}, href: {href}")
+                        if len(entry) >= 2:
+                            uuid, href = entry[0], entry[1]
+                            logging.debug(f"    - uuid: {uuid}, href: {href}")
                         self.mapping.remove_entry(ods_id)
                         removed_count += 1
                 if removed_count > 0:
@@ -130,22 +131,38 @@ class DNKClient(BaseDataspotClient):
                         # Use the helper function to extract UUID and href
                         uuid, href = get_uuid_and_href_from_response(dataset_response)
                         
+                        # Extract inCollection business key directly from the downloaded dataset
+                        inCollection_key = dataset.get('inCollection')
+                        
                         if uuid and href:
                             # Check if the mapping has changed before updating
                             existing_entry = self.mapping.get_entry(ods_id)
-                            if existing_entry and existing_entry == (uuid, href):
+                            if existing_entry and len(existing_entry) > 2 and existing_entry[0] == uuid and existing_entry[1] == href and existing_entry[2] == inCollection_key:
                                 logging.info(f"No changes in dataset {ods_id}. Skipping")
-                                logging.debug(f"    - uuid: {uuid}, href: {href}")
+                                logging.debug(f"    - uuid: {uuid}, href: {href}, inCollection: {inCollection_key}")
                             elif existing_entry:
-                                old_uuid, old_href = existing_entry
+                                old_uuid = existing_entry[0] if len(existing_entry) > 0 else None
+                                old_href = existing_entry[1] if len(existing_entry) > 1 else None
+                                old_inCollection = existing_entry[2] if len(existing_entry) > 2 else None
+                                
                                 logging.warning(f"Update dataset {ods_id} uuid from {old_uuid} to {uuid}")
-                                logging.debug(f"    - old_uuid: {old_uuid}, old_href: {old_href}, new_uuid: {uuid}, new_href: {href}")
-                                self.mapping.add_entry(ods_id, uuid, href)
+                                
+                                # Log a more meaningful message if inCollection has changed
+                                if old_inCollection != inCollection_key and old_inCollection and inCollection_key:
+                                    logging.info(f"Dataset {ods_id} has been moved from '{old_inCollection}' to '{inCollection_key}'")
+                                elif not old_inCollection and inCollection_key:
+                                    logging.info(f"Dataset {ods_id} has been placed in '{inCollection_key}'")
+                                elif old_inCollection and not inCollection_key:
+                                    logging.info(f"Dataset {ods_id} has been removed from '{old_inCollection}'")
+                                
+                                logging.debug(f"    - old_uuid: {old_uuid}, old_href: {old_href}, old_inCollection: {old_inCollection}")
+                                logging.debug(f"    - new_uuid: {uuid}, new_href: {href}, new_inCollection: {inCollection_key}")
+                                self.mapping.add_entry(ods_id, uuid, href, inCollection_key)
                                 updated_count += 1
                             else:
                                 logging.info(f"Add dataset {ods_id} with uuid {uuid}")
-                                logging.debug(f"    - uuid: {uuid}, href: {href}")
-                                self.mapping.add_entry(ods_id, uuid, href)
+                                logging.debug(f"    - uuid: {uuid}, href: {href}, inCollection: {inCollection_key}")
+                                self.mapping.add_entry(ods_id, uuid, href, inCollection_key)
                                 updated_count += 1
                         else:
                             logging.warning(f"Missing UUID or href for dataset with ODS ID: {ods_id}")
@@ -184,22 +201,38 @@ class DNKClient(BaseDataspotClient):
                         # Use the helper function to extract UUID and href
                         uuid, href = get_uuid_and_href_from_response(dataset_response)
                         
+                        # Extract inCollection business key directly from the downloaded dataset
+                        inCollection_key = dataset.get('inCollection')
+                        
                         if uuid and href:
                             # Check if the mapping has changed before updating
                             existing_entry = self.mapping.get_entry(ods_id)
-                            if existing_entry and existing_entry == (uuid, href):
+                            if existing_entry and len(existing_entry) > 2 and existing_entry[0] == uuid and existing_entry[1] == href and existing_entry[2] == inCollection_key:
                                 logging.info(f"No changes in dataset {ods_id}. Skipping")
-                                logging.debug(f"    - uuid: {uuid}, href: {href}")
+                                logging.debug(f"    - uuid: {uuid}, href: {href}, inCollection: {inCollection_key}")
                             elif existing_entry:
-                                old_uuid, old_href = existing_entry
+                                old_uuid = existing_entry[0] if len(existing_entry) > 0 else None
+                                old_href = existing_entry[1] if len(existing_entry) > 1 else None
+                                old_inCollection = existing_entry[2] if len(existing_entry) > 2 else None
+                                
                                 logging.warning(f"Update dataset {ods_id} uuid from {old_uuid} to {uuid}")
-                                logging.debug(f"    - old_uuid: {old_uuid}, old_href: {old_href}, new_uuid: {uuid}, new_href: {href}")
-                                self.mapping.add_entry(ods_id, uuid, href)
+                                
+                                # Log a more meaningful message if inCollection has changed
+                                if old_inCollection != inCollection_key and old_inCollection and inCollection_key:
+                                    logging.info(f"Dataset {ods_id} has been moved from '{old_inCollection}' to '{inCollection_key}'")
+                                elif not old_inCollection and inCollection_key:
+                                    logging.info(f"Dataset {ods_id} has been placed in '{inCollection_key}'")
+                                elif old_inCollection and not inCollection_key:
+                                    logging.info(f"Dataset {ods_id} has been removed from '{old_inCollection}'")
+                                
+                                logging.debug(f"    - old_uuid: {old_uuid}, old_href: {old_href}, old_inCollection: {old_inCollection}")
+                                logging.debug(f"    - new_uuid: {uuid}, new_href: {href}, new_inCollection: {inCollection_key}")
+                                self.mapping.add_entry(ods_id, uuid, href, inCollection_key)
                                 updated_count += 1
                             else:
                                 logging.info(f"Add dataset {ods_id} with uuid {uuid}")
-                                logging.debug(f"    - uuid: {uuid}, href: {href}")
-                                self.mapping.add_entry(ods_id, uuid, href)
+                                logging.debug(f"    - uuid: {uuid}, href: {href}, inCollection: {inCollection_key}")
+                                self.mapping.add_entry(ods_id, uuid, href, inCollection_key)
                                 updated_count += 1
                         else:
                             logging.warning(f"Missing UUID or href for dataset with ODS ID: {ods_id}")
@@ -245,7 +278,7 @@ class DNKClient(BaseDataspotClient):
         # Check if dataset with this ODS ID already exists
         existing_entry = self.mapping.get_entry(ods_id)
         if existing_entry:
-            uuid, href = existing_entry
+            uuid, href = existing_entry[0], existing_entry[1]
             logging.info(f"Dataset with ODS ID {ods_id} already exists (UUID: {uuid}). Use update_dataset method to update.")
             raise ValueError(f"Dataset with ODS ID {ods_id} already exists. Use update_dataset or create_or_update_dataset method.")
         
@@ -280,8 +313,9 @@ class DNKClient(BaseDataspotClient):
         if ods_id:
             uuid, href = get_uuid_and_href_from_response(response)
             if uuid and href:
-                logging.debug(f"Adding mapping entry for ODS ID {ods_id} with UUID {uuid} and href {href}")
-                self.mapping.add_entry(ods_id, uuid, href)
+                # For newly created datasets, store the ODS-Imports collection name as the business key
+                logging.debug(f"Adding mapping entry for ODS ID {ods_id} with UUID {uuid}, href {href}, and inCollection '{self.ods_imports_collection_name}'")
+                self.mapping.add_entry(ods_id, uuid, href, self.ods_imports_collection_name)
             else:
                 logging.warning(f"Could not extract UUID and href from response for dataset '{title}'")
         
@@ -293,7 +327,7 @@ class DNKClient(BaseDataspotClient):
         """
         Create multiple datasets in bulk in the 'Datennutzungskatalog/ODS-Imports' in Dataspot.
         The datasets will be created at the scheme level, but each dataset will have its inCollection
-        field set to place it within the ODS-Imports collection.
+        field set to place it within the ODS-Imports collection or the collection stored in the mapping.
         
         Args:
             datasets (List[Dataset]): List of dataset instances to be uploaded.
@@ -364,8 +398,18 @@ class DNKClient(BaseDataspotClient):
                 title = dataset_json.get('label', f"<Unnamed Dataset {ods_id}>")
                 logging.debug(f"Processing dataset '{title}' with ODS ID: {ods_id}")
                 
-                # Modify the dataset to include inCollection field referencing the ODS-Imports collection
-                dataset_json['inCollection'] = self.ods_imports_collection_name
+                # Check if this dataset has a stored inCollection (business key)
+                inCollection = self.mapping.get_inCollection(ods_id)
+                
+                if inCollection:
+                    # Use the stored inCollection business key
+                    logging.debug(f"Using stored inCollection '{inCollection}' for dataset with ODS ID: {ods_id}")
+                    dataset_json['inCollection'] = inCollection
+                else:
+                    # Default to ODS-Imports collection
+                    logging.debug(f"No inCollection found in mapping for ODS ID: {ods_id}, defaulting to {self.ods_imports_collection_name}")
+                    dataset_json['inCollection'] = self.ods_imports_collection_name
+                
                 dataset_jsons.append(dataset_json)
             except Exception as e:
                 validation_errors.append(f"Error processing dataset at index {i}: {str(e)}")
@@ -477,11 +521,23 @@ class DNKClient(BaseDataspotClient):
         title = dataset.to_json()['label']
         logging.info(f"Updating dataset: '{title}' with ODS ID: {ods_id}")
         
+        # Get the inCollection from mapping if available (this is now a business key)
+        inCollection = self.mapping.get_inCollection(ods_id)
+        
+        # Set inCollection in the dataset JSON
+        dataset_json = dataset.to_json()
+        if inCollection:
+            dataset_json['inCollection'] = inCollection
+            logging.debug(f"Using stored inCollection '{inCollection}' from mapping")
+        else:
+            dataset_json['inCollection'] = self.ods_imports_collection_name
+            logging.debug(f"No inCollection found in mapping, defaulting to '{self.ods_imports_collection_name}'")
+        
         # Update the existing dataset
         logging.debug(f"Update method: {'PUT (replace)' if force_replace else 'PATCH (partial update)'}")
         response = self.update_resource(
             endpoint=href,
-            data=dataset.to_json(),
+            data=dataset_json,
             replace=force_replace,
             _type='Dataset'
         )
@@ -490,8 +546,8 @@ class DNKClient(BaseDataspotClient):
         if ods_id:
             uuid, href = get_uuid_and_href_from_response(response)
             if uuid and href:
-                logging.debug(f"Updating mapping for ODS ID {ods_id} with UUID {uuid} and href {href}")
-                self.mapping.add_entry(ods_id, uuid, href)
+                logging.debug(f"Updating mapping for ODS ID {ods_id} with UUID {uuid}, href {href}, inCollection {inCollection}")
+                self.mapping.add_entry(ods_id, uuid, href, inCollection)
             else:
                 logging.warning(f"Could not extract UUID and href from response for dataset '{title}'")
         
