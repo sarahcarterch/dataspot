@@ -1,6 +1,8 @@
 import csv
 import os
-from typing import Tuple, Optional, Dict
+import uuid # Only for validating dataspot uuid
+import logging
+from typing import Tuple, Optional, Dict, List
 
 
 class ODSDataspotMapping:
@@ -34,27 +36,55 @@ class ODSDataspotMapping:
         """Load the mapping from the CSV file if it exists."""
         if not os.path.exists(self.csv_file_path):
             # Create the file with headers if it doesn't exist
-            with open(self.csv_file_path, 'w', newline='') as csvfile:
-                writer = csv.writer(csvfile)
-                writer.writerow(['ods_id', 'uuid', 'href'])
+            try:
+                with open(self.csv_file_path, 'w', newline='') as csvfile:
+                    writer = csv.writer(csvfile)
+                    writer.writerow(['ods_id', 'uuid', 'href'])
+            except (IOError, PermissionError) as e:
+                self.logger.warning("Could not create mapping file: %s", str(e))
             return
         
-        with open(self.csv_file_path, 'r', newline='') as csvfile:
-            reader = csv.DictReader(csvfile)
-            self.mapping = {
-                row['ods_id']: (row['uuid'], row['href'])
-                for row in reader
-            }
+        try:
+            with open(self.csv_file_path, 'r', newline='') as csvfile:
+                reader = csv.DictReader(csvfile)
+                self.mapping = {
+                    row['ods_id']: (row['uuid'], row['href'])
+                    for row in reader
+                }
+        except (IOError, PermissionError) as e:
+            self.logger.warning("Could not read mapping file: %s", str(e))
+        except Exception as e:
+            self.logger.warning("Error parsing mapping file: %s", str(e))
     
     def _save_mapping(self) -> None:
         """Save the current mapping to the CSV file."""
-        # Sort the items by ods_id
-        sorted_mapping = sorted(self.mapping.items(), key=lambda x: x[0])
-        with open(self.csv_file_path, 'w', newline='') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(['ods_id', 'uuid', 'href'])
-            for ods_id, (uuid, href) in sorted_mapping:
-                writer.writerow([ods_id, uuid, href])
+        try:
+            # Sort the items by ods_id
+            sorted_mapping = sorted(self.mapping.items(), key=lambda x: x[0])
+            with open(self.csv_file_path, 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(['ods_id', 'uuid', 'href'])
+                for ods_id, (uuid, href) in sorted_mapping:
+                    writer.writerow([ods_id, uuid, href])
+        except (IOError, PermissionError) as e:
+            self.logger.warning("Could not write to mapping file: %s", str(e))
+    
+    def _is_valid_uuid(self, uuid_str: str) -> bool:
+        """
+        Check if the string is a valid UUID format.
+        
+        Args:
+            uuid_str (str): The UUID string to validate
+            
+        Returns:
+            bool: True if the UUID is valid, False otherwise
+        """
+        try:
+            # Try to parse it as a UUID
+            uuid_obj = uuid.UUID(uuid_str)
+            return str(uuid_obj) == uuid_str
+        except (ValueError, AttributeError):
+            return False
     
     def get_entry(self, ods_id: str) -> Optional[Tuple[str, str]]:
         """
@@ -68,17 +98,42 @@ class ODSDataspotMapping:
         """
         return self.mapping.get(ods_id)
     
-    def add_entry(self, ods_id: str, uuid: str, href: str) -> None:
+    def add_entry(self, ods_id: str, uuid_str: str, href: str) -> bool:
         """
         Add a new mapping entry or update an existing one.
         
         Args:
             ods_id (str): The ODS ID
-            uuid (str): The Dataspot UUID
+            uuid_str (str): The Dataspot UUID
             href (str): The Dataspot HREF
+            
+        Returns:
+            bool: True if the entry was added successfully, False otherwise
         """
-        self.mapping[ods_id] = (uuid, href)
+        # Check for empty values with specific error messages
+        empty_params = []
+        if not ods_id:
+            empty_params.append("ods_id")
+        if not uuid_str:
+            empty_params.append("uuid_str")
+        if not href:
+            empty_params.append("href")
+            
+        if empty_params:
+            self.logger.warning("Cannot add entry with empty values for: %s", ", ".join(empty_params))
+            self.logger.warning("Provided values - ods_id: '%s', uuid_str: '%s', href: '%s'", 
+                             ods_id, uuid_str, href)
+            return False
+        
+        # Validate UUID format
+        if not self._is_valid_uuid(uuid_str):
+            self.logger.warning("Invalid UUID format: '%s'", uuid_str)
+            self.logger.warning("UUID must match the format: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' (8-4-4-4-12 hex digits)")
+            return False
+        
+        self.mapping[ods_id] = (uuid_str, href)
         self._save_mapping()
+        return True
     
     def remove_entry(self, ods_id: str) -> bool:
         """
@@ -121,3 +176,21 @@ class ODSDataspotMapping:
         """
         entry = self.get_entry(ods_id)
         return entry[1] if entry else None
+    
+    def get_all_entries(self) -> Dict[str, Tuple[str, str]]:
+        """
+        Get all mapping entries.
+        
+        Returns:
+            Dict[str, Tuple[str, str]]: Dictionary of all ODS ID to (UUID, HREF) mappings
+        """
+        return dict(self.mapping)
+    
+    def get_all_ods_ids(self) -> List[str]:
+        """
+        Get all ODS IDs in the mapping.
+        
+        Returns:
+            List[str]: List of all ODS IDs
+        """
+        return list(self.mapping.keys())
