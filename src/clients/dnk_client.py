@@ -788,163 +788,211 @@ class DNKClient(BaseDataspotClient):
             logging.error(f"Unexpected error during bulk upload: {str(e)}")
             raise
             
-    def get_validated_staatskalender_url(self, title: str, title_full: str, validate_url: bool = False) -> str:
+    def get_validated_staatskalender_url(self, title: str, url_website: str, validate_url: bool = False) -> str:
         """
-        Generate and optionally validate a Staatskalender URL for an organization.
+        Validate a Staatskalender URL for an organization or use the provided URL.
         
         Args:
             title (str): The organization title
-            title_full (str): The full path title of the organization
+            url_website (str): The URL provided in the data
             validate_url (bool): Whether to validate the URL by making an HTTP request
             
         Returns:
-            str: The generated URL for the organization (validated only if validate_url is True)
+            str: The validated URL for the organization, or empty string if invalid
         """
-        # Generate potential URL
-        url_website = generate_potential_staatskalender_url(title_full)
-        
-        # Skip validation if feature flag is set to False
-        if not validate_url:
-            return url_website
-            
-        # Check if the generated URL is valid
-        try:
-            response = requests_get(url_website)
-            if not response.status_code == 200: # TODO (Renato): Not sure if this ever happens... Potentially remove it.
-                logging.warning(f"Invalid URL for organization '{title}': {url_website}")
-                return ""
-            return url_website
-        except SystemExit as e:
-            logging.warning(f"Invalid URL for organization '{title}': {url_website}")
-            return ""
+        # If URL is already provided, optionally validate it
+        if url_website:
+            if not validate_url:
+                return url_website
+                
+            # Validate the provided URL
+            try:
+                response = requests_get(url_website)
+                if response.status_code == 200:
+                    return url_website
+                logging.warning(f"Invalid provided URL for organization '{title}': {url_website}")
+            except Exception as e:
+                logging.warning(f"Error validating URL for organization '{title}': {url_website}")
+                
+        # If no URL or validation failed, return empty string
+        return ""
 
     def transform_organization_for_bulk_upload(self, org_data: Dict[str, Any], validate_urls: bool = False) -> List[Dict[str, Any]]:
         """
-        Transform organization data from ODS API format to a format suitable for bulk upload to Dataspot.
-        
-        This method:
-        1. Extracts organizations from the ODS API data
-        2. Groups them by path depth to ensure proper hierarchy creation
-        3. Transforms each organization into a format suitable for Dataspot
-        4. Returns a list of organizational units ready for bulk upload
+        Build organization hierarchy from flat data using parent_id and children_id fields.
         
         Args:
             org_data (Dict[str, Any]): Organization data from ODS API
-            validate_urls (bool): Whether to validate Staatskalender URLs (can be slow)
+            validate_urls (bool): Whether to validate Staatskalender URLs
             
         Returns:
-            List[Dict[str, Any]]: List of organizational units ready for bulk upload
-            
-        Raises:
-            ValueError: If organization data is invalid
+            List[Dict[str, Any]]: List of organizational units with hierarchy info
         """
         if not org_data or 'results' not in org_data:
             raise ValueError("Invalid organization data format")
         
         # Build a lookup dictionary for quick access to organization by ID
-        org_lookup = {org['id']: org for org in org_data['results']}
+        org_lookup = {str(org['id']): org for org in org_data['results']}
         
-        # Use a set to track processed paths to avoid duplicates
-        processed_paths = set()
+        # Create a dictionary to track parent-child relationships
+        parent_child_map = {}
         
-        # List to hold all organizational units for bulk upload
-        all_units = []
+        # Track missing entries that are referenced
+        missing_entries = set()
         
-        # Process organizations from shallowest to deepest path
-        # First group by path depth
-        org_by_depth = {}
+        # Process each organization to build parent-child relationships
         for org_id, org in org_lookup.items():
-            title_full = org.get('title_full', '')
-            if not title_full:
-                continue
+            # Get parent ID
+            parent_id = str(org.get('parent_id', '')).strip()
+            if parent_id and parent_id.lower() != 'nan':
+                # Add this org as a child of its parent
+                if parent_id not in parent_child_map:
+                    parent_child_map[parent_id] = []
+                parent_child_map[parent_id].append(org_id)
                 
-            path_depth = len(title_full.split('/'))
-            if path_depth not in org_by_depth:
-                org_by_depth[path_depth] = []
+                # Check if parent exists
+                if parent_id not in org_lookup:
+                    missing_entries.add(parent_id)
+                    logging.warning(f"Organization {org_id} references missing parent {parent_id}")
             
-            org_by_depth[path_depth].append(org)
-        
-        # Now process in order of depth
-        for depth in sorted(org_by_depth.keys()):
-            for org in org_by_depth[depth]:
-                # Extract organization details
-                org_id = org.get('id')
-                title = org.get('title')
-                title_full = org.get('title_full', '')
+            # Check children IDs for consistency
+            children_ids = org.get('children_id', '')
+            if children_ids:
+                # Parse the children IDs - they might be in various formats
+                if isinstance(children_ids, str):
+                    # Try to split by comma if it's a string
+                    children_list = [id.strip() for id in children_ids.split(',')]
+                elif isinstance(children_ids, list):
+                    children_list = [str(id).strip() for id in children_ids]
+                else:
+                    children_list = [str(children_ids).strip()]
                 
-                if not title or not title_full:
+                # Add these children to the map if not already added by parent_id
+                if org_id not in parent_child_map:
+                    parent_child_map[org_id] = []
+                
+                # Check each child
+                for child_id in children_list:
+                    if child_id and child_id.lower() != 'nan':
+                        if child_id not in org_lookup:
+                            missing_entries.add(child_id)
+                            logging.warning(f"Organization {org_id} references missing child {child_id}")
+                        else:
+                            # Only add if not already in the list
+                            if child_id not in parent_child_map[org_id]:
+                                parent_child_map[org_id].append(child_id)
+        
+        # Log all missing entries
+        if missing_entries:
+            logging.warning(f"Found {len(missing_entries)} missing organizations referenced in the data: {', '.join(missing_entries)}")
+        
+        # Find root nodes (those without parents or with 'nan' as parent)
+        root_nodes = []
+        for org_id, org in org_lookup.items():
+            parent_id = str(org.get('parent_id', '')).strip()
+            if not parent_id:
+                logging.warning(f"Organization {org_id} has no parent ID. Assume it is a root node.")
+                root_nodes.append(org_id)
+            elif parent_id.lower() == 'nan':
+                logging.warning(f"Organization {org_id} has 'nan' as parent ID. Assume it is a root node.")
+                root_nodes.append(org_id)
+        
+        if not root_nodes:
+            logging.warning("No root nodes found in organization data. Hierarchy may be incomplete.")
+        
+        # Now construct hierarchical data for each root node
+        all_units = []
+        processed_ids = set()
+        
+        # BFS traversal to build hierarchy level by level
+        for depth in range(100):  # Safety limit to prevent infinite loops
+            current_level = []
+            
+            # For depth 0, start with root nodes
+            if depth == 0:
+                current_level = root_nodes
+            else:
+                # Find all children of the previous level's nodes
+                for parent_id in all_units:
+                    if parent_id in parent_child_map:
+                        for child_id in parent_child_map[parent_id]:
+                            if child_id not in processed_ids:
+                                current_level.append(child_id)
+            
+            # If no more nodes at this level, we're done
+            if not current_level:
+                break
+            
+            # Process each node at this level
+            for org_id in current_level:
+                # Skip if already processed
+                if org_id in processed_ids:
                     continue
                 
-                # Generate and validate Staatskalender URL (with feature flag)
-                url_website = self.get_validated_staatskalender_url(title, title_full, validate_url=validate_urls)
+                # Mark as processed
+                processed_ids.add(org_id)
                 
-                # If URL validation failed, use the fallback URL from the organization data
-                if not url_website:
-                    url_website = org.get('url_website', '')
-                    logging.info(f"Using fallback URL for organization '{title}': {url_website}")
+                # Get organization data
+                if org_id not in org_lookup:
+                    logging.warning(f"Organization ID {org_id} referenced but not found in data")
+                    continue
                 
-                # Extract path components
-                path_components = title_full.split('/')
+                org = org_lookup[org_id]
+                title = org.get('title', '')
+                if not title:
+                    logging.warning(f"Organization {org_id} missing title, skipping")
+                    continue
                 
-                # Process each component in the path
-                for i, component in enumerate(path_components):
-                    # Create path string up to this component
-                    current_path = '/'.join(path_components[:i+1])
-                    
-                    # Skip if already processed
-                    if current_path in processed_paths:
-                        continue
-                    
-                    # Add to processed paths
-                    processed_paths.add(current_path)
-                    
-                    # Create basic unit data
-                    unit_data = {
-                        "_type": "Collection",
-                        "label": component.strip(),  # Ensure no leading/trailing spaces
-                        "stereotype": "Organisationseinheit",
-                        # Store the hierarchy depth for sorting later
-                        "_hierarchy_depth": i
-                    }
-                    
-                    # For leaf node (the actual organization), add additional properties
-                    if i == len(path_components) - 1:
-                        # Add customProperties only for the leaf nodes (actual organizations)
-                        # Use the properties defined in the YAML schema
-                        custom_properties = {}
-                        
-                        # Only add properties that are defined in the schema
-                        if url_website:
-                            custom_properties["link_zum_staatskalender"] = url_website
-                            
-                        if org_id:
-                            custom_properties["id_im_staatskalender"] = org_id
-                            
-                        # Add custom properties only if we have some
-                        if custom_properties:
-                            unit_data["customProperties"] = custom_properties
-                    
-                    # Determine parent path and parent key
-                    parent_path = '/'.join(path_components[:i]) if i > 0 else None
-                    parent_key = path_components[i-1] if i > 0 else None
-                    
-                    # Set inCollection reference 
-                    if parent_key:
-                        unit_data["inCollection"] = parent_key
-                    # For top-level units, don't set inCollection to make them root-level in the scheme
-                    
-                    # Add to list of units
-                    all_units.append(unit_data)
+                # Get or validate URL
+                url_website = self.get_validated_staatskalender_url(
+                    title, 
+                    org.get('url_website', ''), 
+                    validate_url=validate_urls
+                )
+                
+                # Create unit data
+                unit_data = {
+                    "_type": "Collection",
+                    "label": title.strip(),
+                    "stereotype": "Organisationseinheit",
+                    "_hierarchy_depth": depth,
+                    "_id": org_id  # Store original ID for relationship building
+                }
+                
+                # Add custom properties
+                custom_properties = {}
+                if url_website:
+                    custom_properties["link_zum_staatskalender"] = url_website
+                if org_id:
+                    custom_properties["id_im_staatskalender"] = org_id
+                if custom_properties:
+                    unit_data["customProperties"] = custom_properties
+                
+                # Set parent relationship
+                parent_id = str(org.get('parent_id', '')).strip()
+                if parent_id and parent_id.lower() != 'nan' and parent_id in org_lookup:
+                    parent_org = org_lookup[parent_id]
+                    parent_title = parent_org.get('title', '').strip()
+                    if parent_title:
+                        unit_data["inCollection"] = parent_title
+                
+                # Add to the units list
+                all_units.append(unit_data)
         
-        logging.info(f"Transformed {len(processed_paths)} organizational units for bulk upload")
+        logging.info(f"Built hierarchy with {len(all_units)} organizational units")
+        
+        # Check for any organizations not included in the hierarchy
+        not_processed = set(org_lookup.keys()) - processed_ids
+        if not_processed:
+            logging.warning(f"{len(not_processed)} organizations not included in the hierarchy due to circular references or other issues")
+        
         return all_units
-        
+
     def build_organization_hierarchy_from_ods_bulk(self, org_data: Dict[str, Any], validate_urls: bool = False) -> dict:
         """
         Build organization hierarchy in the DNK based on data from ODS API using bulk upload.
         
-        This approach processes the hierarchy level by level, ensuring parent units 
-        are created before their children.
+        This method uses parent_id and children_id to build the hierarchy, not title_full.
         
         Args:
             org_data (Dict[str, Any]): Dictionary containing organization data from ODS API
@@ -952,13 +1000,10 @@ class DNKClient(BaseDataspotClient):
             
         Returns:
             dict: The response from the final bulk upload API call
-            
-        Raises:
-            ValueError: If organization data is missing or invalid
         """
         logging.info("Building organization hierarchy using level-by-level bulk upload...")
         
-        # Transform organization data for bulk upload
+        # Transform organization data for bulk upload using parent-child relationships
         org_units = self.transform_organization_for_bulk_upload(org_data, validate_urls=validate_urls)
         
         if not org_units:
@@ -970,6 +1015,7 @@ class DNKClient(BaseDataspotClient):
         for unit in org_units:
             # Get the hierarchy depth directly from the unit
             depth = unit.pop("_hierarchy_depth", 0)  # Remove the depth field and use its value
+            unit.pop("_id", None)  # Remove the temp ID field before upload
             
             # Add to the appropriate depth group
             if depth not in units_by_depth:
