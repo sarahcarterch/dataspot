@@ -666,125 +666,6 @@ class DNKClient(BaseDataspotClient):
         
         return True
     
-    # TODO: Do NOT implement me
-    def build_organization_hierarchy_from_ods(self, org_data: Dict[str, Any]):
-        """
-        Build organization hierarchy in the DNK based on organization data from ODS API.
-        
-        Args:
-            org_data (Dict[str, Any]): Dictionary containing organization data from ODS API
-            
-        Raises:
-            ValueError: If organization data is missing or invalid
-        """
-        
-        if not org_data or 'results' not in org_data:
-            raise ValueError("Invalid organization data format")
-            
-        # Build a lookup dictionary for quick access to organization by ID
-        org_lookup = {org['id']: org for org in org_data['results']}
-        
-        # Keep track of processed organizations to avoid duplicates
-        processed_orgs = set()
-        failed_orgs = set()
-        
-        # Group organizations by their path depth
-        depth_groups = {}
-        for org_id, org in org_lookup.items():
-            title_full = org.get('title_full', '')
-            if not title_full:
-                continue
-                
-            # Determine path depth (number of segments in title_full)
-            path_depth = len(title_full.split('/'))
-            if path_depth not in depth_groups:
-                depth_groups[path_depth] = []
-                
-            depth_groups[path_depth].append(org_id)
-        
-        # Calculate total number of organizations to process
-        total_orgs = sum(len(depth_groups[depth]) for depth in depth_groups)
-        current_org = 0
-        
-        # Process organizations level by level (starting from the shallowest)
-        for depth in sorted(depth_groups.keys()):
-            logging.info(f"Processing organizations at depth level {depth}")
-            
-            # Use a queue for processing organizations at this depth level
-            from collections import deque
-            queue = deque(depth_groups[depth])
-            
-            while queue:
-                org_id = queue.popleft()
-                
-                # Skip if already processed or failed before
-                if org_id in processed_orgs or org_id in failed_orgs:
-                    continue
-                
-                # Skip if not found in lookup
-                if org_id not in org_lookup:
-                    logging.warning(f"Organization with ID {org_id} not found in data, skipping")
-                    failed_orgs.add(org_id)
-                    continue
-                
-                org = org_lookup[org_id]
-
-                # Extract organization details
-                title = org.get('title')
-                title_full = org.get('title_full', '')
-                url_website = generate_potential_staatskalender_url(title_full)
-
-                # Increment the counter
-                current_org += 1
-
-                # Check if the generated url is valid
-                try:
-                    response = requests_get(url_website)
-                    if not response.status_code == 200:
-                        logging.warning(f"Invalid URL for organization '{title}': {url_website}.")
-                        url_website = org.get('url_website', '')
-                        logging.info(f"Invalid URL for organization '{title}', falling back to {url_website}")
-                except (RequestException, ConnectionError, Timeout) as e:
-                    logging.warning(f"Invalid URL for organization '{title}': {url_website}")
-
-                    # Note: We don't check whether the fallback url is valid, because we assume it is.
-                    url_website = org.get('url_website', '')
-                    logging.info(f"Invalid URL for organization '{title}', falling back to {url_website}")
-
-                # Create custom properties for the organization
-                custom_properties = {
-                    "ID": org_id,
-                    "Link_zum_Staatskalender": url_website
-                }
-                
-                # Skip if organization is missing critical data
-                if not title or not title_full:
-                    logging.warning(f"Organization with ID {org_id} has missing data, skipping")
-                    failed_orgs.add(org_id)
-                    continue
-
-
-                # Extract the path components from title_full
-                path_components = title_full.split('/')
-
-                logging.info(f"[{current_org}/{total_orgs}] Processing organization: {title} (ID: {org_id}, Path: {title_full})")
-
-                try:
-                    # TODO: Implement this (also don't forget to "Mark as processed" by processed_orgs.add(org_id)
-                    # TODO: Actually build the structure based on path_components. Create Collections of stereotype "Organisationseinheiten" only.
-                    pass
-
-
-                    
-                except Exception as e:
-                    logging.error(f"Error processing organization {org_id}: {str(e)}")
-                    failed_orgs.add(org_id)
-        
-        # Log summary statistics
-        logging.info(f"Processed {len(processed_orgs)} organizations successfully")
-        if failed_orgs:
-            logging.warning(f"Failed to process {len(failed_orgs)} organizations")
-
     def require_scheme_exists(self) -> str:
         """
         Assert that the DNK scheme exists and return its href. Throw an error if it doesn't.
@@ -841,3 +722,279 @@ class DNKClient(BaseDataspotClient):
         except HTTPError as create_error:
             logging.error(f"Failed to create ODS-Imports collection: {str(create_error)}")
             raise
+
+    def bulk_create_or_update_organizational_units(self, organizational_units: List[Dict[str, Any]], 
+                                        operation: str = "ADD", dry_run: bool = False) -> dict:
+        """
+        Create multiple organizational units in bulk in the Datennutzungskatalog scheme in Dataspot.
+        
+        Args:
+            organizational_units (List[Dict[str, Any]]): List of organizational unit data to upload
+            operation (str, optional): Upload operation mode. Defaults to "ADD".
+                                      "ADD": Add or update only. Existing units not in the upload remain unchanged.
+                                      "REPLACE": Reconcile elements. Units not in the upload are considered obsolete.
+                                      "FULL_LOAD": Reconcile model. Completely replaces with the uploaded units.
+            dry_run (bool, optional): Whether to perform a test run without changing data. Defaults to False.
+            
+        Returns:
+            dict: The JSON response from the API containing the upload results
+            
+        Raises:
+            ValueError: If any organizational unit is missing required properties
+            HTTPError: If API requests fail
+        """
+        # Verify we have organizational units to process
+        if not organizational_units:
+            logging.warning("No organizational units provided for bulk upload")
+            return {"status": "error", "message": "No organizational units provided"}
+        
+        # Ensure DNK scheme exists
+        try:
+            self.require_scheme_exists()
+        except HTTPError as e:
+            logging.error(f"HTTP error ensuring DNK scheme exists: {str(e)}")
+            raise
+        except Exception as e:
+            logging.error(f"Unexpected error ensuring DNK scheme exists: {str(e)}")
+            raise ValueError(f"Could not access scheme information: {str(e)}")
+        
+        # Count of units
+        num_units = len(organizational_units)
+        logging.info(f"Bulk creating {num_units} organizational units (operation: {operation}, dry_run: {dry_run})...")
+        
+        # Bulk create organizational units using the scheme name
+        try:
+            response = self.bulk_create_or_update_resources(
+                scheme_name=self.scheme_name,
+                data=organizational_units,
+                _type='Collection',
+                operation=operation,
+                dry_run=dry_run
+            )
+
+            logging.info(f"Bulk creation of organizational units complete")
+            return response
+            
+        except HTTPError as e:
+            logging.error(f"HTTP error during bulk upload: {str(e)}")
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_details = e.response.json()
+                    logging.error(f"Error response details: {error_details}")
+                except:
+                    logging.error(f"Error response status: {e.response.status_code}, text: {e.response.text[:500]}")
+            raise
+        except Exception as e:
+            logging.error(f"Unexpected error during bulk upload: {str(e)}")
+            raise
+            
+    def get_validated_staatskalender_url(self, title: str, title_full: str, validate_url: bool = False) -> str:
+        """
+        Generate and optionally validate a Staatskalender URL for an organization.
+        
+        Args:
+            title (str): The organization title
+            title_full (str): The full path title of the organization
+            validate_url (bool): Whether to validate the URL by making an HTTP request
+            
+        Returns:
+            str: The generated URL for the organization (validated only if validate_url is True)
+        """
+        # Generate potential URL
+        url_website = generate_potential_staatskalender_url(title_full)
+        
+        # Skip validation if feature flag is set to False
+        if not validate_url:
+            return url_website
+            
+        # Check if the generated URL is valid
+        try:
+            response = requests_get(url_website)
+            if not response.status_code == 200: # TODO (Renato): Not sure if this ever happens... Potentially remove it.
+                logging.warning(f"Invalid URL for organization '{title}': {url_website}")
+                return ""
+            return url_website
+        except SystemExit as e:
+            logging.warning(f"Invalid URL for organization '{title}': {url_website}")
+            return ""
+
+    def transform_organization_for_bulk_upload(self, org_data: Dict[str, Any], validate_urls: bool = False) -> List[Dict[str, Any]]:
+        """
+        Transform organization data from ODS API format to a format suitable for bulk upload to Dataspot.
+        
+        This method:
+        1. Extracts organizations from the ODS API data
+        2. Groups them by path depth to ensure proper hierarchy creation
+        3. Transforms each organization into a format suitable for Dataspot
+        4. Returns a list of organizational units ready for bulk upload
+        
+        Args:
+            org_data (Dict[str, Any]): Organization data from ODS API
+            validate_urls (bool): Whether to validate Staatskalender URLs (can be slow)
+            
+        Returns:
+            List[Dict[str, Any]]: List of organizational units ready for bulk upload
+            
+        Raises:
+            ValueError: If organization data is invalid
+        """
+        if not org_data or 'results' not in org_data:
+            raise ValueError("Invalid organization data format")
+        
+        # Build a lookup dictionary for quick access to organization by ID
+        org_lookup = {org['id']: org for org in org_data['results']}
+        
+        # Use a set to track processed paths to avoid duplicates
+        processed_paths = set()
+        
+        # List to hold all organizational units for bulk upload
+        all_units = []
+        
+        # Process organizations from shallowest to deepest path
+        # First group by path depth
+        org_by_depth = {}
+        for org_id, org in org_lookup.items():
+            title_full = org.get('title_full', '')
+            if not title_full:
+                continue
+                
+            path_depth = len(title_full.split('/'))
+            if path_depth not in org_by_depth:
+                org_by_depth[path_depth] = []
+            
+            org_by_depth[path_depth].append(org)
+        
+        # Now process in order of depth
+        for depth in sorted(org_by_depth.keys()):
+            for org in org_by_depth[depth]:
+                # Extract organization details
+                org_id = org.get('id')
+                title = org.get('title')
+                title_full = org.get('title_full', '')
+                
+                if not title or not title_full:
+                    continue
+                
+                # Generate and validate Staatskalender URL (with feature flag)
+                url_website = self.get_validated_staatskalender_url(title, title_full, validate_url=validate_urls)
+                
+                # If URL validation failed, use the fallback URL from the organization data
+                if not url_website:
+                    url_website = org.get('url_website', '')
+                    logging.info(f"Using fallback URL for organization '{title}': {url_website}")
+                
+                # Extract path components
+                path_components = title_full.split('/')
+                
+                # Process each component in the path
+                for i, component in enumerate(path_components):
+                    # Create path string up to this component
+                    current_path = '/'.join(path_components[:i+1])
+                    
+                    # Skip if already processed
+                    if current_path in processed_paths:
+                        continue
+                    
+                    # Add to processed paths
+                    processed_paths.add(current_path)
+                    
+                    # Create basic unit data
+                    unit_data = {
+                        "_type": "Collection",
+                        "label": component.strip(),  # Ensure no leading/trailing spaces
+                        "stereotype": "Organisationseinheit",
+                        # Store the hierarchy depth for sorting later
+                        "_hierarchy_depth": i
+                    }
+                    
+                    # For leaf node (the actual organization), add additional properties
+                    if i == len(path_components) - 1:
+                        # Add customProperties only for the leaf nodes (actual organizations)
+                        # Use the properties defined in the YAML schema
+                        custom_properties = {}
+                        
+                        # Only add properties that are defined in the schema
+                        if url_website:
+                            custom_properties["link_zum_staatskalender"] = url_website
+                            
+                        if org_id:
+                            custom_properties["id_im_staatskalender"] = org_id
+                            
+                        # Add custom properties only if we have some
+                        if custom_properties:
+                            unit_data["customProperties"] = custom_properties
+                    
+                    # Determine parent path and parent key
+                    parent_path = '/'.join(path_components[:i]) if i > 0 else None
+                    parent_key = path_components[i-1] if i > 0 else None
+                    
+                    # Set inCollection reference 
+                    if parent_key:
+                        unit_data["inCollection"] = parent_key
+                    # For top-level units, don't set inCollection to make them root-level in the scheme
+                    
+                    # Add to list of units
+                    all_units.append(unit_data)
+        
+        logging.info(f"Transformed {len(processed_paths)} organizational units for bulk upload")
+        return all_units
+        
+    def build_organization_hierarchy_from_ods_bulk(self, org_data: Dict[str, Any], validate_urls: bool = False) -> dict:
+        """
+        Build organization hierarchy in the DNK based on data from ODS API using bulk upload.
+        
+        This approach processes the hierarchy level by level, ensuring parent units 
+        are created before their children.
+        
+        Args:
+            org_data (Dict[str, Any]): Dictionary containing organization data from ODS API
+            validate_urls (bool): Whether to validate Staatskalender URLs (can be slow)
+            
+        Returns:
+            dict: The response from the final bulk upload API call
+            
+        Raises:
+            ValueError: If organization data is missing or invalid
+        """
+        logging.info("Building organization hierarchy using level-by-level bulk upload...")
+        
+        # Transform organization data for bulk upload
+        org_units = self.transform_organization_for_bulk_upload(org_data, validate_urls=validate_urls)
+        
+        if not org_units:
+            logging.warning("No organizational units to upload")
+            return {"status": "error", "message": "No organizational units to upload"}
+        
+        # Group units by their depth in the hierarchy
+        units_by_depth = {}
+        for unit in org_units:
+            # Get the hierarchy depth directly from the unit
+            depth = unit.pop("_hierarchy_depth", 0)  # Remove the depth field and use its value
+            
+            # Add to the appropriate depth group
+            if depth not in units_by_depth:
+                units_by_depth[depth] = []
+            
+            units_by_depth[depth].append(unit)
+        
+        # Process each depth level in order
+        last_response = None
+        for depth in sorted(units_by_depth.keys()):
+            level_units = units_by_depth[depth]
+            logging.info(f"Uploading {len(level_units)} organizational units at depth level {depth}...")
+            
+            # Perform bulk upload for this level
+            try:
+                response = self.bulk_create_or_update_organizational_units(
+                    organizational_units=level_units,
+                    operation="ADD",
+                    dry_run=False
+                )
+                last_response = response
+                logging.info(f"Successfully uploaded {len(level_units)} units at depth level {depth}")
+            except Exception as e:
+                logging.error(f"Error uploading units at depth level {depth}: {str(e)}")
+                # Continue with next level despite errors
+        
+        logging.info("Organization hierarchy build completed")
+        return last_response or {"status": "error", "message": "No levels were successfully uploaded"}

@@ -63,12 +63,16 @@ def generate_potential_staatskalender_url(path: str) -> str:
         >>> generate_potential_staatskalender_url("Präsidialdepartement/Kantons- und Stadtentwicklung")
         "https://staatskalender.bs.ch/organization/praesidialdepartement/kantons-und-stadtentwicklung"
     """
-    # Make path string lowercase, and replace ö -> oe, ä -> ae, ü -> ue, space -> '-', and remove trailing slashes
+    # Make path string lowercase, and replace ö -> oe, ä -> ae, ü -> ue, é -> e, etc., and space -> '-', and remove trailing slashes
     new_path = path.lower()
     new_path = new_path.replace(' ', '-')
     new_path = new_path.replace('ö', 'oe')
     new_path = new_path.replace('ä', 'ae')
     new_path = new_path.replace('ü', 'ue')
+    new_path = new_path.replace('é', 'e')
+    new_path = new_path.replace('ê', 'e')
+    new_path = new_path.replace('è', 'e')
+    new_path = new_path.replace('à', 'a')
     # Keep only letters a-z and hyphens, remove all other characters
     new_path = ''.join(c for c in new_path if c.isalpha() or c in '-/')
     new_path = new_path.replace('--', '-')

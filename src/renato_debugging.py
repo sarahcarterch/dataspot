@@ -558,26 +558,26 @@ def main_8_test_bulk_ods_datasets_upload(cleanup_after_test=True):
     
     return processed_ids
 
-def main_X_build_organization_structure_in_dnk():
+def main_9_build_organization_structure_in_dnk():
     """
     Build the organization structure in Dataspot's DNK scheme based on data from the ODS API.
+    Uses the bulk upload approach.
 
     This method:
     1. Retrieves organization data from the ODS API
-    2. Builds the organization hierarchy in Dataspot using a path-depth approach
-       where organizations are processed level by level based on their path depth
-    3. This ensures parent organizations are always created before their children
+    2. Builds the organization hierarchy in Dataspot using bulk upload
+    3. Provides options to limit the number of batches processed
     """
     logging.info("Starting organization structure build...")
 
     # Initialize clients
     ods_client = ODSClient()
-    dataspot_client = DataspotClient()
+    dataspot_client = DNKClient()
 
     # Configuration for data retrieval and processing
     batch_size = 100  # Number of records to retrieve in each API call
     max_batches = None  # Maximum number of batches to retrieve (set to None for all)
-    cooldown_delay = 1.0  # Delay in seconds between API calls to prevent overloading the server
+    validate_urls = False  # Set to False to skip URL validation (much faster)
     all_organizations = {"results": []}
 
     # Fetch organization data in batches
@@ -616,22 +616,20 @@ def main_X_build_organization_structure_in_dnk():
         all_organizations['total_count'] = batch_data.get('total_count', total_retrieved)
         logging.info(f"Total organizations retrieved: {total_retrieved} (out of {all_organizations['total_count']})")
 
-        # Optionally clear existing structure before building
-        if True:  # Set to True to clear existing structure
-            logging.info("Clearing existing organization structure...")
-            dataspot_client.teardown_dnk(delete_empty_collections=True)
-
-        # Build the organization hierarchy in Dataspot
-        logging.info("Building organization hierarchy in Dataspot...")
+        # Build the organization hierarchy in Dataspot using bulk upload
+        logging.info(f"Building organization hierarchy in Dataspot using bulk upload (validate_urls={validate_urls})...")
         try:
-            dataspot_client.build_organization_hierarchy_from_ods(
-                all_organizations,
-                cooldown_delay=cooldown_delay
+            # Use the bulk upload method with URL validation feature flag
+            upload_response = dataspot_client.build_organization_hierarchy_from_ods_bulk(
+                all_organizations, 
+                validate_urls=validate_urls
             )
-            logging.info("Organization structure build completed successfully")
+            
+            logging.info(f"Organization structure bulk upload complete. Response summary: {upload_response}")
+            
         except Exception as e:
             logging.error(f"Error building organization hierarchy: {str(e)}")
-            logging.info("Organization structure build partially completed with errors")
+            logging.info("Organization structure build failed")
 
     except KeyboardInterrupt:
         logging.info("Operation was interrupted by user")
@@ -643,6 +641,6 @@ def main_X_build_organization_structure_in_dnk():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     logging.info(f'Executing {__file__}...')
-    main_8_test_bulk_ods_datasets_upload()
+    main_9_build_organization_structure_in_dnk()
     logging.info('Job successful!')
     
