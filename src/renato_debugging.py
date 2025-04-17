@@ -540,7 +540,7 @@ def main_8_test_bulk_ods_datasets_upload(cleanup_after_test=True):
     
     # Clean up if requested
     if cleanup_after_test and processed_ids:
-        logging.info(f"Cleaning up {len(processed_ids)} uploaded datasets...")
+        logging.info(f"Step 3: Cleaning up {len(processed_ids)} uploaded datasets...")
         
         for idx, dataset_id in enumerate(processed_ids):
             try:
