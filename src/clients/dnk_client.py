@@ -7,7 +7,7 @@ from requests import HTTPError
 
 from src import config
 from src.clients.base_client import BaseDataspotClient
-from src.clients.helpers import url_join, generate_potential_staatskalender_url, get_uuid_and_href_from_response
+from src.clients.helpers import url_join, generate_potential_staatskalender_url, get_uuid_and_href_from_response, escape_special_chars
 from src.dataspot_dataset import Dataset
 from src.common import requests_get # BUT DO NOT IMPORT THESE: requests_post, requests_put, requests_patch
 from src.ods_dataspot_mapping import ODSDataspotMapping
@@ -842,26 +842,33 @@ class DNKClient(BaseDataspotClient):
         # Track missing entries that are referenced
         missing_entries = set()
         
+        # Track organizations that reference missing parents - these will be excluded
+        invalid_orgs = set()
+        
         # Process each organization to build parent-child relationships
         for org_id, org in org_lookup.items():
             # Get parent ID
             parent_id = str(org.get('parent_id', '')).strip()
             if parent_id and parent_id.lower() != 'nan':
+                # Check if parent exists
+                if parent_id not in org_lookup:
+                    missing_entries.add(parent_id)
+                    logging.warning(f"Organization {org_id} ('{org.get('title', 'Unknown')}') references missing parent {parent_id}. Skipping...")
+                    # Mark this organization as invalid (has missing parent)
+                    invalid_orgs.add(org_id)
+                    continue
+                
                 # Add this org as a child of its parent
                 if parent_id not in parent_child_map:
                     parent_child_map[parent_id] = []
                 parent_child_map[parent_id].append(org_id)
-                
-                # Check if parent exists
-                if parent_id not in org_lookup:
-                    missing_entries.add(parent_id)
-                    logging.warning(f"Organization {org_id} ('{org.get('title', 'Unknown')}') references missing parent {parent_id}")
             
             # Check children IDs for consistency
             children_ids = org.get('children_id', '')
             if children_ids:
                 # Parse the children IDs - they might be in various formats
                 try:
+                    # TODO (Renato): We don't need this. If it exists, then it is a list with strings of ids (I think). Throw an error otherwise.
                     if isinstance(children_ids, str):
                         # Try to split by comma if it's a string
                         children_list = [id.strip() for id in children_ids.split(',')]
@@ -896,6 +903,10 @@ class DNKClient(BaseDataspotClient):
         # Find root nodes (those without parents or with 'nan' as parent)
         root_nodes = []
         for org_id, org in org_lookup.items():
+            # Skip organizations with missing parents
+            if org_id in invalid_orgs:
+                continue
+                
             parent_id = str(org.get('parent_id', '')).strip()
             if not parent_id:
                 logging.info(f"Organization {org_id} ('{org.get('title', 'Unknown')}') has no parent ID. Treating as root node.")
@@ -910,10 +921,78 @@ class DNKClient(BaseDataspotClient):
         
         logging.info(f"Found {len(root_nodes)} root nodes")
         logging.info(f"Start construction of organizational structure - Not yet uploading...")
+
+        # Dictionary to store organization titles by ID for lookup
+        org_title_by_id = {org_id: org.get('title', '').strip() for org_id, org in org_lookup.items()}
         
-        # Now construct hierarchical data for each root node
+        # Dictionary to track the path components for each organization
+        # For root nodes, the path is just their title as a single component
+        # For other nodes, it will be built recursively as a list of components
+        # This avoids problems with slashes in organization names
+        path_components_by_id = {}
+        for root_id in root_nodes:
+            path_components_by_id[root_id] = [org_title_by_id.get(root_id, '')]
+        
+        # Function to check if an organization or any of its ancestors is invalid
+        def has_invalid_ancestor(org_id):
+            if org_id in invalid_orgs:
+                return True
+                
+            parent_id = str(org_lookup.get(org_id, {}).get('parent_id', '')).strip()
+            if not parent_id or parent_id.lower() == 'nan' or parent_id not in org_lookup:
+                return False
+                
+            return has_invalid_ancestor(parent_id)
+        
+        # Function to get or build the path components for an organization
+        def get_path_components(org_id):
+            # If path already calculated, return it
+            if org_id in path_components_by_id:
+                return path_components_by_id[org_id]
+            
+            # Get the organization's title
+            title = org_title_by_id.get(org_id, '')
+            if not title:
+                logging.warning(f"Organization {org_id} has no title, using ID as title")
+                title = f"Unknown-{org_id}"
+            
+            # Get the parent ID
+            parent_id = str(org_lookup.get(org_id, {}).get('parent_id', '')).strip()
+            if not parent_id or parent_id.lower() == 'nan' or parent_id not in org_lookup:
+                # If no valid parent, this is effectively a root node
+                path_components = [title]
+                path_components_by_id[org_id] = path_components
+                return path_components
+            
+            # Get the parent's path components recursively
+            parent_path_components = get_path_components(parent_id)
+            
+            # Create the full path components by appending this org's title
+            path_components = parent_path_components + [title]
+            
+            # Store the components in the mapping
+            path_components_by_id[org_id] = path_components
+            return path_components
+        
+        # Now construct hierarchical data for each organization
         all_units = []
         processed_ids = set()
+        excluded_ids = set()  # Track excluded organizations
+        
+        # Recursively identify and exclude all descendants of invalid organizations
+        def mark_descendants_as_invalid(org_id):
+            if org_id in parent_child_map:
+                for child_id in parent_child_map[org_id]:
+                    invalid_orgs.add(child_id)
+                    excluded_ids.add(child_id)
+                    mark_descendants_as_invalid(child_id)
+        
+        # Mark all descendants of invalid organizations as invalid too
+        for org_id in list(invalid_orgs):
+            mark_descendants_as_invalid(org_id)
+        
+        if excluded_ids:
+            logging.warning(f"Excluding {len(excluded_ids)} organizations with missing parents or ancestors: {', '.join(excluded_ids)}")
         
         # BFS traversal to build hierarchy level by level
         for depth in range(100):  # Safety limit to prevent infinite loops
@@ -928,7 +1007,7 @@ class DNKClient(BaseDataspotClient):
                 for parent_id in processed_ids:  # Check all processed nodes for children
                     if parent_id in parent_child_map:
                         for child_id in parent_child_map[parent_id]:
-                            if child_id not in processed_ids:
+                            if child_id not in processed_ids and child_id not in invalid_orgs:
                                 current_level.append(child_id)
             
             # If no more nodes at this level, we're done
@@ -942,6 +1021,10 @@ class DNKClient(BaseDataspotClient):
             for org_id in current_level:
                 # Skip if already processed
                 if org_id in processed_ids:
+                    continue
+                
+                # Skip if this org or any of its ancestors is invalid
+                if org_id in invalid_orgs:
                     continue
                 
                 # Mark as processed
@@ -983,21 +1066,50 @@ class DNKClient(BaseDataspotClient):
                 if custom_properties:
                     unit_data["customProperties"] = custom_properties
                 
-                # Set parent relationship
+                # Set parent relationship using hierarchical business key
                 parent_id = str(org.get('parent_id', '')).strip()
                 if parent_id and parent_id.lower() != 'nan' and parent_id in org_lookup:
-                    parent_org = org_lookup[parent_id]
-                    parent_title = parent_org.get('title', '').strip()
-                    if parent_title:
-                        unit_data["inCollection"] = parent_title
+                    # Get the parent's path components
+                    parent_path_components = get_path_components(parent_id)
+                    
+                    if parent_path_components:
+                        # Escape each path component individually
+                        escaped_components = []
+                        
+                        for i, comp in enumerate(parent_path_components):
+                            # Log before escaping for components with special characters
+                            if any(char in comp for char in ['/', '.', '"']):
+                                logging.debug(f"Component {i} before escaping: '{comp}'")
+                            
+                            # Escape special characters in this component
+                            escaped_comp = escape_special_chars(comp)
+                            
+                            # Log after escaping for components with special characters
+                            if any(char in comp for char in ['/', '.', '"']):
+                                logging.debug(f"Component {i} after escaping: '{escaped_comp}'")
+                                
+                            escaped_components.append(escaped_comp)
+                        
+                        # Join the escaped components with slashes
+                        escaped_parent_path = '/'.join(escaped_components)
+                        
+                        # For debugging, show original path components and final escaped path
+                        original_path = '/'.join(parent_path_components)
+                        logging.debug(f"Original path components: {parent_path_components}")
+                        logging.debug(f"Escaped path: '{escaped_parent_path}'")
+                        
+                        unit_data["inCollection"] = escaped_parent_path
+                        logging.debug(f"Setting inCollection for '{title}' to '{escaped_parent_path}'")
                 
                 # Add to the units list
                 all_units.append(unit_data)
         
-        logging.info(f"Built hierarchy with {len(all_units)} organizational units")
+        # Calculate total invalid organizations (those with invalid ancestors)
+        total_excluded = len(invalid_orgs) + len(excluded_ids)
+        logging.info(f"Built hierarchy with {len(all_units)} organizational units (excluded {total_excluded} due to missing parents/ancestors)")
         
         # Check for any organizations not included in the hierarchy
-        not_processed = set(org_lookup.keys()) - processed_ids
+        not_processed = set(org_lookup.keys()) - processed_ids - invalid_orgs - excluded_ids
         if not_processed:
             logging.warning(f"{len(not_processed)} organizations not included in the hierarchy due to circular references or other issues")
             
@@ -1008,13 +1120,14 @@ class DNKClient(BaseDataspotClient):
         Build organization hierarchy in the DNK based on data from ODS API using bulk upload.
         
         This method uses parent_id and children_id to build the hierarchy, not title_full.
+        It processes the hierarchy level by level.
         
         Args:
             org_data (Dict[str, Any]): Dictionary containing organization data from ODS API
             validate_urls (bool): Whether to validate Staatskalender URLs (can be slow)
             
         Returns:
-            dict: The response from the final bulk upload API call
+            dict: The response from the final bulk upload API call with status information
             
         Raises:
             ValueError: If organization data is invalid or no organizational units can be built
@@ -1042,20 +1155,92 @@ class DNKClient(BaseDataspotClient):
             
             units_by_depth[depth].append(unit)
         
+        # Track uploaded units to handle failures
+        level_result = {}
+        upload_errors = []
+        
         # Process each depth level in order
-        last_response = None
         for depth in sorted(units_by_depth.keys()):
             level_units = units_by_depth[depth]
+            if not level_units:
+                logging.info(f"No units to upload at depth level {depth}, skipping")
+                continue
+                
             logging.info(f"Uploading {len(level_units)} organizational units at depth level {depth}...")
             
-            # Perform bulk upload for this level - let errors propagate up
-            response = self.bulk_create_or_update_organizational_units(
-                organizational_units=level_units,
-                operation="ADD",
-                dry_run=False
-            )
-            last_response = response
-            logging.info(f"Successfully uploaded {len(level_units)} units at depth level {depth}")
+            try:
+                # Perform bulk upload for this level
+                response = self.bulk_create_or_update_organizational_units(
+                    organizational_units=level_units,
+                    operation="ADD",
+                    dry_run=False
+                )
+                
+                # Store the result for this level
+                level_result[depth] = response
+                logging.info(f"Successfully uploaded {len(level_units)} units at depth level {depth}")
+                
+                # If this level has relationship errors, log them but continue
+                if 'errors' in response and response.get('errors'):
+                    error_count = len(response.get('errors', []))
+                    logging.warning(f"Upload for level {depth} completed with {error_count} errors")
+                    
+                    # Log up to 10 errors in detail
+                    for i, error in enumerate(response.get('errors', [])[:10]):
+                        error_msg = error.get('error', str(error))
+                        upload_errors.append(f"Level {depth} error: {error_msg}")
+                        logging.warning(f"Level {depth} upload error {i+1}: {error_msg}")
+                    
+                    if error_count > 10:
+                        logging.warning(f"... and {error_count - 10} more errors")
+                
+            except HTTPError as e:
+                error_msg = f"HTTP error uploading level {depth}: {str(e)}"
+                logging.error(error_msg)
+                upload_errors.append(error_msg)
+                
+                # Try to extract details from the response for debugging
+                if hasattr(e, 'response') and e.response is not None:
+                    try:
+                        error_details = e.response.json()
+                        # Log the first few errors
+                        if 'errors' in error_details:
+                            error_count = len(error_details.get('errors', []))
+                            for i, err in enumerate(error_details.get('errors', [])[:10]):
+                                logging.error(f"Error {i+1}: {err}")
+                            if error_count > 10:
+                                logging.error(f"...and {error_count - 10} more errors")
+                    except:
+                        logging.error(f"Error response: {e.response.text[:500]}")
+                
+            except Exception as e:
+                error_msg = f"Error uploading level {depth}: {str(e)}"
+                logging.error(error_msg)
+                upload_errors.append(error_msg)
         
         logging.info("Organization hierarchy build completed")
-        return last_response or {"status": "error", "message": "No levels were successfully uploaded"}
+        
+        # Determine overall result
+        if upload_errors:
+            logging.warning(f"Upload completed with {len(upload_errors)} errors")
+            
+            # Sample up to 10 errors for the result
+            sample_errors = upload_errors[:10]
+            if len(upload_errors) > 10:
+                sample_errors.append(f"... and {len(upload_errors) - 10} more errors")
+                
+            result = {
+                "status": "partial", 
+                "message": "Hierarchy build completed with errors",
+                "errors": sample_errors,
+                "total_errors": len(upload_errors),
+                "levels_processed": len(level_result)
+            }
+        else:
+            result = {
+                "status": "success",
+                "message": "Hierarchy build completed successfully",
+                "levels_processed": len(level_result)
+            }
+            
+        return result
