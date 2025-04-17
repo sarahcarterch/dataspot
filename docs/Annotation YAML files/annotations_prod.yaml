@@ -1583,17 +1583,13 @@ Deployment:
 #  instances:
 #    DARK:
 #      appBarBackgroundColor: 167a3e
-#      colorScheme: DARK
 #    LIGHT:
 #      appBarBackgroundColor: 167a3e
-#      colorScheme: LIGHT
 
 # Uncomment these lines when working in an `int` (integration) environment
 #Theme:
 #  instances:
 #    DARK:
 #      appBarBackgroundColor: ff0000
-#      colorScheme: DARK
 #    LIGHT:
 #      appBarBackgroundColor: ff0000
-#      colorScheme: LIGHT
