@@ -81,7 +81,8 @@ def generate_potential_staatskalender_url(path: str) -> str:
 
 def escape_special_chars(name: str) -> str:
     '''
-    Escape special characters in asset names for Dataspot API according to the business key rules.
+    Escape special characters in asset names for Dataspot API according to the business key rules. Also remove leading
+    and trailing spaces.
     
     According to Dataspot documentation, special characters need to be properly escaped in business keys:
     
@@ -109,6 +110,11 @@ def escape_special_chars(name: str) -> str:
     
     # Check if the name contains any characters that need special handling
     needs_quoting = False
+
+    orig_name = name
+    
+    # Remove leading and trailing spaces
+    name = name.strip()
     
     # Names containing '/' or '.' need to be quoted
     if '/' in name or '.' in name:
@@ -124,6 +130,8 @@ def escape_special_chars(name: str) -> str:
     
     # Enclose the name in quotes if needed
     if needs_quoting:
+        logging.debug(f"Escaped organization title from '{orig_name}' to '{name}'")
         return f'"{name}"'
     
+    logging.debug(f"No need to escape special characters for '{orig_name}'")
     return name
