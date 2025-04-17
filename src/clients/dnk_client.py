@@ -41,6 +41,7 @@ class DNKClient(BaseDataspotClient):
             
         Raises:
             HTTPError: If API requests fail
+            ValueError: If the response format is unexpected or invalid
         """
         logging.info(f"Downloading datasets from DNK scheme for mapping update")
         
@@ -49,186 +50,177 @@ class DNKClient(BaseDataspotClient):
         full_url = url_join(self.base_url, download_path)
         
         logging.debug(f"Downloading datasets from: {full_url}")
-        try:
-            response = requests_get(full_url, headers=self.auth.get_headers())
-            response.raise_for_status()
-        except HTTPError as e:
-            logging.error(f"Failed to download datasets from scheme: {str(e)}")
-            raise
+        response = requests_get(full_url, headers=self.auth.get_headers())
+        response.raise_for_status()
         
         # Parse the JSON response
-        try:
-            datasets = response.json()
-            
-            # If we got a list directly, use it
-            if isinstance(datasets, list):
-                # Filter to only include datasets
-                datasets = [item for item in datasets if item.get('_type') == 'Dataset' and item.get('ODS_ID')]
-                datasets.sort(key=lambda x: x.get('ODS_ID'))
-                logging.info(f"Downloaded {len(datasets)} datasets from scheme")
-            else:
-                # We might have received a job ID instead
-                logging.warning("Received unexpected response format. Expected a list of datasets.")
-                logging.debug(f"Response: {datasets}")
-                return 0
-            
-            if not datasets:
-                logging.warning(f"No datasets with ods_ids found in {self.scheme_name}")
-                return 0
-            
-            # Create a lookup dictionary for faster access
-            dataset_by_ods_id = {}
-            for dataset in datasets:
+        datasets = response.json()
+        
+        # If we got a list directly, use it
+        if isinstance(datasets, list):
+            # Filter to only include datasets
+            datasets = [item for item in datasets if item.get('_type') == 'Dataset' and item.get('ODS_ID')]
+            datasets.sort(key=lambda x: x.get('ODS_ID'))
+            logging.info(f"Downloaded {len(datasets)} datasets from scheme")
+        else:
+            # We might have received a job ID instead
+            logging.error(f"Received unexpected response format from {full_url}. Expected a list of datasets.")
+            logging.debug(f"Response content: {datasets}")
+            raise ValueError(f"Unexpected response format from download API. Expected a list but got: {type(datasets)}")
+        
+        if not datasets:
+            logging.warning(f"No datasets with ods_ids found in {self.scheme_name}")
+            return 0
+        
+        # Create a lookup dictionary for faster access
+        dataset_by_ods_id = {}
+        for dataset in datasets:
+            ods_id = dataset.get('ODS_ID')
+            if ods_id:
+                dataset_by_ods_id[ods_id] = dataset
+        
+        # Process each dataset and update the mapping
+        updated_count = 0
+        
+        # Check for datasets in mapping that are not in downloaded datasets
+        if not target_ods_ids:
+            removed_count = 0
+            for ods_id, entry in list(self.mapping.mapping.items()):
+                if ods_id not in dataset_by_ods_id:
+                    logging.warning(f"Dataset {ods_id} exists in local mapping but not in dataspot. Removing from local mapping.")
+                    if len(entry) >= 2:
+                        uuid, href = entry[0], entry[1]
+                        logging.debug(f"    - uuid: {uuid}, href: {href}")
+                    self.mapping.remove_entry(ods_id)
+                    removed_count += 1
+            if removed_count > 0:
+                logging.info(f"Found {removed_count} datasets that exist locally but not in dataspot.")
+        
+        # If we have target IDs, prioritize those
+        if target_ods_ids and len(target_ods_ids) > 0:
+            total_targets = len(target_ods_ids)
+            target_ods_ids.sort()
+            for idx, ods_id in enumerate(target_ods_ids, 1):
+                logging.info(f"[{idx}/{total_targets}] Processing dataset with ODS ID: {ods_id}")
+                
+                # Find this ODS ID in our downloaded datasets
+                dataset = dataset_by_ods_id.get(ods_id)
+                if not dataset:
+                    logging.warning(f"Could not find dataset with ODS ID {ods_id} in downloaded data, skipping")
+                    continue
+                
+                # Get the UUID
+                uuid = dataset.get('id')
+                if not uuid:
+                    logging.warning(f"Dataset with ODS ID {ods_id} missing UUID, skipping")
+                    continue
+                
+                # Build the href directly instead of fetching the full dataset
+                href = '/' + url_join('rest', self.database_name, 'datasets', uuid)
+                
+                # Extract inCollection business key directly from the downloaded dataset
+                inCollection_key = dataset.get('inCollection')
+                
+                if uuid and href:
+                    # Check if the mapping has changed before updating
+                    existing_entry = self.mapping.get_entry(ods_id)
+                    if existing_entry and len(existing_entry) > 2 and existing_entry[0] == uuid and existing_entry[1] == href and existing_entry[2] == inCollection_key:
+                        logging.info(f"No changes in dataset {ods_id}. Skipping")
+                        logging.debug(f"    - uuid: {uuid}, href: {href}, inCollection: {inCollection_key}")
+                    elif existing_entry:
+                        old_uuid = existing_entry[0] if len(existing_entry) > 0 else None
+                        old_href = existing_entry[1] if len(existing_entry) > 1 else None
+                        old_inCollection = existing_entry[2] if len(existing_entry) > 2 else None
+                        
+                        # Only log UUID update warning if the UUID actually changed
+                        if old_uuid != uuid:
+                            logging.warning(f"Update dataset {ods_id} uuid from {old_uuid} to {uuid}")
+                        else:
+                            logging.info(f"Updating dataset {ods_id} metadata")
+                        
+                        # Log a more meaningful message if inCollection has changed
+                        if old_inCollection != inCollection_key and old_inCollection and inCollection_key:
+                            logging.info(f"Dataset {ods_id} has been moved from '{old_inCollection}' to '{inCollection_key}'")
+                        elif not old_inCollection and inCollection_key:
+                            logging.info(f"Dataset {ods_id} has been placed in '{inCollection_key}'")
+                        elif old_inCollection and not inCollection_key:
+                            logging.info(f"Dataset {ods_id} has been removed from '{old_inCollection}'")
+                        
+                        logging.debug(f"    - old_uuid: {old_uuid}, old_href: {old_href}, old_inCollection: {old_inCollection}")
+                        logging.debug(f"    - new_uuid: {uuid}, new_href: {href}, new_inCollection: {inCollection_key}")
+                        self.mapping.add_entry(ods_id, uuid, href, inCollection_key)
+                        updated_count += 1
+                    else:
+                        logging.info(f"Add dataset {ods_id} with uuid {uuid}")
+                        logging.debug(f"    - uuid: {uuid}, href: {href}, inCollection: {inCollection_key}")
+                        self.mapping.add_entry(ods_id, uuid, href, inCollection_key)
+                        updated_count += 1
+                else:
+                    logging.warning(f"Missing UUID or href for dataset with ODS ID: {ods_id}")
+        else:
+            # No target IDs, process all datasets
+            total_datasets = len(datasets)
+            for idx, dataset in enumerate(datasets, 1):
+                # Extract the ID from customProperties
                 ods_id = dataset.get('ODS_ID')
-                if ods_id:
-                    dataset_by_ods_id[ods_id] = dataset
-            
-            # Process each dataset and update the mapping
-            updated_count = 0
-            
-            # Check for datasets in mapping that are not in downloaded datasets
-            if not target_ods_ids:
-                removed_count = 0
-                for ods_id, entry in list(self.mapping.mapping.items()):
-                    if ods_id not in dataset_by_ods_id:
-                        logging.warning(f"Dataset {ods_id} exists in local mapping but not in dataspot. Removing from local mapping.")
-                        if len(entry) >= 2:
-                            uuid, href = entry[0], entry[1]
-                            logging.debug(f"    - uuid: {uuid}, href: {href}")
-                        self.mapping.remove_entry(ods_id)
-                        removed_count += 1
-                if removed_count > 0:
-                    logging.info(f"Found {removed_count} datasets that exist locally but not in dataspot.")
-            
-            # If we have target IDs, prioritize those
-            if target_ods_ids and len(target_ods_ids) > 0:
-                total_targets = len(target_ods_ids)
-                target_ods_ids.sort()
-                for idx, ods_id in enumerate(target_ods_ids, 1):
-                    logging.info(f"[{idx}/{total_targets}] Processing dataset with ODS ID: {ods_id}")
-                    
-                    # Find this ODS ID in our downloaded datasets
-                    dataset = dataset_by_ods_id.get(ods_id)
-                    if not dataset:
-                        logging.warning(f"Could not find dataset with ODS ID {ods_id} in downloaded data, skipping")
-                        continue
-                    
-                    # Get the UUID
-                    uuid = dataset.get('id')
-                    if not uuid:
-                        logging.warning(f"Dataset with ODS ID {ods_id} missing UUID, skipping")
-                        continue
-                    
-                    # Build the href directly instead of fetching the full dataset
-                    href = '/' + url_join('rest', self.database_name, 'datasets', uuid)
-                    
-                    # Extract inCollection business key directly from the downloaded dataset
-                    inCollection_key = dataset.get('inCollection')
-                    
-                    if uuid and href:
-                        # Check if the mapping has changed before updating
-                        existing_entry = self.mapping.get_entry(ods_id)
-                        if existing_entry and len(existing_entry) > 2 and existing_entry[0] == uuid and existing_entry[1] == href and existing_entry[2] == inCollection_key:
-                            logging.info(f"No changes in dataset {ods_id}. Skipping")
-                            logging.debug(f"    - uuid: {uuid}, href: {href}, inCollection: {inCollection_key}")
-                        elif existing_entry:
-                            old_uuid = existing_entry[0] if len(existing_entry) > 0 else None
-                            old_href = existing_entry[1] if len(existing_entry) > 1 else None
-                            old_inCollection = existing_entry[2] if len(existing_entry) > 2 else None
-                            
-                            # Only log UUID update warning if the UUID actually changed
-                            if old_uuid != uuid:
-                                logging.warning(f"Update dataset {ods_id} uuid from {old_uuid} to {uuid}")
-                            else:
-                                logging.info(f"Updating dataset {ods_id} metadata")
-                            
-                            # Log a more meaningful message if inCollection has changed
-                            if old_inCollection != inCollection_key and old_inCollection and inCollection_key:
-                                logging.info(f"Dataset {ods_id} has been moved from '{old_inCollection}' to '{inCollection_key}'")
-                            elif not old_inCollection and inCollection_key:
-                                logging.info(f"Dataset {ods_id} has been placed in '{inCollection_key}'")
-                            elif old_inCollection and not inCollection_key:
-                                logging.info(f"Dataset {ods_id} has been removed from '{old_inCollection}'")
-                            
-                            logging.debug(f"    - old_uuid: {old_uuid}, old_href: {old_href}, old_inCollection: {old_inCollection}")
-                            logging.debug(f"    - new_uuid: {uuid}, new_href: {href}, new_inCollection: {inCollection_key}")
-                            self.mapping.add_entry(ods_id, uuid, href, inCollection_key)
-                            updated_count += 1
+                
+                # Skip if this dataset doesn't have an ODS ID
+                if not ods_id:
+                    continue
+                
+                logging.info(f"[{idx}/{total_datasets}] Processing dataset with ODS ID: {ods_id}")
+                
+                # Get the UUID
+                uuid = dataset.get('id')
+                if not uuid:
+                    logging.warning(f"Dataset with ODS ID {ods_id} missing UUID, skipping")
+                    continue
+                
+                # Build the href directly instead of fetching the full dataset
+                href = '/' + url_join('rest', self.database_name, 'datasets', uuid)
+                
+                # Extract inCollection business key directly from the downloaded dataset
+                inCollection_key = dataset.get('inCollection')
+                
+                if uuid and href:
+                    # Check if the mapping has changed before updating
+                    existing_entry = self.mapping.get_entry(ods_id)
+                    if existing_entry and len(existing_entry) > 2 and existing_entry[0] == uuid and existing_entry[1] == href and existing_entry[2] == inCollection_key:
+                        logging.info(f"No changes in dataset {ods_id}. Skipping")
+                        logging.debug(f"    - uuid: {uuid}, href: {href}, inCollection: {inCollection_key}")
+                    elif existing_entry:
+                        old_uuid = existing_entry[0] if len(existing_entry) > 0 else None
+                        old_href = existing_entry[1] if len(existing_entry) > 1 else None
+                        old_inCollection = existing_entry[2] if len(existing_entry) > 2 else None
+                        
+                        # Only log UUID update warning if the UUID actually changed
+                        if old_uuid != uuid:
+                            logging.warning(f"Update dataset {ods_id} uuid from {old_uuid} to {uuid}")
                         else:
-                            logging.info(f"Add dataset {ods_id} with uuid {uuid}")
-                            logging.debug(f"    - uuid: {uuid}, href: {href}, inCollection: {inCollection_key}")
-                            self.mapping.add_entry(ods_id, uuid, href, inCollection_key)
-                            updated_count += 1
+                            logging.info(f"Updating dataset {ods_id} metadata")
+                        
+                        # Log a more meaningful message if inCollection has changed
+                        if old_inCollection != inCollection_key and old_inCollection and inCollection_key:
+                            logging.info(f"Dataset {ods_id} has been moved from '{old_inCollection}' to '{inCollection_key}'")
+                        elif not old_inCollection and inCollection_key:
+                            logging.info(f"Dataset {ods_id} has been placed in '{inCollection_key}'")
+                        elif old_inCollection and not inCollection_key:
+                            logging.info(f"Dataset {ods_id} has been removed from '{old_inCollection}'")
+                        
+                        logging.debug(f"    - old_uuid: {old_uuid}, old_href: {old_href}, old_inCollection: {old_inCollection}")
+                        logging.debug(f"    - new_uuid: {uuid}, new_href: {href}, new_inCollection: {inCollection_key}")
+                        self.mapping.add_entry(ods_id, uuid, href, inCollection_key)
+                        updated_count += 1
                     else:
-                        logging.warning(f"Missing UUID or href for dataset with ODS ID: {ods_id}")
-            else:
-                # No target IDs, process all datasets
-                total_datasets = len(datasets)
-                for idx, dataset in enumerate(datasets, 1):
-                    # Extract the ID from customProperties
-                    ods_id = dataset.get('ODS_ID')
-                    
-                    # Skip if this dataset doesn't have an ODS ID
-                    if not ods_id:
-                        continue
-                    
-                    logging.info(f"[{idx}/{total_datasets}] Processing dataset with ODS ID: {ods_id}")
-                    
-                    # Get the UUID
-                    uuid = dataset.get('id')
-                    if not uuid:
-                        logging.warning(f"Dataset with ODS ID {ods_id} missing UUID, skipping")
-                        continue
-                    
-                    # Build the href directly instead of fetching the full dataset
-                    href = '/' + url_join('rest', self.database_name, 'datasets', uuid)
-                    
-                    # Extract inCollection business key directly from the downloaded dataset
-                    inCollection_key = dataset.get('inCollection')
-                    
-                    if uuid and href:
-                        # Check if the mapping has changed before updating
-                        existing_entry = self.mapping.get_entry(ods_id)
-                        if existing_entry and len(existing_entry) > 2 and existing_entry[0] == uuid and existing_entry[1] == href and existing_entry[2] == inCollection_key:
-                            logging.info(f"No changes in dataset {ods_id}. Skipping")
-                            logging.debug(f"    - uuid: {uuid}, href: {href}, inCollection: {inCollection_key}")
-                        elif existing_entry:
-                            old_uuid = existing_entry[0] if len(existing_entry) > 0 else None
-                            old_href = existing_entry[1] if len(existing_entry) > 1 else None
-                            old_inCollection = existing_entry[2] if len(existing_entry) > 2 else None
-                            
-                            # Only log UUID update warning if the UUID actually changed
-                            if old_uuid != uuid:
-                                logging.warning(f"Update dataset {ods_id} uuid from {old_uuid} to {uuid}")
-                            else:
-                                logging.info(f"Updating dataset {ods_id} metadata")
-                            
-                            # Log a more meaningful message if inCollection has changed
-                            if old_inCollection != inCollection_key and old_inCollection and inCollection_key:
-                                logging.info(f"Dataset {ods_id} has been moved from '{old_inCollection}' to '{inCollection_key}'")
-                            elif not old_inCollection and inCollection_key:
-                                logging.info(f"Dataset {ods_id} has been placed in '{inCollection_key}'")
-                            elif old_inCollection and not inCollection_key:
-                                logging.info(f"Dataset {ods_id} has been removed from '{old_inCollection}'")
-                            
-                            logging.debug(f"    - old_uuid: {old_uuid}, old_href: {old_href}, old_inCollection: {old_inCollection}")
-                            logging.debug(f"    - new_uuid: {uuid}, new_href: {href}, new_inCollection: {inCollection_key}")
-                            self.mapping.add_entry(ods_id, uuid, href, inCollection_key)
-                            updated_count += 1
-                        else:
-                            logging.info(f"Add dataset {ods_id} with uuid {uuid}")
-                            logging.debug(f"    - uuid: {uuid}, href: {href}, inCollection: {inCollection_key}")
-                            self.mapping.add_entry(ods_id, uuid, href, inCollection_key)
-                            updated_count += 1
-                    else:
-                        logging.warning(f"Missing UUID or href for dataset with ODS ID: {ods_id}")
-            
-            logging.info(f"Updated mappings for {updated_count} datasets. Did not update mappings for the other {len(datasets) - updated_count} datasets.")
-            return updated_count
-            
-        except Exception as e:
-            logging.error(f"Error processing download response: {str(e)}")
-            raise
+                        logging.info(f"Add dataset {ods_id} with uuid {uuid}")
+                        logging.debug(f"    - uuid: {uuid}, href: {href}, inCollection: {inCollection_key}")
+                        self.mapping.add_entry(ods_id, uuid, href, inCollection_key)
+                        updated_count += 1
+                else:
+                    logging.warning(f"Missing UUID or href for dataset with ODS ID: {ods_id}")
+        
+        logging.info(f"Updated mappings for {updated_count} datasets. Did not update mappings for the other {len(datasets) - updated_count} datasets.")
+        return updated_count
 
     def create_dataset(self, dataset: Dataset) -> dict:
         """
@@ -740,7 +732,7 @@ class DNKClient(BaseDataspotClient):
             dict: The JSON response from the API containing the upload results
             
         Raises:
-            ValueError: If any organizational unit is missing required properties
+            ValueError: If no organizational units are provided or if the DNK scheme doesn't exist
             HTTPError: If API requests fail
         """
         # Verify we have organizational units to process
@@ -798,7 +790,11 @@ class DNKClient(BaseDataspotClient):
             validate_url (bool): Whether to validate the URL by making an HTTP request
             
         Returns:
-            str: The validated URL for the organization, or empty string if invalid
+            str: The validated URL for the organization, or empty string if invalid or validation fails
+            
+        Note:
+            If validation fails or no URL is provided, an empty string is returned.
+            No exceptions are raised from this method, validation errors are logged.
         """
         # If URL is already provided, optionally validate it
         if url_website:
@@ -827,12 +823,18 @@ class DNKClient(BaseDataspotClient):
             
         Returns:
             List[Dict[str, Any]]: List of organizational units with hierarchy info
+            
+        Raises:
+            ValueError: If organization data is invalid, missing 'results' key, or no root nodes found
+            Exception: If there's an error processing children_id fields
         """
         if not org_data or 'results' not in org_data:
-            raise ValueError("Invalid organization data format")
+            logging.error("Invalid organization data format. Data must contain a 'results' key.")
+            raise ValueError("Invalid organization data format. Data must contain a 'results' key.")
         
         # Build a lookup dictionary for quick access to organization by ID
         org_lookup = {str(org['id']): org for org in org_data['results']}
+        logging.info(f"Processing {len(org_lookup)} organizations from input data")
         
         # Create a dictionary to track parent-child relationships
         parent_child_map = {}
@@ -853,34 +855,39 @@ class DNKClient(BaseDataspotClient):
                 # Check if parent exists
                 if parent_id not in org_lookup:
                     missing_entries.add(parent_id)
-                    logging.warning(f"Organization {org_id} references missing parent {parent_id}")
+                    logging.warning(f"Organization {org_id} ('{org.get('title', 'Unknown')}') references missing parent {parent_id}")
             
             # Check children IDs for consistency
             children_ids = org.get('children_id', '')
             if children_ids:
                 # Parse the children IDs - they might be in various formats
-                if isinstance(children_ids, str):
-                    # Try to split by comma if it's a string
-                    children_list = [id.strip() for id in children_ids.split(',')]
-                elif isinstance(children_ids, list):
-                    children_list = [str(id).strip() for id in children_ids]
-                else:
-                    children_list = [str(children_ids).strip()]
-                
-                # Add these children to the map if not already added by parent_id
-                if org_id not in parent_child_map:
-                    parent_child_map[org_id] = []
-                
-                # Check each child
-                for child_id in children_list:
-                    if child_id and child_id.lower() != 'nan':
-                        if child_id not in org_lookup:
-                            missing_entries.add(child_id)
-                            logging.warning(f"Organization {org_id} references missing child {child_id}")
-                        else:
-                            # Only add if not already in the list
-                            if child_id not in parent_child_map[org_id]:
-                                parent_child_map[org_id].append(child_id)
+                try:
+                    if isinstance(children_ids, str):
+                        # Try to split by comma if it's a string
+                        children_list = [id.strip() for id in children_ids.split(',')]
+                    elif isinstance(children_ids, list):
+                        children_list = [str(id).strip() for id in children_ids]
+                    else:
+                        children_list = [str(children_ids).strip()]
+                    
+                    # Add these children to the map if not already added by parent_id
+                    if org_id not in parent_child_map:
+                        parent_child_map[org_id] = []
+                    
+                    # Check each child
+                    for child_id in children_list:
+                        if child_id and child_id.lower() != 'nan':
+                            if child_id not in org_lookup:
+                                missing_entries.add(child_id)
+                                logging.warning(f"Organization {org_id} ('{org.get('title', 'Unknown')}') references missing child {child_id}")
+                            else:
+                                # Only add if not already in the list
+                                if child_id not in parent_child_map[org_id]:
+                                    parent_child_map[org_id].append(child_id)
+                except Exception as e:
+                    logging.error(f"Error processing children_id for organization {org_id}: {children_ids}")
+                    logging.error(f"Exception: {str(e)}")
+                    raise
         
         # Log all missing entries
         if missing_entries:
@@ -891,14 +898,18 @@ class DNKClient(BaseDataspotClient):
         for org_id, org in org_lookup.items():
             parent_id = str(org.get('parent_id', '')).strip()
             if not parent_id:
-                logging.warning(f"Organization {org_id} has no parent ID. Assume it is a root node.")
+                logging.info(f"Organization {org_id} ('{org.get('title', 'Unknown')}') has no parent ID. Treating as root node.")
                 root_nodes.append(org_id)
             elif parent_id.lower() == 'nan':
-                logging.warning(f"Organization {org_id} has 'nan' as parent ID. Assume it is a root node.")
+                logging.info(f"Organization {org_id} ('{org.get('title', 'Unknown')}') has 'nan' as parent ID. Treating as root node.")
                 root_nodes.append(org_id)
         
         if not root_nodes:
-            logging.warning("No root nodes found in organization data. Hierarchy may be incomplete.")
+            logging.error("No root nodes found in organization data. Hierarchy cannot be built.")
+            raise ValueError("No root nodes found in organization data. Hierarchy cannot be built.")
+        
+        logging.info(f"Found {len(root_nodes)} root nodes")
+        logging.info(f"Start construction of organizational structure - Not yet uploading...")
         
         # Now construct hierarchical data for each root node
         all_units = []
@@ -906,6 +917,7 @@ class DNKClient(BaseDataspotClient):
         
         # BFS traversal to build hierarchy level by level
         for depth in range(100):  # Safety limit to prevent infinite loops
+            logging.info(f"Processing depth level {depth}")
             current_level = []
             
             # For depth 0, start with root nodes
@@ -913,7 +925,7 @@ class DNKClient(BaseDataspotClient):
                 current_level = root_nodes
             else:
                 # Find all children of the previous level's nodes
-                for parent_id in all_units:
+                for parent_id in processed_ids:  # Check all processed nodes for children
                     if parent_id in parent_child_map:
                         for child_id in parent_child_map[parent_id]:
                             if child_id not in processed_ids:
@@ -921,7 +933,10 @@ class DNKClient(BaseDataspotClient):
             
             # If no more nodes at this level, we're done
             if not current_level:
+                logging.info(f"No more nodes to process at depth {depth}. Hierarchy build complete.")
                 break
+            
+            logging.info(f"Processing {len(current_level)} organizations at depth {depth}")
             
             # Process each node at this level
             for org_id in current_level:
@@ -985,7 +1000,7 @@ class DNKClient(BaseDataspotClient):
         not_processed = set(org_lookup.keys()) - processed_ids
         if not_processed:
             logging.warning(f"{len(not_processed)} organizations not included in the hierarchy due to circular references or other issues")
-        
+            
         return all_units
 
     def build_organization_hierarchy_from_ods_bulk(self, org_data: Dict[str, Any], validate_urls: bool = False) -> dict:
@@ -1000,10 +1015,14 @@ class DNKClient(BaseDataspotClient):
             
         Returns:
             dict: The response from the final bulk upload API call
+            
+        Raises:
+            ValueError: If organization data is invalid or no organizational units can be built
+            HTTPError: If bulk upload API requests fail
         """
         logging.info("Building organization hierarchy using level-by-level bulk upload...")
         
-        # Transform organization data for bulk upload using parent-child relationships
+        # Transform organization data for bulk upload
         org_units = self.transform_organization_for_bulk_upload(org_data, validate_urls=validate_urls)
         
         if not org_units:
@@ -1029,18 +1048,14 @@ class DNKClient(BaseDataspotClient):
             level_units = units_by_depth[depth]
             logging.info(f"Uploading {len(level_units)} organizational units at depth level {depth}...")
             
-            # Perform bulk upload for this level
-            try:
-                response = self.bulk_create_or_update_organizational_units(
-                    organizational_units=level_units,
-                    operation="ADD",
-                    dry_run=False
-                )
-                last_response = response
-                logging.info(f"Successfully uploaded {len(level_units)} units at depth level {depth}")
-            except Exception as e:
-                logging.error(f"Error uploading units at depth level {depth}: {str(e)}")
-                # Continue with next level despite errors
+            # Perform bulk upload for this level - let errors propagate up
+            response = self.bulk_create_or_update_organizational_units(
+                organizational_units=level_units,
+                operation="ADD",
+                dry_run=False
+            )
+            last_response = response
+            logging.info(f"Successfully uploaded {len(level_units)} units at depth level {depth}")
         
         logging.info("Organization hierarchy build completed")
         return last_response or {"status": "error", "message": "No levels were successfully uploaded"}
