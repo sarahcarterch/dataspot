@@ -1455,7 +1455,7 @@ class DataspotClient:
                 # Create custom properties for the organization
                 custom_properties = {
                     "ID": org_id,
-                    "Link_zum_Staatskalender": url_website
+                    "link_zum_staatskalender": url_website
                 }
                 
                 # Skip if organization is missing critical data
