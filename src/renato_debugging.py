@@ -469,7 +469,7 @@ def main_8_test_bulk_ods_datasets_upload(cleanup_after_test=True):
     Returns:
         List[str]: The list of dataset IDs that were uploaded
     """
-    logging.info("Testing bulk upload of ALL public ODS datasets...")
+    logging.info("Testing bulk upload of public ODS datasets...")
     
     # Initialize clients
     dataspot_client = DNKClient()
@@ -480,7 +480,7 @@ def main_8_test_bulk_ods_datasets_upload(cleanup_after_test=True):
     
     # Get all public dataset IDs
     logging.info(f"Step 1: Retrieving {max_datasets or 'all'} public dataset IDs from ODS...")
-    ods_ids = ods_utils.get_all_dataset_ids(include_restricted=False, max_datasets=max_datasets, cooldown=request_delay)
+    ods_ids = ods_utils.get_all_dataset_ids(include_restricted=False, max_datasets=max_datasets)
     
     if max_datasets:
         ods_ids = ods_ids[:max_datasets]
