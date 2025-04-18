@@ -452,7 +452,7 @@ def main_7_test_bulk_few_ods_datasets_upload(cleanup_after_test=True):
                     logging.warning(f"Failed to delete dataset {dataset_id}: {str(e)}")
             logging.info("Cleanup completed")
 
-def main_8_test_bulk_ods_datasets_upload(cleanup_after_test=True):
+def main_8_test_bulk_ods_datasets_upload(cleanup_after_test: bool = True, max_datasets: int = None):
     """
     Test the bulk upload of all public ODS datasets to Dataspot.
     
@@ -465,6 +465,7 @@ def main_8_test_bulk_ods_datasets_upload(cleanup_after_test=True):
 
     Args:
         cleanup_after_test (bool, optional): Whether to delete datasets after testing. Defaults to True.
+        max_datasets (int, optional): Maximum number of datasets to process (set to None for all). Defaults to None.
     
     Returns:
         List[str]: The list of dataset IDs that were uploaded
@@ -475,7 +476,6 @@ def main_8_test_bulk_ods_datasets_upload(cleanup_after_test=True):
     dataspot_client = DNKClient()
     
     # Configuration
-    max_datasets = None  # Maximum number of datasets to process (set to None for all)
     request_delay = 1.0  # Delay in seconds between API calls
     
     # Get all public dataset IDs
@@ -637,10 +637,14 @@ def main_9_build_organization_structure_in_dnk():
         logging.error(f"Unexpected error: {str(e)}")
     finally:
         logging.info("Organization structure build process finished")
+        logging.info("=============================================")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     logging.info(f'Executing {__file__}...')
+
     main_9_build_organization_structure_in_dnk()
+    main_8_test_bulk_ods_datasets_upload(cleanup_after_test=False)
+
     logging.info('Job successful!')
     
