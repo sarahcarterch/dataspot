@@ -120,7 +120,8 @@ class DNKClient(BaseDataspotClient):
                     continue
                 
                 # Build the API href
-                href = '/' + url_join('rest', self.database_name, 'datasets', uuid)
+                href = url_join('rest', self.database_name, 'datasets', uuid,
+                                leading_slash=True)
                 
                 # Extract inCollection business key directly from the downloaded dataset
                 inCollection_key = dataset.get('inCollection')
@@ -197,7 +198,8 @@ class DNKClient(BaseDataspotClient):
                     continue
                 
                 # Build the API href
-                href = '/' + url_join('rest', self.database_name, 'datasets', uuid)
+                href = url_join('rest', self.database_name, 'datasets', uuid,
+                                      leading_slash=True)
                 
                 # Extract inCollection business key directly from the downloaded dataset
                 inCollection_key = dataset.get('inCollection')

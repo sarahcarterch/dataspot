@@ -7,16 +7,20 @@ This module provides utility functions and helpers for Dataspot API clients.
 import logging
 
 
-def url_join(*parts: str) -> str:
+def url_join(*parts: str, leading_slash: bool = False) -> str:
     """
     Join URL parts ensuring proper formatting with slashes.
     
     Args:
         *parts: URL parts to be joined.
+        leading_slash: Whether to add a leading slash to the URL.
         
     Returns:
         str: A properly formatted URL.
     """
+    if leading_slash:
+        return '/' + url_join(*parts, leading_slash=False)
+
     return "/".join([part.strip("/") for part in parts])
 
 def get_uuid_and_href_from_response(response: dict) -> tuple:
