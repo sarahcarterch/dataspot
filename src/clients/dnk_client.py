@@ -746,6 +746,9 @@ class DNKClient(BaseDataspotClient):
         except HTTPError as e:
             logging.error(f"HTTP error ensuring DNK scheme exists: {str(e)}")
             raise
+        except ValueError as e:
+            logging.error(f"Error while ensuring that scheme exists: {str(e)}. Did you correctly set the database name in the config (currently it is: {self.database_name})?")
+            raise ValueError(f"Error while ensuring that scheme exists: {str(e)}")
         except Exception as e:
             logging.error(f"Unexpected error ensuring DNK scheme exists: {str(e)}")
             raise ValueError(f"Could not access scheme information: {str(e)}")
