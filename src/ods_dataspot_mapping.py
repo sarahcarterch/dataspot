@@ -10,7 +10,7 @@ def _get_mapping_file_path(database_name: str) -> str:
 
 class ODSDataspotMapping:
     """
-    A lookup table that maps ODS IDs to Dataspot asset type, UUID, HREF, and inCollection.
+    A lookup table that maps ODS IDs to Dataspot asset type, UUID, REST API Endpoint, and inCollection.
     Stores the mapping in a CSV file for persistence. Handles only datasets for now.
     """
 
@@ -32,14 +32,14 @@ class ODSDataspotMapping:
         self.csv_file_path = _get_mapping_file_path(database_name)
         self.logger.info(f"Using mapping file: {self.csv_file_path}")
 
-        # Mapping: Dict[str, Tuple[str, str, str, Optional[str]]] -> Dict[ods_id, (_type, uuid, href, inCollection)]
+        # Mapping: Dict[str, Tuple[str, str, str, Optional[str]]] -> Dict[ods_id, (_type, uuid, endpoint_rest, inCollection)]
         self.mapping: Dict[str, Tuple[str, str, str, Optional[str]]] = {}
         self._load_mapping()
 
     def _load_mapping(self) -> None:
         """Load the mapping from the CSV file if it exists."""
         # Define expected headers including _type
-        expected_headers = ['ods_id', '_type', 'uuid', 'href', 'inCollection']
+        expected_headers = ['ods_id', '_type', 'uuid', 'endpoint_rest', 'inCollection']
         if not os.path.exists(self.csv_file_path):
             # Create the file with headers if it doesn't exist
             try:
@@ -62,20 +62,20 @@ class ODSDataspotMapping:
                 self.mapping = {} # Clear existing mapping before loading
                 for row in reader:
                     # Check if required columns exist in the row
-                    if not all(h in row for h in ['ods_id', '_type', 'uuid', 'href']):
+                    if not all(h in row for h in ['ods_id', '_type', 'uuid', 'endpoint_rest']):
                          self.logger.warning(f"Skipping row due to missing required columns: {row}")
                          continue
 
                     ods_id = row['ods_id']
                     _type = row['_type']
                     uuid_val = row['uuid']
-                    href = row['href']
+                    endpoint_rest = row['endpoint_rest']
                     # Handle potentially missing or empty inCollection
                     inCollection = row.get('inCollection')
                     if inCollection == '':
                         inCollection = None
 
-                    self.mapping[ods_id] = (_type, uuid_val, href, inCollection)
+                    self.mapping[ods_id] = (_type, uuid_val, endpoint_rest, inCollection)
 
         except (IOError, PermissionError) as e:
             self.logger.warning("Could not read dataset mapping file: %s", str(e))
@@ -84,16 +84,16 @@ class ODSDataspotMapping:
 
     def _save_mapping(self) -> None:
         """Save the current mapping to the CSV file."""
-        expected_headers = ['ods_id', '_type', 'uuid', 'href', 'inCollection'] # Define headers again
+        expected_headers = ['ods_id', '_type', 'uuid', 'endpoint_rest', 'inCollection'] # Define headers again
         try:
             # Sort the items by ods_id
             sorted_mapping = sorted(self.mapping.items(), key=lambda x: x[0])
             with open(self.csv_file_path, 'w', newline='', encoding='utf-8') as csvfile:
                 writer = csv.writer(csvfile)
                 writer.writerow(expected_headers) # Write the headers
-                for ods_id, (_type, uuid_val, href, inCollection) in sorted_mapping:
+                for ods_id, (_type, uuid_val, endpoint_rest, inCollection) in sorted_mapping:
                     # Ensure inCollection is written as empty string if None
-                    writer.writerow([ods_id, _type, uuid_val, href, inCollection or ''])
+                    writer.writerow([ods_id, _type, uuid_val, endpoint_rest, inCollection or ''])
         except (IOError, PermissionError) as e:
             self.logger.warning("Could not write to dataset mapping file: %s", str(e))
     
@@ -116,17 +116,17 @@ class ODSDataspotMapping:
     
     def get_entry(self, ods_id: str) -> Optional[Tuple[str, str, str, Optional[str]]]:
         """
-        Get the _type, UUID, HREF, and inCollection for an ODS ID if it exists.
+        Get the _type, UUID, REST API Endpoint, and inCollection for an ODS ID if it exists.
 
         Args:
             ods_id (str): The ODS ID to look up
 
         Returns:
-            Optional[Tuple[str, str, str, Optional[str]]]: A tuple of (_type, uuid, href, inCollection) if found, None otherwise
+            Optional[Tuple[str, str, str, Optional[str]]]: A tuple of (_type, uuid, endpoint_rest, inCollection) if found, None otherwise
         """
         return self.mapping.get(ods_id)
     
-    def add_entry(self, ods_id: str, _type: str, uuid_str: str, href: str, inCollection: Optional[str] = None) -> bool:
+    def add_entry(self, ods_id: str, _type: str, uuid_str: str, endpoint_rest: str, in_collection: Optional[str] = None) -> bool:
         """
         Add a new mapping entry or update an existing one.
 
@@ -134,8 +134,8 @@ class ODSDataspotMapping:
             ods_id (str): The ODS ID
             _type (str): The Dataspot asset type (e.g., "Dataset")
             uuid_str (str): The Dataspot UUID
-            href (str): The Dataspot API HREF (e.g., /rest/db/datasets/uuid)
-            inCollection (str, optional): The business key of the collection containing this dataset
+            endpoint_rest (str): The Dataspot REST API Endpoint (e.g., /rest/db/datasets/<uuid>)
+            in_collection (str, optional): The business key of the collection containing this dataset
 
         Returns:
             bool: True if the entry was added successfully, False otherwise
@@ -145,16 +145,16 @@ class ODSDataspotMapping:
         if not ods_id:
             empty_params.append("ods_id")
         if not _type:
-            empty_params.append("_type") # Added check for _type
+            empty_params.append("_type")
         if not uuid_str:
             empty_params.append("uuid_str")
-        if not href:
-            empty_params.append("href")
+        if not endpoint_rest:
+            empty_params.append("endpoint_rest")
 
         if empty_params:
             self.logger.warning("Cannot add entry with empty values for: %s", ", ".join(empty_params))
-            self.logger.warning("Provided values - ods_id: '%s', _type: '%s', uuid_str: '%s', href: '%s'",
-                             ods_id, _type, uuid_str, href)
+            self.logger.warning("Provided values - ods_id: '%s', _type: '%s', uuid_str: '%s', endpoint_rest: '%s'",
+                             ods_id, _type, uuid_str, endpoint_rest)
             return False
 
         # Validate UUID format
@@ -164,7 +164,7 @@ class ODSDataspotMapping:
             return False
 
         # Store the entry including _type
-        self.mapping[ods_id] = (_type, uuid_str, href, inCollection)
+        self.mapping[ods_id] = (_type, uuid_str, endpoint_rest, in_collection)
         self._save_mapping()
         return True
     
@@ -210,18 +210,18 @@ class ODSDataspotMapping:
         entry = self.get_entry(ods_id)
         return entry[1] if entry else None # Index 1 for UUID
     
-    def get_href(self, ods_id: str) -> Optional[str]:
+    def get_endpoint_rest(self, ods_id: str) -> Optional[str]:
         """
-        Get just the HREF for an ODS ID.
+        Get just the REST API Endpoint for an ODS ID.
         
         Args:
             ods_id (str): The ODS ID to look up
             
         Returns:
-            Optional[str]: The HREF if found, None otherwise
+            Optional[str]: The REST API Endpoint if found, None otherwise
         """
         entry = self.get_entry(ods_id)
-        return entry[2] if entry else None # Index 2 for HREF
+        return entry[2] if entry else None # Index 2 for REST API Endpoint
     
     def get_inCollection(self, ods_id: str) -> Optional[str]:
         """
@@ -243,7 +243,7 @@ class ODSDataspotMapping:
         Get all mapping entries.
 
         Returns:
-            Dict[str, Tuple[str, str, str, Optional[str]]]: Dictionary of all ODS ID to (_type, UUID, HREF, inCollection) mappings
+            Dict[str, Tuple[str, str, str, Optional[str]]]: Dictionary of all ODS ID to (_type, UUID, REST API Endpoint, inCollection) mappings
         """
         return dict(self.mapping)
     
