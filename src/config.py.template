@@ -12,8 +12,13 @@ rdm_scheme_name = 'Referenzdatenmodell'
 datatype_scheme_name = 'Datentypmodell'
 tdm_scheme_name = 'Technische Datenmodelle'
 
-# Default ODS Imports collection name: The name of the collection where all ODS Imports will be imported to.
+# Default ODS Imports collection name
 ods_imports_collection_name = 'ODS-Imports'
+
+# Default path for the ODS Imports collection within the DNK scheme.
+# An empty list [] means it's directly under the scheme root.
+# Example: ["Parent Folder", "Sub Folder"] places it under Parent Folder/Sub Folder.
+ods_imports_collection_path = []
 
 # Validate that critical configuration values are present
 assert base_url, "base_url must be set in config.py"
