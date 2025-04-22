@@ -488,6 +488,7 @@ def main_8_test_bulk_ods_datasets_upload(cleanup_after_test: bool = True, max_da
     logging.info(f"Found {len(ods_ids)} datasets to process")
     
     # Process all datasets
+    logging.info(f"Step 2: Processing the retrieved dataset: Transforming the ODS datasets to dataspot datasets...")
     total_processed = 0
     total_successful = 0
     total_failed = 0
@@ -517,12 +518,14 @@ def main_8_test_bulk_ods_datasets_upload(cleanup_after_test: bool = True, max_da
             total_failed += 1
         
         total_processed += 1
-    
+
+    logging.info(f"Completed processing {total_processed} datasets: {total_successful} successful, {total_failed} failed")
+
     # Upload all datasets at once if we have any
     if all_datasets:
         try:
             # Bulk create all datasets
-            logging.info(f"Step 2: Bulk uploading all {len(all_datasets)} datasets to dataspot...") # Comment: This line is confusing, as it we do not upload right here and there, but before that there is more setup.
+            logging.info(f"Step 3: Bulk uploading all {len(all_datasets)} datasets to dataspot...") # Comment: This line is confusing, as it we do not upload right here and there, but before that there is more setup.
             
             # Perform the bulk upload
             create_response = dataspot_client.bulk_create_or_update_datasets(
@@ -535,9 +538,7 @@ def main_8_test_bulk_ods_datasets_upload(cleanup_after_test: bool = True, max_da
             
         except Exception as e:
             logging.error(f"Error during bulk upload: {str(e)}")
-    
-    logging.info(f"Completed processing {total_processed} datasets: {total_successful} successful, {total_failed} failed")
-    
+
     # Clean up if requested
     if cleanup_after_test and processed_ids:
         logging.info(f"Step 3: Cleaning up {len(processed_ids)} uploaded datasets...")
@@ -568,7 +569,6 @@ def main_9_build_organization_structure_in_dnk():
     2. Builds the organization hierarchy in Dataspot using bulk upload
     3. Provides options to limit the number of batches processed
     """
-    # TODO (large language model): Instead, just call the scripts/build_organization_hierarchy.py
     logging.info("Starting organization structure build...")
 
     # Initialize clients

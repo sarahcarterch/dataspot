@@ -745,7 +745,7 @@ class DNKClient(BaseDataspotClient):
         self.mapping.remove_entry(ods_id)
         
         return True
-    
+
     def require_scheme_exists(self) -> str:
         """
         Assert that the DNK scheme exists and return its API endpoint. Throw an error if it doesn't.
@@ -766,30 +766,33 @@ class DNKClient(BaseDataspotClient):
     def ensure_ods_imports_collection_exists(self) -> dict:
         """
         Ensures that the ODS-Imports collection exists within the Datennutzungskatalog scheme.
-        Creates the collection if it does not exist, respecting the path defined in config.py.
         
         The path is defined by config.ods_imports_collection_path, which is a list of folder names.
-        For example, ['A', 'B', 'C'] would place the collection under A/B/C/ODS-Imports.
+        For example, if config.ods_imports_collection_path is ['A', 'B', 'C'], the function:
+        1. First checks if 'A/B/C' path already exists
+        2. If the path doesn't exist, logs an error and throws an exception
+        3. If the path exists, checks if ODS-Imports collection exists at that location
+        4. Creates the ODS-Imports collection if it doesn't exist, or returns the existing one if it does
 
         Returns:
             dict: The JSON response containing information about the ODS-Imports collection
             
         Raises:
-            ValueError: If the DNK scheme does not exist
+            ValueError: If the DNK scheme does not exist or the configured path doesn't exist
             HTTPError: If API requests fail
         """
+        logging.info("Ensuring ODS-Imports collection exists")
         # Assert that the DNK scheme exists.
         self.require_scheme_exists()
 
         # Get the path from config
         collection_path = getattr(config, 'ods_imports_collection_path', [])
- 
-        # TODO (large language model): Uncomment and document this
-        # Ensure the path contains strings only
-        #for item in collection_path:
-        #    if type(item) != str:
-        #        logging.error(f"Path defined in config.py contains {item}, which is not a string.")
-        #        raise ValueError("...")
+
+        # Validate that the path contains only strings
+        for item in collection_path:
+            if type(item) != str:
+                logging.error(f"Path defined in config.py contains {item}, which is not a string.")
+                raise ValueError(f"Invalid path component in ods_imports_collection_path: {item}. All path components must be strings.")
 
         if collection_path:
             logging.debug(f"Using configured path for ODS-Imports: {'/'.join(collection_path)}")
@@ -804,24 +807,34 @@ class DNKClient(BaseDataspotClient):
                 logging.warning(f"Collection path contains forward slashes, which can't be used in business keys: {folder}")
                 break
         
-        # Try checking if ODS-Imports already exists at the target location
+        # Check if the configured path exists
         if not collection_path:
             # No path specified, check directly under scheme
-            ods_imports_path = url_join('rest', self.database_name, 'schemes', self.scheme_name, 'collections', 
-                                        self.ods_imports_collection_name)
+            parent_endpoint = url_join('rest', self.database_name, 'schemes', self.scheme_name)
+            parent_response = self.get_resource_if_exists(parent_endpoint)
+            if not parent_response:
+                error_msg = f"Scheme '{self.scheme_name}' does not exist"
+                logging.error(error_msg)
+                raise ValueError(error_msg)
             
-            collection_response = self.get_resource_if_exists(ods_imports_path)
-            if collection_response:
-                logging.debug(f"ODS-Imports collection exists at scheme root")
-                return collection_response
-                
-            # Create at root level
-            collections_endpoint = url_join('rest', self.database_name, 'schemes', self.scheme_name, 'collections')
-            parent_exists = True
+            # Parent exists (scheme root), check if ODS-Imports exists
+            ods_imports_endpoint = url_join(parent_endpoint, 'collections', self.ods_imports_collection_name, leading_slash=True)
+            collections_endpoint = url_join(parent_endpoint, 'collections', leading_slash=True)
+            existing_collection = self.get_resource_if_exists(ods_imports_endpoint)
+            
+            # Check both existence and correct parent
+            ods_imports_exists = False
+            if existing_collection:
+                # For root collections, parentId should match the scheme UUID
+                if 'parentId' in existing_collection and existing_collection['parentId'] == parent_response['id']:
+                    ods_imports_exists = True
+                else:
+                    logging.warning(f"Found ODS-Imports collection but it's not under the expected parent. Will create new one.")
+            
         elif has_special_chars:
-            # We need to go the long route if we have special characters
-            logging.info("Using step-by-step creation due to special characters in path")
-            return self._ensure_ods_imports_collection_exists_step_by_step(collection_path)
+            error_msg = "Path contains special characters that prevent using business keys. Fix the path in config."
+            logging.error(error_msg)
+            raise ValueError(error_msg)
         else:
             # Construct business key path to check if the full path exists
             # Format: /rest/{db}/schemes/{scheme}/collections/{col1}/collections/{col2}/...
@@ -832,132 +845,58 @@ class DNKClient(BaseDataspotClient):
                 path_elements.append('collections')
                 path_elements.append(folder)
             
-            # Add the final ODS-Imports collection to check
-            check_path = path_elements.copy()
-            check_path.append('collections')
-            check_path.append(self.ods_imports_collection_name)
-            ods_imports_check_path = url_join(*check_path)
-            
-            # Check if the full path with ODS-Imports exists
-            collection_response = self.get_resource_if_exists(ods_imports_check_path)
-            if collection_response:
-                logging.debug(f"ODS-Imports collection exists at configured path")
-                return collection_response
-                
-            # Now check if the parent path exists
-            parent_path = url_join(*path_elements)
+            # Check if the parent path exists
+            parent_path = url_join(*path_elements, leading_slash=True)
             parent_response = self.get_resource_if_exists(parent_path)
-            parent_exists = parent_response is not None
             
-            if parent_exists:
-                logging.info(f"Parent path exists, creating ODS-Imports directly under it")
-                collections_endpoint = url_join(parent_path, 'collections')
-            else:
-                logging.info(f"Parent path doesn't exist, need to create full path")
-                # Since parent path doesn't exist, we need to create everything
-                return self._ensure_ods_imports_collection_exists_step_by_step(collection_path)
-        
-        # Create the ODS-Imports collection directly under the parent (scheme or found path)
-        collection_data = {
-            "label": self.ods_imports_collection_name,
-            "_type": "Collection"
-        }
+            if not parent_response:
+                # Parent path doesn't exist - throw error instead of creating it
+                error_msg = (f"Configured path '{'/'.join(collection_path)}' not found. "
+                             f"Please make sure the ods_imports_collection_path field in config.py is set correctly!")
+                logging.error(error_msg)
+                raise ValueError(error_msg)
+            
+            # Parent path exists, check if ODS-Imports exists under it
+            collections_endpoint = url_join(parent_path, 'collections', leading_slash=True)
+            
+            # Create ODS-Imports endpoint for checking existence
+            ods_imports_elements = path_elements.copy()
+            ods_imports_elements.append('collections')
+            ods_imports_elements.append(self.ods_imports_collection_name)
+            ods_imports_endpoint = url_join(*ods_imports_elements, leading_slash=True)
+            existing_collection = self.get_resource_if_exists(ods_imports_endpoint)
+            
+            # Check both existence and correct parent
+            ods_imports_exists = False
+            if existing_collection:
+                # Verify the collection is under the expected parent
+                if 'parentId' in existing_collection and existing_collection['parentId'] == parent_response['id']:
+                    ods_imports_exists = True
+                else:
+                    logging.warning(f"Found ODS-Imports collection but it's not under the expected parent. Will create new one.")
         
         try:
-            response_json = self.create_resource(endpoint=collections_endpoint, data=collection_data, _type="Collection")
-            path_str = "/".join(collection_path) if collection_path else "scheme root"
-            logging.info(f"Created ODS-Imports collection at: {path_str}")
-            return response_json
-        except HTTPError as create_error:
-            logging.error(f"Failed to create ODS-Imports collection: {str(create_error)}")
-            raise
-
-    def _ensure_ods_imports_collection_exists_step_by_step(self, collection_path: List[str]) -> dict:
-        """
-        Helper method that creates the full path to ODS-Imports collection step by step.
-        Used when the direct path creation is not possible.
-        
-        Args:
-            collection_path (List[str]): The path to create
-            
-        Returns:
-            dict: The response from the created ODS-Imports collection
-        """
-        # Build the path to check if the ODS-Imports collection exists
-        path_components = ['rest', self.database_name, 'schemes', self.scheme_name]
-        
-        # If there's a path, we need to navigate through all parent collections first
-        parent_collections = []
-        current_path = path_components.copy()
-        
-        # Ensure all folders in the path exist
-        current_collection_href = None
-        
-        # First, check/create each level of the path
-        for i, folder_name in enumerate(collection_path):
-            current_path.append('collections')
-            current_path.append(folder_name)
-            
-            folder_endpoint = url_join(*current_path)
-            folder_data = self.get_resource_if_exists(folder_endpoint)
-            
-            if folder_data:
-                logging.debug(f"Found existing folder: {folder_name}")
-                current_collection_href = folder_data.get('_links', {}).get('self', {}).get('href')
-                parent_collections.append(folder_data)
+            # Return existing or create new
+            if ods_imports_exists:
+                logging.debug(f"ODS-Imports collection already exists under the correct parent, using it as is")
+                path_str = "/".join(collection_path) if collection_path else "scheme root"
+                logging.info(f"ODS-Imports collection found at: {path_str}")
+                return existing_collection
             else:
-                # This folder doesn't exist, need to create it
-                logging.info(f"Creating folder: {folder_name}")
-                
-                # Determine the parent endpoint where we'll create this folder
-                if i == 0:
-                    # First level - create directly under the scheme
-                    parent_endpoint = url_join('rest', self.database_name, 'schemes', self.scheme_name, 'collections')
-                else:
-                    # Use the href of the previously created parent
-                    parent_endpoint = url_join(current_collection_href, 'collections')
-                
-                # Create the folder
-                folder_data = {
-                    "label": folder_name,
+                logging.debug(f"ODS-Imports collection does not exist under the correct parent, creating it")
+                collection_data = {
+                    "label": self.ods_imports_collection_name,
                     "_type": "Collection"
                 }
+                response_json = self.create_resource(
+                    endpoint=collections_endpoint, 
+                    data=collection_data, 
+                    _type="Collection"
+                )
+                path_str = "/".join(collection_path) if collection_path else "scheme root"
+                logging.info(f"Created ODS-Imports collection at: {path_str}")
+                return response_json
                 
-                try:
-                    response_json = self.create_resource(endpoint=parent_endpoint, data=folder_data, _type="Collection")
-                    current_collection_href = response_json.get('_links', {}).get('self', {}).get('href')
-                    parent_collections.append(response_json)
-                    logging.info(f"Created folder: {folder_name}")
-                except HTTPError as create_error:
-                    logging.error(f"Failed to create folder {folder_name}: {str(create_error)}")
-                    raise
-        
-        # Now create the ODS-Imports collection under the final parent
-        final_parent = parent_collections[-1]
-        final_parent_href = final_parent.get('_links', {}).get('self', {}).get('href')
-        
-        # Check if ODS-Imports already exists under this parent (just in case)
-        ods_imports_endpoint = url_join(final_parent_href, 'collections', self.ods_imports_collection_name)
-        collection_response = self.get_resource_if_exists(ods_imports_endpoint)
-        
-        if collection_response:
-            logging.debug(f"ODS-Imports collection already exists at configured path")
-            return collection_response
-            
-        # Create the ODS-Imports collection
-        logging.info(f"Creating ODS-Imports collection at configured path")
-        collections_endpoint = url_join(final_parent_href, 'collections')
-        
-        collection_data = {
-            "label": self.ods_imports_collection_name,
-            "_type": "Collection"
-        }
-        
-        try:
-            response_json = self.create_resource(endpoint=collections_endpoint, data=collection_data, _type="Collection")
-            path_str = "/".join(collection_path)
-            logging.info(f"Created ODS-Imports collection at: {path_str}")
-            return response_json
         except HTTPError as create_error:
             logging.error(f"Failed to create ODS-Imports collection: {str(create_error)}")
             raise
