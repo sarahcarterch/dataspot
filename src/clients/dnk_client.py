@@ -5,7 +5,7 @@ from requests import HTTPError
 
 from src import config
 from src.clients.base_client import BaseDataspotClient
-from src.clients.helpers import url_join, get_uuid_and_href_from_response, escape_special_chars
+from src.clients.helpers import url_join, get_uuid_from_response, escape_special_chars
 from src.dataspot_dataset import Dataset
 from src.common import requests_get # BUT DO NOT IMPORT THESE: requests_post, requests_put, requests_patch
 from src.ods_dataspot_mapping import ODSDataspotMapping
@@ -283,14 +283,16 @@ class DNKClient(BaseDataspotClient):
         collection_data = self.ensure_ods_imports_collection_exists()
         logging.debug(f"Collection info: {collection_data}")
 
-        # Get the collection UUID and href
-        collection_uuid, collection_href = get_uuid_and_href_from_response(collection_data)
+        # Get the collection UUID
+        collection_uuid = get_uuid_from_response(collection_data)
 
-        if not collection_uuid or not collection_href:
-            logging.error("Failed to get collection UUID or href")
-            raise ValueError("Could not retrieve collection information required for dataset creation")
+        if not collection_uuid:
+            error_msg = "Failed to get collection UUID"
+            logging.error(error_msg)
+            raise ValueError(error_msg)
 
-        logging.debug(f"Using collection UUID: {collection_uuid} and href: {collection_href}")
+        collection_href = url_join('rest', self.database_name, 'datasets', collection_uuid, leading_slash=True)
+        logging.debug(f"Using collection UUID: {collection_uuid} and constructed href: {collection_href}")
         
         # Create a new dataset
         dataset_creation_endpoint = url_join(collection_href, "datasets")
@@ -327,14 +329,14 @@ class DNKClient(BaseDataspotClient):
         
         # Store the mapping for future reference
         if ods_id:
-            uuid, href = get_uuid_and_href_from_response(response)
-            if uuid and href:
+            uuid = get_uuid_from_response(response)
+            if uuid:
                 # For newly created datasets, store the ODS-Imports collection name as the business key
                 # The _type for datasets created here is always "Dataset"
                 logging.debug(f"Adding mapping entry for ODS ID {ods_id} with Type 'Dataset', UUID {uuid}, and inCollection '{self.ods_imports_collection_name}'")
                 self.mapping.add_entry(ods_id, "Dataset", uuid, self.ods_imports_collection_name)
             else:
-                logging.warning(f"Could not extract UUID and href from response for dataset '{title}'")
+                logging.warning(f"Could not extract UUID from response for dataset '{title}'")
         
         logging.info(f"Successfully created dataset '{title}'")
         return response
@@ -379,14 +381,14 @@ class DNKClient(BaseDataspotClient):
             collection_data = self.ensure_ods_imports_collection_exists()
             
             # Get the collection UUID
-            collection_uuid, collection_href = get_uuid_and_href_from_response(collection_data)
+            collection_uuid = get_uuid_from_response(collection_data)
 
-            if not collection_uuid or not collection_href:
-                error_msg = "Failed to get collection UUID or href"
+            if not collection_uuid:
+                error_msg = "Failed to get collection UUID"
                 logging.error(error_msg)
                 raise ValueError(error_msg)
 
-            logging.debug(f"Using collection UUID: {collection_uuid} and href: {collection_href}")
+            logging.debug(f"Using collection UUID: {collection_uuid}")
         except HTTPError as e:
             logging.error(f"HTTP error ensuring ODS-Imports collection exists: {str(e)}")
             raise
@@ -600,15 +602,15 @@ class DNKClient(BaseDataspotClient):
         
         # Ensure the mapping is updated
         if ods_id:
-            uuid, href = get_uuid_and_href_from_response(response)
-            if uuid and href:
+            uuid = get_uuid_from_response(response)
+            if uuid:
                 # The _type for datasets updated here is always "Dataset"
                 # Use the determined inCollection value (either from mapping or default)
                 final_inCollection = dataset_json.get('inCollection')
                 logging.debug(f"Updating mapping for ODS ID {ods_id} with Type 'Dataset', UUID {uuid}, inCollection {final_inCollection}")
                 self.mapping.add_entry(ods_id, "Dataset", uuid, final_inCollection)
             else:
-                logging.warning(f"Could not extract UUID and href from response for dataset '{title}'")
+                logging.warning(f"Could not extract UUID from response for dataset '{title}'")
         
         logging.info(f"Successfully updated dataset '{title}'")
         return response
