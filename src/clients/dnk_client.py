@@ -783,7 +783,14 @@ class DNKClient(BaseDataspotClient):
 
         # Get the path from config
         collection_path = getattr(config, 'ods_imports_collection_path', [])
-        
+ 
+        # TODO (large language model): Uncomment and document this
+        # Ensure the path contains strings only
+        #for item in collection_path:
+        #    if type(item) != str:
+        #        logging.error(f"Path defined in config.py contains {item}, which is not a string.")
+        #        raise ValueError("...")
+
         if collection_path:
             logging.debug(f"Using configured path for ODS-Imports: {'/'.join(collection_path)}")
         else:

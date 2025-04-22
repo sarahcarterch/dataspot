@@ -55,6 +55,7 @@ class BaseDataspotClient(ABC):
             
         Raises:
             HTTPError: If the request fails
+            TODO (Renato): What happens if the resource already exists?
         """
         headers = self.auth.get_headers()
         full_url = url_join(self.base_url, endpoint)

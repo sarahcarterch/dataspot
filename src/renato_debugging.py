@@ -568,6 +568,7 @@ def main_9_build_organization_structure_in_dnk():
     2. Builds the organization hierarchy in Dataspot using bulk upload
     3. Provides options to limit the number of batches processed
     """
+    # TODO (large language model): Instead, just call the scripts/build_organization_hierarchy.py
     logging.info("Starting organization structure build...")
 
     # Initialize clients
