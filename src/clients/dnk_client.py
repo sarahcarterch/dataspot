@@ -778,7 +778,7 @@ class DNKClient(BaseDataspotClient):
             dict: The JSON response containing information about the ODS-Imports collection
             
         Raises:
-            ValueError: If the DNK scheme does not exist or the configured path doesn't exist
+            ValueError: If the DNK scheme does not exist or the configured path contains a '/' or the configured path doesn't exist
             HTTPError: If API requests fail
         """
         logging.info("Ensuring ODS-Imports collection exists")
@@ -832,7 +832,10 @@ class DNKClient(BaseDataspotClient):
                     logging.warning(f"Found ODS-Imports collection but it's not under the expected parent. Will create new one.")
             
         elif has_special_chars:
-            error_msg = "Path contains special characters that prevent using business keys. Fix the path in config."
+            error_msg = ("Path contains special characters that prevent using business keys. Fix the path in config. "
+                         "Using Collections that contain a slash is currently not supported in ODS-Imports path. "
+                         "Implementing this would be time-consuming and likely introduce errors. "
+                         "Also, I don't think this error will ever happen, so I will not fix it at the moment.")
             logging.error(error_msg)
             raise ValueError(error_msg)
         else:
@@ -844,7 +847,7 @@ class DNKClient(BaseDataspotClient):
             for folder in collection_path:
                 path_elements.append('collections')
                 path_elements.append(folder)
-            
+
             # Check if the parent path exists
             parent_path = url_join(*path_elements, leading_slash=True)
             parent_response = self.get_resource_if_exists(parent_path)
