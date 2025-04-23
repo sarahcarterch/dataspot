@@ -452,7 +452,7 @@ def main_7_test_bulk_few_ods_datasets_upload(cleanup_after_test=True):
                     logging.warning(f"Failed to delete dataset {dataset_id}: {str(e)}")
             logging.info("Cleanup completed")
 
-def main_8_test_bulk_ods_datasets_upload(cleanup_after_test: bool = True, max_datasets: int = None):
+def main_8_test_bulk_ods_datasets_upload_and_delete(cleanup_after_test: bool = True, max_datasets: int = None):
     """
     Test the bulk upload of all public ODS datasets to Dataspot.
     
@@ -661,7 +661,7 @@ if __name__ == "__main__":
     logging.info(f'Executing {__file__}...')
 
     main_9_build_organization_structure_in_dnk()
-    main_8_test_bulk_ods_datasets_upload(cleanup_after_test=False)
+    main_8_test_bulk_ods_datasets_upload_and_delete(cleanup_after_test=False)
 
     logging.info('Job successful!')
     
