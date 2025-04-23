@@ -628,6 +628,22 @@ def main_9_build_organization_structure_in_dnk():
             
             logging.info(f"Organization structure bulk upload complete. Response summary: {upload_response}")
             
+            # Log the organization mapping entries
+            org_mappings = dataspot_client.org_mapping.get_all_entries()
+            if org_mappings:
+                logging.info(f"Organization mapping contains {len(org_mappings)} entries")
+                # Log a few sample mappings
+                sample_count = min(5, len(org_mappings))
+                sample_entries = list(org_mappings.items())[:sample_count]
+                
+                for staatskalender_id, (type_, uuid, in_collection) in sample_entries:
+                    logging.info(f"Sample mapping - Staatskalender ID: {staatskalender_id}, Type: {type_}, UUID: {uuid}, inCollection: {in_collection or 'None'}")
+                
+                # Show mappings file path for reference
+                logging.info(f"Organization mappings saved to: {dataspot_client.org_mapping.csv_file_path}")
+            else:
+                logging.warning("No organization mappings were created")
+            
         except Exception as e:
             logging.error(f"Error building organization hierarchy: {str(e)}")
             logging.info("Organization structure build failed")

@@ -9,6 +9,7 @@ from src.clients.helpers import url_join, get_uuid_from_response, escape_special
 from src.dataspot_dataset import Dataset
 from src.common import requests_get # BUT DO NOT IMPORT THESE: requests_post, requests_put, requests_patch
 from src.ods_dataspot_mapping import ODSDataspotMapping
+from src.staatskalender_dataspot_mapping import StaatskalenderDataspotMapping
 
 class DNKClient(BaseDataspotClient):
     """Client for interacting with the DNK (Datennutzungskatalog)."""
@@ -25,6 +26,9 @@ class DNKClient(BaseDataspotClient):
         
         # Set up mapping
         self.mapping = ODSDataspotMapping(database_name=self.database_name)
+        
+        # Initialize the organization mapping
+        self.org_mapping = StaatskalenderDataspotMapping(database_name=self.database_name)
         
     def _download_and_update_mappings(self, target_ods_ids: List[str] = None) -> int:
         """
@@ -1248,7 +1252,7 @@ class DNKClient(BaseDataspotClient):
                     "label": title.strip(),
                     "stereotype": "Organisationseinheit",
                     "_hierarchy_depth": depth,
-                    "_id": org_id  # Store original ID for relationship building
+                    "id_im_staatskalender": org_id
                 }
                 
                 # Add custom properties
@@ -1329,6 +1333,13 @@ class DNKClient(BaseDataspotClient):
         """
         logging.info("Building organization hierarchy using level-by-level bulk upload...")
         
+        # Preload mappings from DNK to ensure we have the latest mapping data
+        try:
+            logging.info("Preloading Staatskalender ID to Dataspot mappings from DNK system")
+            self._download_and_update_staatskalender_mappings()
+        except Exception as e:
+            logging.warning(f"Failed to preload organizational unit mappings, continuing with existing mappings: {str(e)}")
+            
         # Transform organization data for bulk upload
         org_units = self.transform_organization_for_bulk_upload(org_data, validate_urls=validate_urls)
         
@@ -1336,12 +1347,18 @@ class DNKClient(BaseDataspotClient):
             logging.warning("No organizational units to upload")
             return {"status": "error", "message": "No organizational units to upload"}
         
+        # Extract Staatskalender IDs from all units for mapping updates
+        staatskalender_ids = []
+        for unit in org_units:
+            staatskalender_id = unit.get("id_im_staatskalender")
+            if staatskalender_id:
+                staatskalender_ids.append(staatskalender_id)
+        
         # Group units by their depth in the hierarchy
         units_by_depth = {}
         for unit in org_units:
             # Get the hierarchy depth directly from the unit
             depth = unit.pop("_hierarchy_depth", 0)  # Remove the depth field and use its value
-            unit.pop("_id", None)  # Remove the temp ID field before upload
             
             # Add to the appropriate depth group
             if depth not in units_by_depth:
@@ -1412,6 +1429,16 @@ class DNKClient(BaseDataspotClient):
                 logging.error(error_msg)
                 upload_errors.append(error_msg)
         
+        # Update mappings for all uploaded organizations
+        try:
+            if staatskalender_ids:
+                logging.info(f"Updating mappings for {len(staatskalender_ids)} organizational units")
+                self.update_staatskalender_mappings_from_upload(staatskalender_ids)
+        except Exception as e:
+            logging.warning(f"Error updating organizational unit mappings: {str(e)}")
+            # Add to errors but continue
+            upload_errors.append(f"Error updating mappings: {str(e)}")
+        
         logging.info("Organization hierarchy build completed")
         
         # Determine overall result
@@ -1438,3 +1465,244 @@ class DNKClient(BaseDataspotClient):
             }
             
         return result
+
+    def _download_and_update_staatskalender_mappings(self, target_staatskalender_ids: List[str] = None) -> int:
+        """
+        Helper method to download organizational units and update Staatskalender ID to Dataspot UUID mappings.
+        
+        Args:
+            target_staatskalender_ids (List[str], optional): If provided, only update mappings for these Staatskalender IDs.
+                                                 If None, update all mappings found.
+        
+        Returns:
+            int: Number of mappings successfully updated
+            
+        Raises:
+            HTTPError: If API requests fail
+            ValueError: If the response format is unexpected or invalid
+        """
+        logging.info(f"Downloading organizational units from DNK scheme for mapping update")
+        
+        # Use the download API to retrieve collections from the scheme
+        download_path = f"/api/{self.database_name}/schemes/{self.scheme_name}/download?format=JSON"
+        full_url = url_join(self.base_url, download_path)
+        
+        logging.debug(f"Downloading collections from: {full_url}")
+        response = requests_get(full_url, headers=self.auth.get_headers())
+        response.raise_for_status()
+        
+        # Parse the JSON response
+        all_items = response.json()
+        
+        # If we got a list directly, use it
+        if isinstance(all_items, list):
+            # Filter to only include collections with stereotype Organisationseinheit and id_im_staatskalender
+            orgs = [item for item in all_items if 
+                    item.get('_type') == 'Collection' and 
+                    item.get('stereotype') == 'Organisationseinheit' and 
+                    item.get('id_im_staatskalender')]
+            
+            # Sort by id_im_staatskalender
+            orgs.sort(key=lambda x: x.get('id_im_staatskalender'))
+            logging.info(f"Downloaded {len(orgs)} organizational units from scheme")
+        else:
+            # We might have received a job ID instead
+            logging.error(f"Received unexpected response format from {full_url}. Expected a list of items.")
+            logging.debug(f"Response content: {all_items}")
+            raise ValueError(f"Unexpected response format from download API. Expected a list but got: {type(all_items)}")
+        
+        if not orgs:
+            logging.warning(f"No organizational units with id_im_staatskalender found in {self.scheme_name}")
+            return 0
+        
+        # Create a lookup dictionary for faster access
+        org_by_staatskalender_id = {}
+        for org in orgs:
+            # Get the id_im_staatskalender field
+            staatskalender_id = org.get('id_im_staatskalender')
+            if staatskalender_id:
+                org_by_staatskalender_id[staatskalender_id] = org
+        
+        # Process each org and update the mapping
+        updated_count = 0
+        
+        # Check for orgs in mapping that are not in downloaded orgs
+        if not target_staatskalender_ids:
+            removed_count = 0
+            for staatskalender_id, entry in list(self.org_mapping.mapping.items()):
+                if staatskalender_id not in org_by_staatskalender_id:
+                    logging.warning(f"Organizational unit {staatskalender_id} exists in local mapping but not in dataspot. Removing from local mapping.")
+                    if len(entry) >= 2:
+                        _type, uuid = entry[0], entry[1]
+                        logging.debug(f"    - _type: {_type}, uuid: {uuid}")
+                    self.org_mapping.remove_entry(staatskalender_id)
+                    removed_count += 1
+            if removed_count > 0:
+                logging.info(f"Found {removed_count} organizational units that exist locally but not in dataspot.")
+        
+        # If we have target IDs, prioritize those
+        if target_staatskalender_ids and len(target_staatskalender_ids) > 0:
+            total_targets = len(target_staatskalender_ids)
+            target_staatskalender_ids.sort()
+            for idx, staatskalender_id in enumerate(target_staatskalender_ids, 1):
+                logging.info(f"[{idx}/{total_targets}] Processing organizational unit with Staatskalender ID: {staatskalender_id}")
+                
+                # Find this Staatskalender ID in our downloaded orgs
+                org = org_by_staatskalender_id.get(staatskalender_id)
+                if not org:
+                    logging.warning(f"Could not find organizational unit with Staatskalender ID {staatskalender_id} in downloaded data, skipping")
+                    continue
+                
+                # Get the UUID and _type
+                uuid = org.get('id')
+                _type = org.get('_type') # Get the _type
+                if not uuid:
+                    logging.warning(f"Organizational unit with Staatskalender ID {staatskalender_id} missing UUID, skipping")
+                    continue
+                if not _type:
+                    logging.warning(f"Organizational unit with Staatskalender ID {staatskalender_id} missing _type, skipping")
+                    continue
+                
+                # Extract inCollection business key directly from the downloaded org
+                inCollection_key = org.get('inCollection')
+                
+                if uuid and _type:
+                    # Check if the mapping has changed before updating
+                    existing_entry = self.org_mapping.get_entry(staatskalender_id)
+                    # Existing entry tuple: (_type, uuid, inCollection)
+                    if (existing_entry and
+                            existing_entry[0] == _type and
+                            existing_entry[1] == uuid and
+                            existing_entry[2] == inCollection_key):
+                        logging.info(f"No changes in organizational unit {staatskalender_id}. Skipping")
+                        logging.debug(f"    - _type: {_type}, uuid: {uuid}, inCollection: {inCollection_key}")
+                    elif existing_entry:
+                        old_type = existing_entry[0] if len(existing_entry) > 0 else None
+                        old_uuid = existing_entry[1] if len(existing_entry) > 1 else None
+                        old_inCollection = existing_entry[2] if len(existing_entry) > 2 else None
+
+                        # Only log UUID update warning if the UUID actually changed
+                        if old_uuid != uuid:
+                            logging.warning(f"Update organizational unit {staatskalender_id} uuid from {old_uuid} to {uuid}")
+                        else:
+                            logging.info(f"Updating organizational unit {staatskalender_id} metadata")
+
+                        # Log changes in type if they occur
+                        if old_type != _type:
+                            logging.warning(f"Organizational unit {staatskalender_id} type changed from '{old_type}' to '{_type}'")
+
+                        # Log a more meaningful message if inCollection has changed
+                        if old_inCollection != inCollection_key and old_inCollection and inCollection_key:
+                            logging.info(f"Organizational unit {staatskalender_id} has been moved from '{old_inCollection}' to '{inCollection_key}'")
+                        elif not old_inCollection and inCollection_key:
+                            logging.info(f"Organizational unit {staatskalender_id} has been placed in '{inCollection_key}'")
+                        elif old_inCollection and not inCollection_key:
+                            logging.info(f"Organizational unit {staatskalender_id} has been removed from '{old_inCollection}'")
+                        
+                        logging.debug(f"    - old_type: {old_type}, old_uuid: {old_uuid}, old_inCollection: {old_inCollection}")
+                        logging.debug(f"    - new_type: {_type}, new_uuid: {uuid}, new_inCollection: {inCollection_key}")
+                        self.org_mapping.add_entry(staatskalender_id, _type, uuid, inCollection_key)
+                        updated_count += 1
+                    else:
+                        logging.info(f"Add organizational unit {staatskalender_id} with uuid {uuid}")
+                        logging.debug(f"    - _type: {_type}, uuid: {uuid}, inCollection: {inCollection_key}")
+                        self.org_mapping.add_entry(staatskalender_id, _type, uuid, inCollection_key)
+                        updated_count += 1
+                else:
+                    logging.warning(f"Missing UUID or _type for organizational unit with Staatskalender ID: {staatskalender_id}")
+        else:
+            # No target IDs, process all orgs
+            total_orgs = len(orgs)
+            for idx, org in enumerate(orgs, 1):
+                # Extract the ID
+                staatskalender_id = org.get('id_im_staatskalender')
+                
+                # Skip if this org doesn't have a Staatskalender ID
+                if not staatskalender_id:
+                    continue
+                
+                logging.info(f"[{idx}/{total_orgs}] Processing organizational unit with Staatskalender ID: {staatskalender_id}")
+                
+                # Get the UUID and _type
+                uuid = org.get('id')
+                _type = org.get('_type') # Get the _type
+                if not uuid:
+                    logging.warning(f"Organizational unit with Staatskalender ID {staatskalender_id} missing UUID, skipping")
+                    continue
+                if not _type:
+                    logging.warning(f"Organizational unit with Staatskalender ID {staatskalender_id} missing _type, skipping")
+                    continue
+
+                # Extract inCollection business key directly from the downloaded org
+                inCollection_key = org.get('inCollection')
+                
+                if uuid and _type:
+                    # Check if the mapping has changed before updating
+                    existing_entry = self.org_mapping.get_entry(staatskalender_id)
+                    # Existing entry tuple: (_type, uuid, inCollection)
+                    if (existing_entry and
+                            existing_entry[0] == _type and
+                            existing_entry[1] == uuid and
+                            existing_entry[2] == inCollection_key):
+                        logging.info(f"No changes in organizational unit {staatskalender_id}. Skipping")
+                        logging.debug(f"    - _type: {_type}, uuid: {uuid}, inCollection: {inCollection_key}")
+                    elif existing_entry:
+                        old_type = existing_entry[0] if len(existing_entry) > 0 else None
+                        old_uuid = existing_entry[1] if len(existing_entry) > 1 else None
+                        old_inCollection = existing_entry[2] if len(existing_entry) > 2 else None
+
+                        # Only log UUID update warning if the UUID actually changed
+                        if old_uuid != uuid:
+                            logging.warning(f"Update organizational unit {staatskalender_id} uuid from {old_uuid} to {uuid}")
+                        else:
+                            logging.info(f"Updating organizational unit {staatskalender_id} metadata")
+
+                        # Log changes in type if they occur
+                        if old_type != _type:
+                            logging.warning(f"Organizational unit {staatskalender_id} type changed from '{old_type}' to '{_type}'")
+
+                        # Log a more meaningful message if inCollection has changed
+                        if old_inCollection != inCollection_key and old_inCollection and inCollection_key:
+                            logging.info(f"Organizational unit {staatskalender_id} has been moved from '{old_inCollection}' to '{inCollection_key}'")
+                        elif not old_inCollection and inCollection_key:
+                            logging.info(f"Organizational unit {staatskalender_id} has been placed in '{inCollection_key}'")
+                        elif old_inCollection and not inCollection_key:
+                            logging.info(f"Organizational unit {staatskalender_id} has been removed from '{old_inCollection}'")
+                        
+                        self.org_mapping.add_entry(staatskalender_id, _type, uuid, inCollection_key)
+                        updated_count += 1
+                    else:
+                        logging.info(f"Add organizational unit {staatskalender_id} with uuid {uuid}")
+                        self.org_mapping.add_entry(staatskalender_id, _type, uuid, inCollection_key)
+                        updated_count += 1
+                else:
+                    logging.warning(f"Missing UUID or _type for organizational unit with Staatskalender ID: {staatskalender_id}")
+        
+        return updated_count
+    
+    def update_staatskalender_mappings_from_upload(self, staatskalender_ids: List[str]) -> None:
+        """
+        Updates the mapping between Staatskalender IDs and Dataspot UUIDs after uploading organizational units.
+        Uses the download API to retrieve all organizational units and then updates the mapping for matching Staatskalender IDs.
+        
+        Args:
+            staatskalender_ids (List[str]): List of Staatskalender IDs to update in the mapping
+            
+        Raises:
+            HTTPError: If API requests fail
+            ValueError: If unable to retrieve organizational unit information
+        """
+        logging.info(f"Updating mappings for {len(staatskalender_ids)} organizational units using download API")
+        
+        try:
+            updated_count = self._download_and_update_staatskalender_mappings(staatskalender_ids)
+            logging.info(f"Updated mappings for {updated_count} out of {len(staatskalender_ids)} organizational units")
+            
+            if updated_count < len(staatskalender_ids):
+                missing_ids = [staatskalender_id for staatskalender_id in staatskalender_ids if not self.org_mapping.get_entry(staatskalender_id)]
+                if missing_ids:
+                    logging.warning(f"Could not find mappings for {len(missing_ids)} Staatskalender IDs: {missing_ids[:5]}" + 
+                                   (f"... and {len(missing_ids)-5} more" if len(missing_ids) > 5 else ""))
+        except Exception as e:
+            logging.error(f"Error updating organizational unit mappings: {str(e)}")
+            raise
