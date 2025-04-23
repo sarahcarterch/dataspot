@@ -1030,8 +1030,9 @@ class DNKClient(BaseDataspotClient):
             logging.error("Invalid organization data format. Data must contain a 'results' key.")
             raise ValueError("Invalid organization data format. Data must contain a 'results' key.")
         
+        # TODO (Renato): Check what the id is in the api of the ods dataset 100349. If it is an int, we should treat it as an int. If it is a string, we should question it.
         # Build a lookup dictionary for quick access to organization by ID
-        org_lookup = {str(org['id']): org for org in org_data['results']}
+        org_lookup : Dict[str, Dict[str, Any]] = {str(org['id']): org for org in org_data['results']} # Assume that the id is a string
         logging.info(f"Processing {len(org_lookup)} organizations from input data")
         
         # Create a dictionary to track parent-child relationships
@@ -1519,9 +1520,14 @@ class DNKClient(BaseDataspotClient):
         org_by_staatskalender_id = {}
         for org in orgs:
             # Get the id_im_staatskalender field
-            staatskalender_id = org.get('id_im_staatskalender')
-            if staatskalender_id:
-                org_by_staatskalender_id[staatskalender_id] = org
+            staatskalender_id_raw = org.get('id_im_staatskalender')
+            if staatskalender_id_raw is not None: # Check if the ID exists
+                # Ensure the key is always a string
+                staatskalender_id_str = str(staatskalender_id_raw)
+                org_by_staatskalender_id[staatskalender_id_str] = org
+            else:
+                # Log if an org unit is missing the ID, although the earlier filter should prevent this
+                logging.warning(f"Found organizational unit missing 'id_im_staatskalender': {org.get('id', 'Unknown ID')}")
         
         # Process each org and update the mapping
         updated_count = 0
@@ -1547,15 +1553,16 @@ class DNKClient(BaseDataspotClient):
             for idx, staatskalender_id in enumerate(target_staatskalender_ids, 1):
                 logging.info(f"[{idx}/{total_targets}] Processing organizational unit with Staatskalender ID: {staatskalender_id}")
                 
-                # Find this Staatskalender ID in our downloaded orgs
                 org = org_by_staatskalender_id.get(staatskalender_id)
-                if not org:
+                
+                # Skip if we couldn't find the organization
+                if org is None:
                     logging.warning(f"Could not find organizational unit with Staatskalender ID {staatskalender_id} in downloaded data, skipping")
                     continue
                 
                 # Get the UUID and _type
                 uuid = org.get('id')
-                _type = org.get('_type') # Get the _type
+                _type = org.get('_type')
                 if not uuid:
                     logging.warning(f"Organizational unit with Staatskalender ID {staatskalender_id} missing UUID, skipping")
                     continue
@@ -1615,11 +1622,14 @@ class DNKClient(BaseDataspotClient):
             total_orgs = len(orgs)
             for idx, org in enumerate(orgs, 1):
                 # Extract the ID
-                staatskalender_id = org.get('id_im_staatskalender')
+                staatskalender_id_raw = org.get('id_im_staatskalender')
                 
-                # Skip if this org doesn't have a Staatskalender ID
-                if not staatskalender_id:
+                # Skip if this org doesn't have a Staatskalender ID (should already be filtered, but check anyway)
+                if staatskalender_id_raw is None:
                     continue
+                
+                # Ensure we use the string version for lookup/processing
+                staatskalender_id = str(staatskalender_id_raw)
                 
                 logging.info(f"[{idx}/{total_orgs}] Processing organizational unit with Staatskalender ID: {staatskalender_id}")
                 
