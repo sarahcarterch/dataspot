@@ -9,17 +9,17 @@ The columns should be (so far): uuid,lastactl,lastpub
 
 This is put on hold for the moment, as lastactl does not really need to be in dataspot. (?)
 
-## How to integrate an `int` environment into `prod` (work-in-progress)
+## How to integrate an `dev` (or `feature`) environment into `prod` [Work-In-Progress]
 When integrating a `dev` into `prod`, first we need to clone the `dev` into an `int`. 
 Then:
-1. Integrate yaml
+1. Integrate yaml from `dev` into `int`
 1. Run job "Regelverletzungen prüfen"
 1. Export DNK as xlsx and import it again (dry run is enough)
 1. Export and reimport other models that might be affected aswell
 
 If everything worked without errors, we can apply the `int` yaml into the `prod` yaml and reapply the changes made to the `int` to the `prod`.
 
-After that, delete the `dev` branch on github, in dataspot, and also its corresponding Annotations.yaml
+After that, delete the `dev` branch on github, in dataspot, and also its corresponding Annotations.yaml. Also delete the `int` environment in dataspot.
 
 ## Notes (Renato)
 ### Colors for top bar background:
