@@ -21,7 +21,7 @@ class ODSClient:
             list: List of column configurations for the dataset
             
         Raises:
-            SystemExit: If neither or both dataset_id and dataset_uid are provided
+            SystemExit: If neither nor both dataset_id and dataset_uid are provided
             HTTPError: If the API request fails
         """
         if not dataset_id:
