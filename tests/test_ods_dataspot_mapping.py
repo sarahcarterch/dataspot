@@ -1,7 +1,7 @@
 import os
 import unittest
 import uuid
-from src.ods_dataspot_mapping import ODSDataspotMapping, _get_mapping_file_path
+from src.ods_dataspot_mapping import ODSDataspotMapping
 
 
 class TestODSDataspotMapping(unittest.TestCase):
@@ -10,15 +10,15 @@ class TestODSDataspotMapping(unittest.TestCase):
     def setUp(self):
         # Use a temporary test file
         self.database_name = "local-test-environment"
-        self.test_file = _get_mapping_file_path(self.database_name)
+        # Create mapping first to get the correct path
         self.mapping = ODSDataspotMapping(database_name=self.database_name)
+        self.test_file = self.mapping.csv_file_path 
         self.test_type = "Dataset"
-        self.test_type_plural = "datasets"
         
     def tearDown(self):
-        # Clean up test file
-        if os.path.exists(self.test_file):
-            os.remove(self.test_file)
+        # Clean up test file using the path from the mapping instance
+        if os.path.exists(self.mapping.csv_file_path):
+            os.remove(self.mapping.csv_file_path)
             
     def test_add_and_retrieve_entry(self):
         # Test adding and retrieving an entry
@@ -86,7 +86,6 @@ class TestODSDataspotMapping(unittest.TestCase):
         new_uuid = "caeb7cb4-3279-46c5-b7cc-19e0c58d7021"
         old_inColl = "Old Collection"
         new_inColl = "New Collection"
-        expected_new_endpoint_rest = f"/rest/{self.database_name}/{self.test_type_plural}/{new_uuid}"
         
         self.mapping.add_entry("ods-update", self.test_type, old_uuid, old_inColl)
         
@@ -97,12 +96,8 @@ class TestODSDataspotMapping(unittest.TestCase):
         entry = self.mapping.get_entry("ods-update")
         self.assertEqual(entry, (self.test_type, new_uuid, new_inColl))
         
-        # Update only uuid, keeping the same inCollection (via update mechanism)
-        # Now update without specifying inCollection (sets it to None)
+        # Test updating without specifying inCollection (sets it to None)
         newest_uuid = "caeb7cb4-3279-46c5-b7cc-19e0c58d7022"
-        expected_newest_endpoint_rest = f"/rest/{self.database_name}/{self.test_type_plural}/{newest_uuid}"
-        
-        # Test updating without specifying inCollection
         self.mapping.add_entry("ods-update", self.test_type, newest_uuid)
         
         # inCollection should be None
@@ -154,11 +149,12 @@ class TestODSDataspotMapping(unittest.TestCase):
     def test_empty_file(self):
         # Test with an empty file (just headers)
         empty_file_db_name = "empty_mapping_db"
-        empty_file = _get_mapping_file_path(empty_file_db_name)
-        
+        empty_mapping = None
+        empty_file_path = None
         try:
             # Create a new empty mapping using database_name
             empty_mapping = ODSDataspotMapping(database_name=empty_file_db_name)
+            empty_file_path = empty_mapping.csv_file_path
             
             # Should not have any entries
             self.assertIsNone(empty_mapping.get_entry("any-id"))
@@ -171,36 +167,38 @@ class TestODSDataspotMapping(unittest.TestCase):
             self.assertEqual(empty_mapping.get_inCollection("ods-empty"), test_inCollection)
         finally:
             # Clean up
-            if os.path.exists(empty_file):
-                os.remove(empty_file)
+            if empty_file_path and os.path.exists(empty_file_path):
+                os.remove(empty_file_path)
     
     def test_file_does_not_exist(self):
         # Test with a non-existent file path by using a unique database name
         non_existent_db_name = f"non_existent_db_{uuid.uuid4()}"
-        non_existent_file = _get_mapping_file_path(non_existent_db_name)
-        
+        non_existent_mapping = None
+        non_existent_file_path = None
         try:
             # Should create the file and add headers when initialized with database_name
             non_existent_mapping = ODSDataspotMapping(database_name=non_existent_db_name)
+            non_existent_file_path = non_existent_mapping.csv_file_path
             
             # Check that the file was created
-            self.assertTrue(os.path.exists(non_existent_file))
+            self.assertTrue(os.path.exists(non_existent_file_path))
             
             # Should be empty
             self.assertIsNone(non_existent_mapping.get_entry("any-id"))
         finally:
             # Clean up
-            if os.path.exists(non_existent_file):
-                os.remove(non_existent_file)
+            if non_existent_file_path and os.path.exists(non_existent_file_path):
+                os.remove(non_existent_file_path)
     
     def test_database_name_parameter(self):
         # Test the database_name parameter
         database_name = "test_db"
-        expected_filename = _get_mapping_file_path(database_name)
-        
+        db_mapping = None
+        expected_filename = None
         try:
             # Create mapping with database_name
             db_mapping = ODSDataspotMapping(database_name=database_name)
+            expected_filename = db_mapping.csv_file_path
             
             # Check that the correct file was created
             self.assertTrue(os.path.exists(expected_filename))
@@ -215,7 +213,7 @@ class TestODSDataspotMapping(unittest.TestCase):
             self.assertEqual(db_mapping.get_type("ods-db"), self.test_type)
         finally:
             # Clean up
-            if os.path.exists(expected_filename):
+            if expected_filename and os.path.exists(expected_filename):
                 os.remove(expected_filename)
     
     def test_invalid_inputs(self):
@@ -230,7 +228,6 @@ class TestODSDataspotMapping(unittest.TestCase):
         # All should fail
         self.assertFalse(result1)
         self.assertFalse(result2)
-        #self.assertFalse(result3)
         self.assertFalse(result_missing_type)
         
         # Nothing should be added
