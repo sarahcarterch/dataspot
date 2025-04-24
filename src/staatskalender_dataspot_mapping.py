@@ -1,7 +1,7 @@
 import logging
 from typing import List
 
-from dataspot_mapping import BaseDataspotMapping
+from src.dataspot_mapping import BaseDataspotMapping
 
 class StaatskalenderDataspotMapping(BaseDataspotMapping):
     """
