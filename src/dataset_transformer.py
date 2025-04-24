@@ -138,7 +138,7 @@ def transform_ods_to_dnk(ods_metadata: Dict[str, Any], ods_dataset_id: str) -> O
                 geographical_dimension = ", ".join(geo_dimensions) if geo_dimensions else None
                 
                 if len(geo_refs) > 1:
-                    logging.info(f"Multiple geographic references found in ODS metadata: {geo_refs}. Joined as: {geographical_dimension}")
+                    logging.debug(f"Multiple geographic references found in ODS metadata: {geo_refs}. Joined as: {geographical_dimension}")
 
     # Extract license/rights information
     license = None

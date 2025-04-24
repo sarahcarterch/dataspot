@@ -488,7 +488,8 @@ def main_8_test_bulk_ods_datasets_upload_and_delete(cleanup_after_test: bool = T
     logging.info(f"Found {len(ods_ids)} datasets to process")
     
     # Process all datasets
-    logging.info(f"Step 2: Processing the retrieved dataset: Transforming the ODS datasets to dataspot datasets...")
+    logging.info(f"Step 2: Processing the retrieved dataset: Downloading and transforming the ODS datasets to dataspot "
+                 f"datasets.")
     total_processed = 0
     total_successful = 0
     total_failed = 0
@@ -655,6 +656,7 @@ def main_9_build_organization_structure_in_dnk():
     finally:
         logging.info("Organization structure build process finished")
         logging.info("=============================================")
+        pass
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

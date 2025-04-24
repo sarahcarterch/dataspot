@@ -103,7 +103,7 @@ class DNKClient(BaseDataspotClient):
             total_targets = len(target_ods_ids)
             target_ods_ids.sort()
             for idx, ods_id in enumerate(target_ods_ids, 1):
-                logging.info(f"[{idx}/{total_targets}] Processing dataset with ODS ID: {ods_id}")
+                logging.debug(f"[{idx}/{total_targets}] Processing dataset with ODS ID: {ods_id}")
                 
                 # Find this ODS ID in our downloaded datasets
                 dataset = dataset_by_ods_id.get(ods_id)
@@ -132,7 +132,7 @@ class DNKClient(BaseDataspotClient):
                             existing_entry[0] == _type and
                             existing_entry[1] == uuid and
                             existing_entry[2] == inCollection_key):
-                        logging.info(f"No changes in dataset {ods_id}. Skipping")
+                        logging.debug(f"No changes in dataset {ods_id}. Skipping")
                         logging.debug(f"    - _type: {_type}, uuid: {uuid}, inCollection: {inCollection_key}")
                     elif existing_entry:
                         old_type = existing_entry[0] if len(existing_entry) > 0 else None
@@ -162,7 +162,7 @@ class DNKClient(BaseDataspotClient):
                         self.mapping.add_entry(ods_id, _type, uuid, inCollection_key)
                         updated_count += 1
                     else:
-                        logging.info(f"Add dataset {ods_id} with uuid {uuid}")
+                        logging.debug(f"Add dataset {ods_id} with uuid {uuid}")
                         logging.debug(f"    - _type: {_type}, uuid: {uuid}, inCollection: {inCollection_key}")
                         self.mapping.add_entry(ods_id, _type, uuid, inCollection_key)
                         updated_count += 1
@@ -179,7 +179,7 @@ class DNKClient(BaseDataspotClient):
                 if not ods_id:
                     continue
                 
-                logging.info(f"[{idx}/{total_datasets}] Processing dataset with ODS ID: {ods_id}")
+                logging.debug(f"[{idx}/{total_datasets}] Processing dataset with ODS ID: {ods_id}")
                 
                 # Get the UUID and _type
                 uuid = dataset.get('id')
@@ -202,7 +202,7 @@ class DNKClient(BaseDataspotClient):
                             existing_entry[0] == _type and
                             existing_entry[1] == uuid and
                             existing_entry[2] == inCollection_key):
-                        logging.info(f"No changes in dataset {ods_id}. Skipping")
+                        logging.debug(f"No changes in dataset {ods_id}. Skipping")
                         logging.debug(f"    - _type: {_type}, uuid: {uuid}, inCollection: {inCollection_key}")
                     elif existing_entry:
                         old_type = existing_entry[0] if len(existing_entry) > 0 else None
@@ -232,7 +232,7 @@ class DNKClient(BaseDataspotClient):
                         self.mapping.add_entry(ods_id, _type, uuid, inCollection_key)
                         updated_count += 1
                     else:
-                        logging.info(f"Add dataset {ods_id} with uuid {uuid}")
+                        logging.debug(f"Add dataset {ods_id} with uuid {uuid}")
                         logging.debug(f"    - _type: {_type}, uuid: {uuid}, inCollection: {inCollection_key}")
                         self.mapping.add_entry(ods_id, _type, uuid, inCollection_key)
                         updated_count += 1
@@ -950,7 +950,7 @@ class DNKClient(BaseDataspotClient):
         
         # Count of units
         num_units = len(organizational_units)
-        logging.info(f"Bulk creating {num_units} organizational units (operation: {operation}, dry_run: {dry_run})...")
+        logging.debug(f"Bulk creating {num_units} organizational units (operation: {operation}, dry_run: {dry_run})...")
         
         # Bulk create organizational units using the scheme name
         try:
@@ -1551,7 +1551,7 @@ class DNKClient(BaseDataspotClient):
             total_targets = len(target_staatskalender_ids)
             target_staatskalender_ids.sort()
             for idx, staatskalender_id in enumerate(target_staatskalender_ids, 1):
-                logging.info(f"[{idx}/{total_targets}] Processing organizational unit with Staatskalender ID: {staatskalender_id}")
+                logging.debug(f"[{idx}/{total_targets}] Processing organizational unit with Staatskalender ID: {staatskalender_id}")
                 
                 org = org_by_staatskalender_id.get(staatskalender_id)
                 
@@ -1581,7 +1581,7 @@ class DNKClient(BaseDataspotClient):
                             existing_entry[0] == _type and
                             existing_entry[1] == uuid and
                             existing_entry[2] == inCollection_key):
-                        logging.info(f"No changes in organizational unit {staatskalender_id}. Skipping")
+                        logging.debug(f"No changes in organizational unit {staatskalender_id}. Skipping")
                         logging.debug(f"    - _type: {_type}, uuid: {uuid}, inCollection: {inCollection_key}")
                     elif existing_entry:
                         old_type = existing_entry[0] if len(existing_entry) > 0 else None
@@ -1611,7 +1611,7 @@ class DNKClient(BaseDataspotClient):
                         self.org_mapping.add_entry(staatskalender_id, _type, uuid, inCollection_key)
                         updated_count += 1
                     else:
-                        logging.info(f"Add organizational unit {staatskalender_id} with uuid {uuid}")
+                        logging.debug(f"Add organizational unit {staatskalender_id} with uuid {uuid}")
                         logging.debug(f"    - _type: {_type}, uuid: {uuid}, inCollection: {inCollection_key}")
                         self.org_mapping.add_entry(staatskalender_id, _type, uuid, inCollection_key)
                         updated_count += 1
@@ -1631,7 +1631,7 @@ class DNKClient(BaseDataspotClient):
                 # Ensure we use the string version for lookup/processing
                 staatskalender_id = str(staatskalender_id_raw)
                 
-                logging.info(f"[{idx}/{total_orgs}] Processing organizational unit with Staatskalender ID: {staatskalender_id}")
+                logging.debug(f"[{idx}/{total_orgs}] Processing organizational unit with Staatskalender ID: {staatskalender_id}")
                 
                 # Get the UUID and _type
                 uuid = org.get('id')
@@ -1654,7 +1654,7 @@ class DNKClient(BaseDataspotClient):
                             existing_entry[0] == _type and
                             existing_entry[1] == uuid and
                             existing_entry[2] == inCollection_key):
-                        logging.info(f"No changes in organizational unit {staatskalender_id}. Skipping")
+                        logging.debug(f"No changes in organizational unit {staatskalender_id}. Skipping")
                         logging.debug(f"    - _type: {_type}, uuid: {uuid}, inCollection: {inCollection_key}")
                     elif existing_entry:
                         old_type = existing_entry[0] if len(existing_entry) > 0 else None
@@ -1682,7 +1682,7 @@ class DNKClient(BaseDataspotClient):
                         self.org_mapping.add_entry(staatskalender_id, _type, uuid, inCollection_key)
                         updated_count += 1
                     else:
-                        logging.info(f"Add organizational unit {staatskalender_id} with uuid {uuid}")
+                        logging.debug(f"Add organizational unit {staatskalender_id} with uuid {uuid}")
                         self.org_mapping.add_entry(staatskalender_id, _type, uuid, inCollection_key)
                         updated_count += 1
                 else:
