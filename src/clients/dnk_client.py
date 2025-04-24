@@ -328,8 +328,7 @@ class DNKClient(BaseDataspotClient):
         
         response = self.create_resource(
             endpoint=dataset_creation_endpoint,
-            data=dataset_json,
-            _type='Dataset'
+            data=dataset_json
         )
         
         # Store the mapping for future reference
@@ -479,7 +478,6 @@ class DNKClient(BaseDataspotClient):
             response = self.bulk_create_or_update_resources(
                 scheme_name=self.scheme_name,
                 data=dataset_jsons,
-                _type='Dataset',
                 operation=operation,
                 dry_run=dry_run
             )
@@ -601,8 +599,7 @@ class DNKClient(BaseDataspotClient):
         response = self.update_resource(
             endpoint=href,
             data=dataset_json,
-            replace=force_replace,
-            _type='Dataset'
+            replace=force_replace
         )
         
         # Ensure the mapping is updated
@@ -900,8 +897,7 @@ class DNKClient(BaseDataspotClient):
                 }
                 response_json = self.create_resource(
                     endpoint=collections_endpoint, 
-                    data=collection_data, 
-                    _type="Collection"
+                    data=collection_data
                 )
                 path_str = "/".join(collection_path) if collection_path else "scheme root"
                 logging.info(f"Created ODS-Imports collection at: {path_str}")
@@ -958,7 +954,6 @@ class DNKClient(BaseDataspotClient):
             response = self.bulk_create_or_update_resources(
                 scheme_name=self.scheme_name,
                 data=organizational_units,
-                _type='Collection',
                 operation=operation,
                 dry_run=dry_run
             )
