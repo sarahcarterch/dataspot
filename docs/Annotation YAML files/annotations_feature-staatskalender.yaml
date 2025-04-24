@@ -1314,6 +1314,7 @@ Collection:
               title: Link zur Quelle im Staatskalender
               width: 1
               order: 1
+              readOnly: true
             id_im_staatskalender:
               label: ID im Staatskalender
               baseType: INTEGER
