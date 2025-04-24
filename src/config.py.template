@@ -3,17 +3,18 @@
 # Base URL
 base_url = 'https://www.myserver.com'
 
-# Database name
-database_name = 'test-database'
-
 # Scheme names
 dnk_scheme_name = 'Datennutzungskatalog'
+dnk_scheme_name_short = 'DNK'
 rdm_scheme_name = 'Referenzdatenmodell'
-datatype_scheme_name = 'Datentypmodell'
+rdm_scheme_name_short = 'RDM'
+datatype_scheme_name = 'Datentypmodell (technisch)'
+datatype_scheme_name_short = 'DTM'
 tdm_scheme_name = 'Technische Datenmodelle'
+tdm_scheme_name_short = 'TDM'
 
 # Default ODS Imports collection name
-ods_imports_collection_name = 'ODS-Imports'
+ods_imports_collection_name = 'Datensätze aus ODS'
 
 # Default path for the ODS Imports collection within the DNK scheme.
 # An empty list [] means it's directly under the scheme root.

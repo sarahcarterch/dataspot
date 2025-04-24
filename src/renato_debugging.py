@@ -663,7 +663,7 @@ if __name__ == "__main__":
     logging.info(f'Executing {__file__}...')
 
     main_9_build_organization_structure_in_dnk()
-    main_8_test_bulk_ods_datasets_upload_and_delete(cleanup_after_test=False)
+    main_8_test_bulk_ods_datasets_upload_and_delete(cleanup_after_test=False, max_datasets=5)
 
     logging.info('Job successful!')
     

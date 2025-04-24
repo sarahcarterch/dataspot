@@ -13,8 +13,8 @@ class DataspotMappingInterface(abc.ABC):
     """
 
     @abc.abstractmethod
-    def __init__(self, database_name: str):
-        """Initialize the mapping with the database name"""
+    def __init__(self, database_name: str, scheme: str):
+        """Initialize the mapping with the database name and scheme"""
         pass
 
     @abc.abstractproperty
@@ -23,8 +23,8 @@ class DataspotMappingInterface(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def _get_mapping_file_path(self, database_name: str) -> str:
-        """Get the file path for the mapping file based on database name"""
+    def _get_mapping_file_path(self, database_name: str, scheme: str) -> str:
+        """Get the file path for the mapping file based on database name and scheme"""
         pass
 
     @property
@@ -78,7 +78,7 @@ class BaseDataspotMapping(DataspotMappingInterface):
     Implementation of the BaseDataspotMapping that can be configured for different mapping types.
     """
 
-    def __init__(self, database_name: str, id_field_name: str, file_prefix: str):
+    def __init__(self, database_name: str, id_field_name: str, file_prefix: str, scheme: str):
         """
         Initialize the mapping table.
         
@@ -86,19 +86,23 @@ class BaseDataspotMapping(DataspotMappingInterface):
             database_name (str): Name of the database to use for file naming.
             id_field_name (str): Name of the ID field (e.g., 'ods_id', 'staatskalender_id')
             file_prefix (str): Prefix for the mapping file (e.g., 'ods-dataspot', 'staatskalender-dataspot')
+            scheme (str): Name of the scheme (e.g., 'DNK', 'TDM')
         """
         self.logger = logging.getLogger(__name__)
         self._id_field_name = id_field_name
         self._file_prefix = file_prefix
+        self._scheme = scheme
 
         if not database_name:
             raise ValueError("database_name cannot be empty")
+        if not scheme:
+            raise ValueError("scheme cannot be empty")
 
         # Store database name for endpoint construction
         self.database_name = database_name
 
-        # Derive csv_file_path from the mandatory database_name
-        self.csv_file_path = self._get_mapping_file_path(database_name)
+        # Derive csv_file_path from the mandatory database_name and scheme
+        self.csv_file_path = self._get_mapping_file_path(database_name, scheme)
         self.logger.info(f"Using mapping file: {self.csv_file_path}")
 
         # Mapping: Dict[str, Tuple[str, str, Optional[str]]] -> Dict[external_id, (_type, uuid, inCollection)]
@@ -110,9 +114,9 @@ class BaseDataspotMapping(DataspotMappingInterface):
         """Get the field name for the ID in this mapping"""
         return self._id_field_name
 
-    def _get_mapping_file_path(self, database_name: str) -> str:
-        """Get the file path for the mapping file based on database name"""
-        return f"{self._file_prefix}-mapping_{database_name}.csv"
+    def _get_mapping_file_path(self, database_name: str, scheme: str) -> str:
+        """Get the file path for the mapping file based on database name and scheme. Format: {database_name}_{scheme}_{file_prefix}-mapping.csv"""
+        return f"{database_name}_{scheme}_{self._file_prefix}-mapping.csv"
 
     def _load_mapping(self) -> None:
         """Load the mapping from the CSV file if it exists."""

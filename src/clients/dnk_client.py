@@ -23,12 +23,13 @@ class DNKClient(BaseDataspotClient):
         # Load scheme name from config
         self.database_name = config.database_name
         self.scheme_name = config.dnk_scheme_name
+        self.scheme_name_short = config.dnk_scheme_name_short
         
         # Set up mapping
-        self.mapping = ODSDataspotMapping(database_name=self.database_name)
+        self.mapping = ODSDataspotMapping(database_name=self.database_name, scheme=self.scheme_name_short)
         
         # Initialize the organization mapping
-        self.org_mapping = StaatskalenderDataspotMapping(database_name=self.database_name)
+        self.org_mapping = StaatskalenderDataspotMapping(database_name=self.database_name, scheme=self.scheme_name_short)
         
     def _download_and_update_mappings(self, target_ods_ids: List[str] = None) -> int:
         """

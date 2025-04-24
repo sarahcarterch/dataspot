@@ -10,16 +10,17 @@ class StaatskalenderDataspotMapping(BaseDataspotMapping):
     The REST endpoint is constructed dynamically.
     """
 
-    def __init__(self, database_name: str):
+    def __init__(self, database_name: str, scheme: str):
         """
         Initialize the mapping table for organizational units.
-        The CSV filename is derived from the database_name.
+        The CSV filename is derived from the database_name and scheme.
 
         Args:
             database_name (str): Name of the database to use for file naming.
-                                 The file will be named "staatskalender-dataspot-mapping_{database_name}.csv".
+                                 Example: "feature-staatskalender_DNK_staatskalender-dataspot-mapping.csv"
+            scheme (str): Name of the scheme (e.g., 'DNK', 'TDM')
         """
-        super().__init__(database_name, "staatskalender_id", "staatskalender-dataspot")
+        super().__init__(database_name, "staatskalender_id", "staatskalender-dataspot", scheme)
         
     def get_all_staatskalender_ids(self) -> List[str]:
         """
