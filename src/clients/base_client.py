@@ -250,7 +250,8 @@ class BaseDataspotClient(ABC):
         full_url = url_join(self.base_url, endpoint)
         
         try:
-            response = requests_get(full_url, headers=headers)
+            # Pass silent_status_codes to prevent logging 404 and 410 errors
+            response = requests_get(full_url, headers=headers, silent_status_codes=[404, 410])
             return response.json()
         except HTTPError as e:
             if e.response.status_code in [404, 410]: # 404 for collections, 410 for datasets

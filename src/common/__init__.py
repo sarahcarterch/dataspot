@@ -49,9 +49,21 @@ proxies = {
     'https': os.getenv('HTTPS_PROXY')
 }
 
-def _print_potential_error_messages(response: requests.Response) -> None:
+def _print_potential_error_messages(response: requests.Response, silent_status_codes: list = None) -> None:
+    """
+    Parse and log error messages from a response.
+    
+    Args:
+        response: The HTTP response object
+        silent_status_codes: A list of status codes that should not trigger error logging
+    """
+    # Initialize silent_status_codes if not provided
+    if silent_status_codes is None:
+        silent_status_codes = []
+        
     try:
-        if response.status_code not in [200, 201, 204]: # 200 is normal, 201 is ???, 204 is normal return code for delete
+        # Skip logging for status codes that should be handled silently
+        if response.status_code not in [200, 201, 204] and response.status_code not in silent_status_codes:
             error_message_detailed = json.loads(response.content.decode(response.apparent_encoding))
             try:
                 logging.error(f"{error_message_detailed['method']} unsuccessful: {error_message_detailed['message']}")
@@ -75,12 +87,13 @@ def _print_potential_error_messages(response: requests.Response) -> None:
 
 @retry(http_errors_to_handle, tries=1, delay=5, backoff=1)
 def requests_get(*args, **kwargs):
-    # Extract delay parameter or use default
+    # Extract parameters
     delay = kwargs.pop('rate_limit_delay', RATE_LIMIT_DELAY_SEC)
+    silent_status_codes = kwargs.pop('silent_status_codes', None)
     
     r = requests.get(*args, proxies=proxies, **kwargs)
 
-    _print_potential_error_messages(r)
+    _print_potential_error_messages(r, silent_status_codes)
     r.raise_for_status()
     
     # Add delay after request to avoid overloading the server
@@ -90,11 +103,12 @@ def requests_get(*args, **kwargs):
 
 @retry(http_errors_to_handle, tries=2, delay=5, backoff=1)
 def requests_post(*args, **kwargs):
-    # Extract delay parameter or use default
+    # Extract parameters
     delay = kwargs.pop('rate_limit_delay', RATE_LIMIT_DELAY_SEC)
+    silent_status_codes = kwargs.pop('silent_status_codes', None)
     
     r = requests.post(*args, proxies=proxies, **kwargs)
-    _print_potential_error_messages(r)
+    _print_potential_error_messages(r, silent_status_codes)
     r.raise_for_status()
     
     # Add delay after request to avoid overloading the server
@@ -104,11 +118,12 @@ def requests_post(*args, **kwargs):
 
 @retry(http_errors_to_handle, tries=2, delay=5, backoff=1)
 def requests_patch(*args, **kwargs):
-    # Extract delay parameter or use default
+    # Extract parameters
     delay = kwargs.pop('rate_limit_delay', RATE_LIMIT_DELAY_SEC)
+    silent_status_codes = kwargs.pop('silent_status_codes', None)
     
     r = requests.patch(*args, proxies=proxies, **kwargs)
-    _print_potential_error_messages(r)
+    _print_potential_error_messages(r, silent_status_codes)
     r.raise_for_status()
     
     # Add delay after request to avoid overloading the server
@@ -118,11 +133,12 @@ def requests_patch(*args, **kwargs):
 
 @retry(http_errors_to_handle, tries=2, delay=5, backoff=1)
 def requests_put(*args, **kwargs):
-    # Extract delay parameter or use default
+    # Extract parameters
     delay = kwargs.pop('rate_limit_delay', RATE_LIMIT_DELAY_SEC)
+    silent_status_codes = kwargs.pop('silent_status_codes', None)
     
     r = requests.put(*args, proxies=proxies, **kwargs)
-    _print_potential_error_messages(r)
+    _print_potential_error_messages(r, silent_status_codes)
     r.raise_for_status()
     
     # Add delay after request to avoid overloading the server
@@ -132,11 +148,12 @@ def requests_put(*args, **kwargs):
 
 @retry(http_errors_to_handle, tries=2, delay=5, backoff=1)
 def requests_delete(*args, **kwargs):
-    # Extract delay parameter or use default
+    # Extract parameters
     delay = kwargs.pop('rate_limit_delay', RATE_LIMIT_DELAY_SEC)
+    silent_status_codes = kwargs.pop('silent_status_codes', None)
     
     r = requests.delete(*args, proxies=proxies, **kwargs)
-    _print_potential_error_messages(r)
+    _print_potential_error_messages(r, silent_status_codes)
     r.raise_for_status()
     
     # Add delay after request to avoid overloading the server
