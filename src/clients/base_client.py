@@ -10,8 +10,43 @@ from src.clients.helpers import url_join
 
 from requests import HTTPError
 
-class BaseDataspotClient(ABC):
-    """Base class for Dataspot API clients with common functionality."""
+class DataspotClientInterface(ABC):
+    """Interface defining the core operations for Dataspot API clients."""
+
+    @abstractmethod
+    def require_scheme_exists(self) -> str:
+        """Verify that the client's associated scheme exists and return its href."""
+        pass
+
+    @abstractmethod
+    def create_resource(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new resource via POST request."""
+        pass
+
+    @abstractmethod
+    def bulk_create_or_update_resources(self, scheme_name: str, data: List[Dict[str, Any]],
+                                        operation: str = "ADD", dry_run: bool = False) -> Dict[str, Any]:
+        """Create or update multiple resources in bulk via the upload API."""
+        pass
+
+    @abstractmethod
+    def update_resource(self, endpoint: str, data: Dict[str, Any], replace: bool = False) -> Dict[str, Any]:
+        """Update an existing resource via PUT or PATCH request."""
+        pass
+
+    @abstractmethod
+    def delete_resource(self, endpoint: str) -> None:
+        """Delete a resource via DELETE request."""
+        pass
+
+    @abstractmethod
+    def get_resource_if_exists(self, endpoint: str) -> Dict[str, Any] | None:
+        """Get a resource if it exists, return None if it doesn't."""
+        pass
+
+
+class BaseDataspotClient(DataspotClientInterface):
+    """Base class for Dataspot API clients implementing common functionality."""
 
     def __init__(self):
         """

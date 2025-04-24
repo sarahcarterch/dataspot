@@ -19,6 +19,16 @@ classDiagram
     }
 
     %% Base Client
+    class DataspotClientInterface {
+        <<interface>>
+        +require_scheme_exists()*
+        +create_resource()*
+        +bulk_create_or_update_resources()*
+        +update_resource()*
+        +delete_resource()*
+        +get_resource_if_exists()*
+    }
+
     class BaseDataspotClient {
         <<abstract>>
         -auth: DataspotAuth
@@ -105,7 +115,7 @@ classDiagram
     class StaatskalenderDataspotMapping {
         +get_all_staatskalender_ids()
     }
-
+    
     %% Dataset Classes
     class Dataset {
         <<abstract>>
@@ -183,6 +193,9 @@ classDiagram
     DataspotMappingInterface <|.. BaseDataspotMapping : implements
     BaseDataspotMapping <|-- ODSDataspotMapping : extends
     BaseDataspotMapping <|-- StaatskalenderDataspotMapping : extends
+
+    %% New client relationships
+    DataspotClientInterface <|.. BaseDataspotClient : implements
 ```
 
 ### Key Components:
@@ -190,8 +203,9 @@ classDiagram
 1. **Authentication (DataspotAuth)**: Handles OAuth token management for Dataspot API access.
 
 2. **Clients**:
-   - **BaseDataspotClient**: Abstract base class providing common functionality for Dataspot API interaction.
-   - **DNKClient**: Extends BaseDataspotClient to specifically work with the Datennutzungskatalog (DNK). Handles both dataset and organizational unit operations.
+   - **DataspotClientInterface**: Interface defining the core operations for Dataspot API clients.
+   - **BaseDataspotClient**: Abstract base class implementing the `DataspotClientInterface` and providing common functionality for Dataspot API interaction.
+   - **DNKClient**: Extends `BaseDataspotClient` to specifically work with the Datennutzungskatalog (DNK). Handles both dataset and organizational unit operations.
    - **ODSClient**: Interfaces with the OpenDataSoft API to retrieve dataset information.
 
 3. **Data Models**:
