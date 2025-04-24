@@ -1,4 +1,3 @@
-
 ## System Architecture Overview
 
 This project facilitates data synchronization between OpenDataSoft (ODS) and Dataspot's Datennutzungskatalog (DNK). Below is a UML diagram showing the main components and their relationships:
@@ -65,30 +64,46 @@ classDiagram
     }
 
     %% Mapping Classes
-    class ODSDataspotMapping {
+    class DataspotMappingInterface {
+        <<interface>>
+        +id_field_name: str
+        +csv_headers: List[str]
+        +get_entry()*
+        +add_entry()*
+        +remove_entry()*
+        +get_type()*
+        +get_uuid()*
+        +get_inCollection()*
+        +get_all_entries()*
+        +get_all_ids()*
+    }
+    
+    class BaseDataspotMapping {
+        -database_name: str
         -csv_file_path: str
         -mapping: Dict
+        -_id_field_name: str
+        -_file_prefix: str
         +get_entry()
         +add_entry()
         +remove_entry()
+        +get_type()
         +get_uuid()
-        +get_href()
         +get_inCollection()
+        +get_all_entries()
+        +get_all_ids()
+        -_get_mapping_file_path()
         -_load_mapping()
         -_save_mapping()
+        -_is_valid_uuid()
+    }
+
+    class ODSDataspotMapping {
+        +get_all_ods_ids()
     }
 
     class StaatskalenderDataspotMapping {
-        -csv_file_path: str
-        -mapping: Dict
-        +get_entry()
-        +add_entry()
-        +remove_entry()
-        +get_uuid()
-        +get_href()
-        +get_inCollection()
-        -_load_mapping()
-        -_save_mapping()
+        +get_all_staatskalender_ids()
     }
 
     %% Dataset Classes
@@ -163,6 +178,11 @@ classDiagram
     BasicDataset <|-- OGDDataset : extends
     DatasetTransformer ..> OGDDataset : creates
     ODSClient ..> DatasetTransformer : data feeds into
+    
+    %% New mapping relationships
+    DataspotMappingInterface <|.. BaseDataspotMapping : implements
+    BaseDataspotMapping <|-- ODSDataspotMapping : extends
+    BaseDataspotMapping <|-- StaatskalenderDataspotMapping : extends
 ```
 
 ### Key Components:
@@ -180,8 +200,10 @@ classDiagram
    - **OGDDataset**: Extends BasicDataset with Open Government Data specific fields.
 
 4. **Mapping**:
-   - **ODSDataspotMapping**: Maintains a persistent mapping between ODS dataset IDs and Dataspot UUIDs/hrefs in a CSV file.
-   - **StaatskalenderDataspotMapping**: Maintains a persistent mapping between Staatskalender organization IDs and Dataspot UUIDs/hrefs.
+   - **DataspotMappingInterface**: Abstract interface defining the contract for all mapping classes.
+   - **BaseDataspotMapping**: Concrete implementation of the interface providing common functionality for all mapping types.
+   - **ODSDataspotMapping**: Extends BaseDataspotMapping to specifically map ODS dataset IDs to Dataspot UUIDs.
+   - **StaatskalenderDataspotMapping**: Extends BaseDataspotMapping to map Staatskalender organization IDs to Dataspot UUIDs.
 
 5. **HTTP Utilities**:
    - **CommonRequestWrappers**: Provides standardized HTTP request functions with consistent error handling.
