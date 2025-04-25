@@ -1,6 +1,6 @@
 ## System Architecture Overview
 
-This project facilitates data synchronization between OpenDataSoft (ODS) and Dataspot's Datennutzungskatalog (DNK). Below is a UML diagram showing the main components and their relationships:
+This project helps keep data in sync between OpenDataSoft (ODS) and Dataspot's Datennutzungskatalog (DNK). The diagram below shows the main parts of the system and how they connect.
 
 ```mermaid
 classDiagram
