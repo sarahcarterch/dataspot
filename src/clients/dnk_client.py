@@ -5,8 +5,10 @@ from requests import HTTPError
 
 from src import config
 from src.clients.base_client import BaseDataspotClient
+from src.clients.org_structure_handler import OrgStructureHandler
 from src.clients.helpers import url_join, get_uuid_from_response, escape_special_chars
 from src.dataspot_dataset import Dataset
+# TODO (Renato): Do not import requests_get; solve this somehow.
 from src.common import requests_get # BUT DO NOT IMPORT THESE: requests_post, requests_put, requests_patch
 from src.ods_dataspot_mapping import ODSDataspotMapping
 from src.staatskalender_dataspot_mapping import StaatskalenderDataspotMapping
@@ -20,16 +22,20 @@ class DNKClient(BaseDataspotClient):
         """
         super().__init__()
         
-        # Load scheme name from config
+        # Set up ODS mapping
         self.database_name = config.database_name
         self.scheme_name = config.dnk_scheme_name
         self.scheme_name_short = config.dnk_scheme_name_short
-        
-        # Set up mapping
         self.mapping = ODSDataspotMapping(database_name=self.database_name, scheme=self.scheme_name_short)
         
-        # Initialize the organization mapping
-        self.org_mapping = StaatskalenderDataspotMapping(database_name=self.database_name, scheme=self.scheme_name_short)
+        # Collection name
+        self.ods_imports_collection_name = config.ods_imports_collection_name
+        
+        # Initialize the organization handler
+        self.org_handler = OrgStructureHandler(self)
+        
+        # Initialize the organization mapping (for direct access if needed)
+        self.org_mapping = self.org_handler.org_mapping
         
     def _download_and_update_mappings(self, target_ods_ids: List[str] = None) -> int:
         """
@@ -243,6 +249,41 @@ class DNKClient(BaseDataspotClient):
         logging.info(f"Updated mappings for {updated_count} datasets. Did not update mappings for the other {len(datasets) - updated_count} datasets.")
         return updated_count
 
+    # TODO (Renato): Remove these later, I think.
+    # The rest of the methods in DNKClient remain the same except for organizational structure methods
+    # These should now delegate to the org_handler instance
+    
+    # Methods that should delegate to org_handler
+    def get_validated_staatskalender_url(self, title: str, url_website: str, validate_url: bool = False) -> str:
+        """Delegate to org_handler"""
+        return self.org_handler.get_validated_staatskalender_url(title, url_website, validate_url)
+    
+    def _download_and_update_staatskalender_mappings(self, target_staatskalender_ids: List[str] = None) -> int:
+        """Delegate to org_handler"""
+        return self.org_handler._download_and_update_staatskalender_mappings(target_staatskalender_ids)
+    
+    def update_staatskalender_mappings_from_upload(self, staatskalender_ids: List[str]) -> None:
+        """Delegate to org_handler"""
+        self.org_handler.update_staatskalender_mappings_from_upload(staatskalender_ids)
+    
+    def transform_organization_for_bulk_upload(self, org_data: Dict[str, Any], validate_urls: bool = False) -> List[Dict[str, Any]]:
+        """Delegate to org_handler"""
+        return self.org_handler.transform_organization_for_bulk_upload(org_data, validate_urls)
+    
+    def build_organization_hierarchy_from_ods_bulk(self, org_data: Dict[str, Any], validate_urls: bool = False) -> dict:
+        """Delegate to org_handler"""
+        return self.org_handler.build_organization_hierarchy_from_ods_bulk(org_data, validate_urls)
+    
+    def sync_staatskalender_org_units(self, org_data: Dict[str, Any], validate_urls: bool = False) -> Dict[str, Any]:
+        """Delegate to org_handler"""
+        return self.org_handler.sync_staatskalender_org_units(org_data, validate_urls)
+    
+    def bulk_create_or_update_organizational_units(self, organizational_units: List[Dict[str, Any]], 
+                                                  operation: str = "ADD", dry_run: bool = False) -> dict:
+        """Delegate to org_handler"""
+        return self.org_handler.bulk_create_or_update_organizational_units(organizational_units, operation, dry_run)
+
+    # Dataset methods remain directly in DNKClient
     def create_dataset(self, dataset: Dataset) -> dict:
         """
         Create a new dataset in the 'Datennutzungskatalog/ODS-Imports' in Dataspot.
@@ -750,6 +791,7 @@ class DNKClient(BaseDataspotClient):
         
         return True
 
+    # TODO (Renato) Important: Resolve this warning
     def require_scheme_exists(self) -> str:
         """
         Assert that the DNK scheme exists and return its API endpoint. Throw an error if it doesn't.
@@ -770,7 +812,7 @@ class DNKClient(BaseDataspotClient):
     def ensure_ods_imports_collection_exists(self) -> dict:
         """
         Ensures that the ODS-Imports collection exists within the Datennutzungskatalog scheme.
-        
+
         The path is defined by config.ods_imports_collection_path, which is a list of folder names.
         For example, if config.ods_imports_collection_path is ['A', 'B', 'C'], the function:
         1. First checks if 'A/B/C' path already exists
@@ -780,7 +822,7 @@ class DNKClient(BaseDataspotClient):
 
         Returns:
             dict: The JSON response containing information about the ODS-Imports collection
-            
+
         Raises:
             ValueError: If the DNK scheme does not exist or the configured path contains a '/' or the configured path doesn't exist
             HTTPError: If API requests fail
@@ -796,7 +838,8 @@ class DNKClient(BaseDataspotClient):
         for item in collection_path:
             if type(item) != str:
                 logging.error(f"Path defined in config.py contains {item}, which is not a string.")
-                raise ValueError(f"Invalid path component in ods_imports_collection_path: {item}. All path components must be strings.")
+                raise ValueError(
+                    f"Invalid path component in ods_imports_collection_path: {item}. All path components must be strings.")
 
         if collection_path:
             logging.debug(f"Using configured path for ODS-Imports: {'/'.join(collection_path)}")
@@ -808,9 +851,10 @@ class DNKClient(BaseDataspotClient):
         for folder in collection_path:
             if '/' in folder:
                 has_special_chars = True
-                logging.warning(f"Collection path contains forward slashes, which can't be used in business keys: {folder}")
+                logging.warning(
+                    f"Collection path contains forward slashes, which can't be used in business keys: {folder}")
                 break
-        
+
         # Check if the configured path exists
         if not collection_path:
             # No path specified, check directly under scheme
@@ -820,12 +864,13 @@ class DNKClient(BaseDataspotClient):
                 error_msg = f"Scheme '{self.scheme_name}' does not exist"
                 logging.error(error_msg)
                 raise ValueError(error_msg)
-            
+
             # Parent exists (scheme root), check if ODS-Imports exists
-            ods_imports_endpoint = url_join(parent_endpoint, 'collections', self.ods_imports_collection_name, leading_slash=True)
+            ods_imports_endpoint = url_join(parent_endpoint, 'collections', self.ods_imports_collection_name,
+                                            leading_slash=True)
             collections_endpoint = url_join(parent_endpoint, 'collections', leading_slash=True)
             existing_collection = self.get_resource_if_exists(ods_imports_endpoint)
-            
+
             # Check both existence and correct parent
             ods_imports_exists = False
             if existing_collection:
@@ -833,8 +878,9 @@ class DNKClient(BaseDataspotClient):
                 if 'parentId' in existing_collection and existing_collection['parentId'] == parent_response['id']:
                     ods_imports_exists = True
                 else:
-                    logging.warning(f"Found ODS-Imports collection but it's not under the expected parent. Will create new one.")
-            
+                    logging.warning(
+                        f"Found ODS-Imports collection but it's not under the expected parent. Will create new one.")
+
         elif has_special_chars:
             error_msg = ("Path contains special characters that prevent using business keys. Fix the path in config. "
                          "Using Collections that contain a slash is currently not supported in ODS-Imports path. "
@@ -846,7 +892,7 @@ class DNKClient(BaseDataspotClient):
             # Construct business key path to check if the full path exists
             # Format: /rest/{db}/schemes/{scheme}/collections/{col1}/collections/{col2}/...
             path_elements = ['rest', self.database_name, 'schemes', self.scheme_name]
-            
+
             # Build up the path with 'collections' between each element
             for folder in collection_path:
                 path_elements.append('collections')
@@ -855,24 +901,24 @@ class DNKClient(BaseDataspotClient):
             # Check if the parent path exists
             parent_path = url_join(*path_elements, leading_slash=True)
             parent_response = self.get_resource_if_exists(parent_path)
-            
+
             if not parent_response:
                 # Parent path doesn't exist - throw error instead of creating it
                 error_msg = (f"Configured path '{'/'.join(collection_path)}' not found. "
                              f"Please make sure the ods_imports_collection_path field in config.py is set correctly!")
                 logging.error(error_msg)
                 raise ValueError(error_msg)
-            
+
             # Parent path exists, check if ODS-Imports exists under it
             collections_endpoint = url_join(parent_path, 'collections', leading_slash=True)
-            
+
             # Create ODS-Imports endpoint for checking existence
             ods_imports_elements = path_elements.copy()
             ods_imports_elements.append('collections')
             ods_imports_elements.append(self.ods_imports_collection_name)
             ods_imports_endpoint = url_join(*ods_imports_elements, leading_slash=True)
             existing_collection = self.get_resource_if_exists(ods_imports_endpoint)
-            
+
             # Check both existence and correct parent
             ods_imports_exists = False
             if existing_collection:
@@ -880,8 +926,9 @@ class DNKClient(BaseDataspotClient):
                 if 'parentId' in existing_collection and existing_collection['parentId'] == parent_response['id']:
                     ods_imports_exists = True
                 else:
-                    logging.warning(f"Found ODS-Imports collection but it's not under the expected parent. Will create new one.")
-        
+                    logging.warning(
+                        f"Found ODS-Imports collection but it's not under the expected parent. Will create new one.")
+
         try:
             # Return existing or create new
             if ods_imports_exists:
@@ -896,13 +943,13 @@ class DNKClient(BaseDataspotClient):
                     "_type": "Collection"
                 }
                 response_json = self.create_resource(
-                    endpoint=collections_endpoint, 
+                    endpoint=collections_endpoint,
                     data=collection_data
                 )
                 path_str = "/".join(collection_path) if collection_path else "scheme root"
                 logging.info(f"Created ODS-Imports collection at: {path_str}")
                 return response_json
-                
+
         except HTTPError as create_error:
             logging.error(f"Failed to create ODS-Imports collection: {str(create_error)}")
             raise

@@ -577,93 +577,105 @@ def main_9_build_organization_structure_in_dnk():
     dataspot_client = DNKClient()
 
     # Configuration for data retrieval and processing
-    batch_size = 100  # Number of records to retrieve in each API call
-    max_batches = None  # Maximum number of batches to retrieve (set to None for all)
     validate_urls = False  # Set to False to skip URL validation (much faster)
-    all_organizations = {"results": []}
 
-    # Fetch organization data in batches
+    # Fetch organization data from ODS API
     logging.info("Fetching organization data from ODS API...")
-    batch_count = 0
-    total_retrieved = 0
+    all_organizations = ods_client.get_all_organization_data(batch_size=100)
+    logging.info(f"Total organizations retrieved: {len(all_organizations['results'])} (out of {all_organizations['total_count']})")
 
+    # Build the organization hierarchy in Dataspot using bulk upload
+    logging.info(f"Building organization hierarchy in Dataspot using bulk upload (validate_urls={validate_urls})...")
     try:
-        while True:
-            # Get the next batch of organization data
-            offset = batch_count * batch_size
-            batch_data = ods_client.get_organization_data(limit=batch_size, offset=offset)
-
-            # Check if we received any results
-            batch_results = batch_data.get('results', [])
-            num_results = len(batch_results)
-
-            if num_results == 0:
-                # No more results, break out of the loop
-                break
-
-            # Add the batch results to our collected data
-            all_organizations['results'].extend(batch_results)
-            total_retrieved += num_results
-
-            logging.info(
-                f"Retrieved batch {batch_count + 1} with {num_results} organizations (total: {total_retrieved})")
-
-            # Check if we've reached our batch limit
-            batch_count += 1
-            if max_batches is not None and batch_count >= max_batches:
-                logging.info(f"Reached the maximum number of batches ({max_batches})")
-                break
-
-        # Set the total count in the combined data
-        all_organizations['total_count'] = batch_data.get('total_count', total_retrieved)
-        logging.info(f"Total organizations retrieved: {total_retrieved} (out of {all_organizations['total_count']})")
-
-        # Build the organization hierarchy in Dataspot using bulk upload
-        logging.info(f"Building organization hierarchy in Dataspot using bulk upload (validate_urls={validate_urls})...")
-        try:
-            # Use the bulk upload method with URL validation feature flag
-            upload_response = dataspot_client.build_organization_hierarchy_from_ods_bulk(
-                all_organizations, 
-                validate_urls=validate_urls
-            )
+        # Use the bulk upload method with URL validation feature flag
+        upload_response = dataspot_client.build_organization_hierarchy_from_ods_bulk(
+            all_organizations, 
+            validate_urls=validate_urls
+        )
+        
+        logging.info(f"Organization structure bulk upload complete. Response summary: {upload_response}")
+        
+        # Log the organization mapping entries
+        org_mappings = dataspot_client.org_mapping.get_all_entries()
+        if org_mappings:
+            logging.info(f"Organization mapping contains {len(org_mappings)} entries")
+            # Log a few sample mappings
+            sample_count = min(5, len(org_mappings))
+            sample_entries = list(org_mappings.items())[:sample_count]
             
-            logging.info(f"Organization structure bulk upload complete. Response summary: {upload_response}")
+            for staatskalender_id, (type_, uuid, in_collection) in sample_entries:
+                logging.info(f"Sample mapping - Staatskalender ID: {staatskalender_id}, Type: {type_}, UUID: {uuid}, inCollection: {in_collection or 'None'}")
             
-            # Log the organization mapping entries
-            org_mappings = dataspot_client.org_mapping.get_all_entries()
-            if org_mappings:
-                logging.info(f"Organization mapping contains {len(org_mappings)} entries")
-                # Log a few sample mappings
-                sample_count = min(5, len(org_mappings))
-                sample_entries = list(org_mappings.items())[:sample_count]
-                
-                for staatskalender_id, (type_, uuid, in_collection) in sample_entries:
-                    logging.info(f"Sample mapping - Staatskalender ID: {staatskalender_id}, Type: {type_}, UUID: {uuid}, inCollection: {in_collection or 'None'}")
-                
-                # Show mappings file path for reference
-                logging.info(f"Organization mappings saved to: {dataspot_client.org_mapping.csv_file_path}")
-            else:
-                logging.warning("No organization mappings were created")
-            
-        except Exception as e:
-            logging.error(f"Error building organization hierarchy: {str(e)}")
-            logging.info("Organization structure build failed")
-
-    except KeyboardInterrupt:
-        logging.info("Operation was interrupted by user")
+            # Show mappings file path for reference
+            logging.info(f"Organization mappings saved to: {dataspot_client.org_mapping.csv_file_path}")
+        else:
+            logging.warning("No organization mappings were created")
+        
     except Exception as e:
-        logging.error(f"Unexpected error: {str(e)}")
-    finally:
-        logging.info("Organization structure build process finished")
-        logging.info("=============================================")
-        pass
+        logging.error(f"Error building organization hierarchy: {str(e)}")
+        logging.info("Organization structure build failed")
+
+    logging.info("Organization structure build process finished")
+    logging.info("=============================================")
+
+def main_10_sync_organization_structure():
+    """
+    Synchronize organizational structure in Dataspot with the latest data from ODS API.
+    This method:
+    1. Retrieves organization data from the ODS API
+    2. Compares with existing organization data in Dataspot
+    3. Updates only the changed organizations
+    4. Provides a summary of changes
+    """
+    logging.info("Starting organization structure synchronization...")
+
+    # Initialize clients
+    ods_client = ODSClient()
+    dataspot_client = DNKClient()
+
+    # Configuration
+    validate_urls = False  # Set to False to skip URL validation (much faster)
+
+    # Fetch organization data
+    logging.info("Fetching organization data from ODS API...")
+    all_organizations = ods_client.get_all_organization_data(batch_size=100)
+    logging.info(f"Total organizations retrieved: {len(all_organizations['results'])} (out of {all_organizations['total_count']})")
+
+    # Synchronize organization data
+    logging.info("Synchronizing organization data with Dataspot...")
+    try:
+        # Use the sync method with URL validation feature flag
+        sync_result = dataspot_client.sync_staatskalender_org_units(
+            all_organizations,
+            validate_urls=validate_urls
+        )
+        
+        # Display sync results
+        logging.info(f"Synchronization {sync_result['status']}!")
+        logging.info(f"Message: {sync_result['message']}")
+        
+        # Display details if available
+        if 'counts' in sync_result:
+            counts = sync_result['counts']
+            logging.info(f"Changes: {counts['total']} total - {counts['created']} created, "
+                         f"{counts['updated']} updated, {counts['deleted']} deleted")
+        
+        # Show full details for debug purposes
+        logging.debug(f"Full sync result: {sync_result}")
+        
+    except Exception as e:
+        logging.error(f"Error synchronizing organization structure: {str(e)}")
+        
+    logging.info("Organization structure synchronization process finished")
+    logging.info("=============================================")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     logging.info(f'Executing {__file__}...')
 
-    main_9_build_organization_structure_in_dnk()
-    main_8_test_bulk_ods_datasets_upload_and_delete(cleanup_after_test=False, max_datasets=5)
+    # main_9_build_organization_structure_in_dnk()
+    main_10_sync_organization_structure()
+    # main_8_test_bulk_ods_datasets_upload_and_delete(cleanup_after_test=False, max_datasets=5)
 
     logging.info('Job successful!')
     
