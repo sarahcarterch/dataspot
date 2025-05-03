@@ -1108,7 +1108,7 @@ class OrgStructureHandler:
                     continue
                 
                 # Construct endpoint for deletion
-                endpoint = url_join('rest', self.database_name, 'datasets', uuid, leading_slash=True)
+                endpoint = url_join('rest', self.database_name, 'collections', uuid, leading_slash=True)
                 logging.info(f"Deleting org unit '{change.title}' (ID: {change.staatskalender_id}) at {endpoint}")
                 
                 # Delete the resource
@@ -1132,7 +1132,9 @@ class OrgStructureHandler:
                     continue
                 
                 # Construct endpoint for update
-                endpoint = url_join('rest', self.database_name, 'datasets', uuid, leading_slash=True)
+                endpoint = url_join('rest', self.database_name, 'collections', uuid, leading_slash=True)
+                
+                logging.info(f"Updating org unit '{change.title}' (ID: {change.staatskalender_id})")
                 
                 # Prepare update data
                 update_data = change.details.get("current_unit", {}).copy()
@@ -1155,8 +1157,6 @@ class OrgStructureHandler:
                     url = update_data["customProperties"]["link_zum_staatskalender"]
                     validated_url = self.get_validated_staatskalender_url(change.title, url, validate_url=True)
                     update_data["customProperties"]["link_zum_staatskalender"] = validated_url
-                
-                logging.info(f"Updating org unit '{change.title}' (ID: {change.staatskalender_id})")
                 
                 # Update the resource
                 self.client.update_resource(endpoint, update_data, replace=True)
