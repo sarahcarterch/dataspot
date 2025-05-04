@@ -723,7 +723,7 @@ class DNKClient(BaseDataspotClient):
             
             # Verify that the dataset still exists at this href
             logging.debug(f"Verifying dataset still exists at: {href}")
-            asset_data = self._get_asset_if_exists(href)
+            asset_data = self._get_asset(href)
             if not asset_data:
                 # Dataset doesn't exist at the expected location
                 logging.warning(f"Dataset no longer exists at {href}, removing from mapping")
