@@ -1,46 +1,15 @@
 from typing import Dict, Any, List
-from abc import ABC, abstractmethod
 import logging
 import json
 
 from src import config
 from src.dataspot_auth import DataspotAuth
 from src.common import requests_get, requests_delete, requests_post, requests_put, requests_patch
-from src.clients.helpers import url_join, escape_special_chars, get_uuid_from_response
+from src.clients.helpers import url_join
 
 from requests import HTTPError
 
-class DataspotClientInterface(ABC):
-    """Interface defining the core operations for Dataspot API clients."""
-
-    @abstractmethod
-    def create_resource(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a new resource via POST request."""
-        pass
-
-    @abstractmethod
-    def bulk_create_or_update_resources(self, scheme_name: str, data: List[Dict[str, Any]],
-                                        operation: str = "ADD", dry_run: bool = False) -> Dict[str, Any]:
-        """Create or update multiple resources in bulk via the upload API."""
-        pass
-
-    @abstractmethod
-    def update_resource(self, endpoint: str, data: Dict[str, Any], replace: bool = False) -> Dict[str, Any]:
-        """Update an existing resource via PUT or PATCH request."""
-        pass
-
-    @abstractmethod
-    def delete_resource(self, endpoint: str) -> None:
-        """Delete a resource via DELETE request."""
-        pass
-
-    @abstractmethod
-    def get_resource_if_exists(self, endpoint: str) -> Dict[str, Any] | None:
-        """Get a resource if it exists, return None if it doesn't."""
-        pass
-
-
-class BaseDataspotClient(DataspotClientInterface):
+class BaseDataspotClient():
     """Base class for Dataspot API clients implementing common functionality."""
 
     def __init__(self, base_url: str, database_name: str, scheme_name: str, scheme_name_short: str, ods_imports_collection_name: str):
@@ -67,7 +36,7 @@ class BaseDataspotClient(DataspotClientInterface):
             HTTPError: If API requests fail
         """
         scheme_path = url_join('rest', self.database_name, 'schemes', self.scheme_name)
-        scheme_response = self.get_resource_if_exists(scheme_path)
+        scheme_response = self._get_resource_if_exists(scheme_path)
         if not scheme_response:
             raise ValueError(f"Scheme '{self.scheme_name}' does not exist")
         return scheme_response['_links']['self']['href']
@@ -122,7 +91,7 @@ class BaseDataspotClient(DataspotClientInterface):
         if not collection_path:
             # No path specified, check directly under scheme
             parent_endpoint = url_join('rest', self.database_name, 'schemes', self.scheme_name)
-            parent_response = self.get_resource_if_exists(parent_endpoint)
+            parent_response = self._get_resource_if_exists(parent_endpoint)
             if not parent_response:
                 error_msg = f"Scheme '{self.scheme_name}' does not exist"
                 logging.error(error_msg)
@@ -132,7 +101,7 @@ class BaseDataspotClient(DataspotClientInterface):
             ods_imports_endpoint = url_join(parent_endpoint, 'collections', self.ods_imports_collection_name,
                                             leading_slash=True)
             collections_endpoint = url_join(parent_endpoint, 'collections', leading_slash=True)
-            existing_collection = self.get_resource_if_exists(ods_imports_endpoint)
+            existing_collection = self._get_resource_if_exists(ods_imports_endpoint)
 
             # Check both existence and correct parent
             ods_imports_exists = False
@@ -163,7 +132,7 @@ class BaseDataspotClient(DataspotClientInterface):
 
             # Check if the parent path exists
             parent_path = url_join(*path_elements, leading_slash=True)
-            parent_response = self.get_resource_if_exists(parent_path)
+            parent_response = self._get_resource_if_exists(parent_path)
 
             if not parent_response:
                 # Parent path doesn't exist - throw error instead of creating it
@@ -180,7 +149,7 @@ class BaseDataspotClient(DataspotClientInterface):
             ods_imports_elements.append('collections')
             ods_imports_elements.append(self.ods_imports_collection_name)
             ods_imports_endpoint = url_join(*ods_imports_elements, leading_slash=True)
-            existing_collection = self.get_resource_if_exists(ods_imports_endpoint)
+            existing_collection = self._get_resource_if_exists(ods_imports_endpoint)
 
             # Check both existence and correct parent
             ods_imports_exists = False
@@ -205,7 +174,7 @@ class BaseDataspotClient(DataspotClientInterface):
                     "label": self.ods_imports_collection_name,
                     "_type": "Collection"
                 }
-                response_json = self.create_resource(
+                response_json = self._create_resource(
                     endpoint=collections_endpoint,
                     data=collection_data
                 )
@@ -217,7 +186,7 @@ class BaseDataspotClient(DataspotClientInterface):
             logging.error(f"Failed to create ODS-Imports collection: {str(create_error)}")
             raise
 
-    def create_resource(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _create_resource(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Create a new resource via POST request.
         
@@ -249,7 +218,7 @@ class BaseDataspotClient(DataspotClientInterface):
         return response.json()
 
     def bulk_create_or_update_resources(self, scheme_name: str, data: List[Dict[str, Any]],
-                                        operation: str = "ADD", dry_run: bool = False) -> Dict[str, Any]:
+                                     operation: str = "ADD", dry_run: bool = False) -> Dict[str, Any]:
         """
         Create or update multiple resources in bulk via the upload API.
         
@@ -340,7 +309,7 @@ class BaseDataspotClient(DataspotClientInterface):
             logging.warning(f"Response was not valid JSON. Content: {response.text[:1000]}...")
             return {"response_text": response.text}
     
-    def update_resource(self, endpoint: str, data: Dict[str, Any], replace: bool = False) -> Dict[str, Any]:
+    def _update_resource(self, endpoint: str, data: Dict[str, Any], replace: bool = False) -> Dict[str, Any]:
         """
         Update an existing resource via PUT or PATCH request.
         
@@ -380,9 +349,9 @@ class BaseDataspotClient(DataspotClientInterface):
         
         if replace and resource_type == "Dataset":
             # When completely replacing a Dataset with PUT, we need to preserve its location
-            current_resource = self.get_resource_if_exists(endpoint)
+            current_resource = self._get_resource_if_exists(endpoint)
             if current_resource is None:
-                raise ValueError(f"Cannot update resource at {endpoint}: Resource does not exist")
+                raise ValueError(f"Cannot update resource at {endpoint}: resource does not exist")
             
             if 'inCollection' in current_resource:
                 data_to_send['inCollection'] = current_resource['inCollection']
@@ -396,7 +365,7 @@ class BaseDataspotClient(DataspotClientInterface):
             
         return response.json()
     
-    def delete_resource(self, endpoint: str) -> None:
+    def _delete_resource(self, endpoint: str) -> None:
         """
         Delete a resource via DELETE request.
         
@@ -409,23 +378,23 @@ class BaseDataspotClient(DataspotClientInterface):
         headers = self.auth.get_headers()
         full_url = url_join(self.base_url, endpoint)
         requests_delete(full_url, headers=headers)
-    
-    def get_resource_if_exists(self, endpoint: str) -> Dict[str, Any] | None:
+
+    def _get_resource_if_exists(self, endpoint: str) -> Dict[str, Any] | None:
         """
         Get a resource if it exists, return None if it doesn't.
-        
+
         Args:
             endpoint (str): API endpoint path (will be joined with base_url)
-            
+
         Returns:
             Dict[str, Any] | None: The resource data (converted to json) if it exists, None if it doesn't
-            
+
         Raises:
             HTTPError: If API requests fail with status codes other than 404
         """
         headers = self.auth.get_headers()
         full_url = url_join(self.base_url, endpoint)
-        
+
         try:
             # Pass silent_status_codes to prevent logging 404 and 410 errors
             response = requests_get(full_url, headers=headers, silent_status_codes=[404, 410])
