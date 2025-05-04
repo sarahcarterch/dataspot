@@ -365,7 +365,7 @@ class DNKClient(BaseDataspotClient):
             logging.debug(f"Using default inCollection: '{self.ods_imports_collection_name}'")
             dataset_json['inCollection'] = self.ods_imports_collection_name
         
-        response = self.create_resource(
+        response = self._create_asset(
             endpoint=dataset_creation_endpoint,
             data=dataset_json
         )
@@ -514,7 +514,7 @@ class DNKClient(BaseDataspotClient):
         
         # Bulk create datasets using the scheme name
         try:
-            response = self.bulk_create_or_update_resources(
+            response = self.bulk_create_or_update_assets(
                 scheme_name=self.scheme_name,
                 data=dataset_jsons,
                 operation=operation,
@@ -635,7 +635,7 @@ class DNKClient(BaseDataspotClient):
         
         # Update the existing dataset
         logging.debug(f"Update method: {'PUT (replace)' if force_replace else 'PATCH (partial update)'}")
-        response = self.update_resource(
+        response = self._update_asset(
             endpoint=href,
             data=dataset_json,
             replace=force_replace
@@ -723,8 +723,8 @@ class DNKClient(BaseDataspotClient):
             
             # Verify that the dataset still exists at this href
             logging.debug(f"Verifying dataset still exists at: {href}")
-            resource_data = self.get_resource_if_exists(href)
-            if not resource_data:
+            asset_data = self._get_asset_if_exists(href)
+            if not asset_data:
                 # Dataset doesn't exist at the expected location
                 logging.warning(f"Dataset no longer exists at {href}, removing from mapping")
                 dataset_exists = False
@@ -782,7 +782,7 @@ class DNKClient(BaseDataspotClient):
         
         # Delete the dataset
         logging.info(f"Deleting dataset with ODS ID '{ods_id}' (UUID: {uuid}) at {href}")
-        self.delete_resource(href)
+        self._delete_asset(href)
         
         # Remove entry from mapping
         self.mapping.remove_entry(ods_id)
@@ -837,7 +837,7 @@ class DNKClient(BaseDataspotClient):
         
         # Bulk create organizational units using the scheme name
         try:
-            response = self.bulk_create_or_update_resources(
+            response = self.bulk_create_or_update_assets(
                 scheme_name=self.scheme_name,
                 data=organizational_units,
                 operation=operation,

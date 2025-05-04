@@ -352,7 +352,7 @@ class OrgStructureHandler:
         
         # Bulk create organizational units using the scheme name
         try:
-            response = self.client.bulk_create_or_update_resources(
+            response = self.client.bulk_create_or_update_assets(
                 scheme_name=self.scheme_name,
                 data=organizational_units,
                 operation=operation,
@@ -1111,8 +1111,8 @@ class OrgStructureHandler:
                 endpoint = url_join('rest', self.database_name, 'collections', uuid, leading_slash=True)
                 logging.info(f"Deleting org unit '{change.title}' (ID: {change.staatskalender_id}) at {endpoint}")
                 
-                # Delete the resource
-                self.client.delete_resource(endpoint)
+                # Delete the asset
+                self.client._delete_asset(endpoint)
                 stats["deleted"] += 1
                 
                 # Remove from mapping
@@ -1158,8 +1158,8 @@ class OrgStructureHandler:
                     validated_url = self.get_validated_staatskalender_url(change.title, url, validate_url=True)
                     update_data["customProperties"]["link_zum_staatskalender"] = validated_url
                 
-                # Update the resource
-                self.client.update_resource(endpoint, update_data, replace=True)
+                # Update the asset
+                self.client._update_asset(endpoint, update_data, replace=True)
                 stats["updated"] += 1
                 
             except Exception as e:

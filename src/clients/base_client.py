@@ -36,7 +36,7 @@ class BaseDataspotClient():
             HTTPError: If API requests fail
         """
         scheme_path = url_join('rest', self.database_name, 'schemes', self.scheme_name)
-        scheme_response = self._get_resource_if_exists(scheme_path)
+        scheme_response = self._get_asset_if_exists(scheme_path)
         if not scheme_response:
             raise ValueError(f"Scheme '{self.scheme_name}' does not exist")
         return scheme_response['_links']['self']['href']
@@ -91,7 +91,7 @@ class BaseDataspotClient():
         if not collection_path:
             # No path specified, check directly under scheme
             parent_endpoint = url_join('rest', self.database_name, 'schemes', self.scheme_name)
-            parent_response = self._get_resource_if_exists(parent_endpoint)
+            parent_response = self._get_asset_if_exists(parent_endpoint)
             if not parent_response:
                 error_msg = f"Scheme '{self.scheme_name}' does not exist"
                 logging.error(error_msg)
@@ -101,7 +101,7 @@ class BaseDataspotClient():
             ods_imports_endpoint = url_join(parent_endpoint, 'collections', self.ods_imports_collection_name,
                                             leading_slash=True)
             collections_endpoint = url_join(parent_endpoint, 'collections', leading_slash=True)
-            existing_collection = self._get_resource_if_exists(ods_imports_endpoint)
+            existing_collection = self._get_asset_if_exists(ods_imports_endpoint)
 
             # Check both existence and correct parent
             ods_imports_exists = False
@@ -132,7 +132,7 @@ class BaseDataspotClient():
 
             # Check if the parent path exists
             parent_path = url_join(*path_elements, leading_slash=True)
-            parent_response = self._get_resource_if_exists(parent_path)
+            parent_response = self._get_asset_if_exists(parent_path)
 
             if not parent_response:
                 # Parent path doesn't exist - throw error instead of creating it
@@ -149,7 +149,7 @@ class BaseDataspotClient():
             ods_imports_elements.append('collections')
             ods_imports_elements.append(self.ods_imports_collection_name)
             ods_imports_endpoint = url_join(*ods_imports_elements, leading_slash=True)
-            existing_collection = self._get_resource_if_exists(ods_imports_endpoint)
+            existing_collection = self._get_asset_if_exists(ods_imports_endpoint)
 
             # Check both existence and correct parent
             ods_imports_exists = False
@@ -174,7 +174,7 @@ class BaseDataspotClient():
                     "label": self.ods_imports_collection_name,
                     "_type": "Collection"
                 }
-                response_json = self._create_resource(
+                response_json = self._create_asset(
                     endpoint=collections_endpoint,
                     data=collection_data
                 )
@@ -186,15 +186,15 @@ class BaseDataspotClient():
             logging.error(f"Failed to create ODS-Imports collection: {str(create_error)}")
             raise
 
-    def _create_resource(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _create_asset(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Create a new resource via POST request.
+        Create a new asset via POST request.
         
-        The provided data dictionary must contain a '_type' key specifying the resource type (e.g., 'Dataset', 'Collection').
+        The provided data dictionary must contain a '_type' key specifying the asset type (e.g., 'Dataset', 'Collection').
         
         Args:
             endpoint (str): API endpoint path (will be joined with base_url)
-            data (Dict[str, Any]): JSON data for the resource, must include '_type'
+            data (Dict[str, Any]): JSON data for the asset, must include '_type'
             
         Returns:
             Dict[str, Any]: JSON response from the API
@@ -202,7 +202,7 @@ class BaseDataspotClient():
         Raises:
             HTTPError: If the request fails
             ValueError: If the data dictionary is missing the '_type' key
-            TODO (Renato): What happens if the resource already exists?
+            TODO (Renato): What happens if the asset already exists?
         """
         headers = self.auth.get_headers()
         full_url = url_join(self.base_url, endpoint)
@@ -212,21 +212,21 @@ class BaseDataspotClient():
         
         # Validate that _type is present
         if "_type" not in data_to_send:
-            raise ValueError("Input data for create_resource must contain a '_type' key.")
+            raise ValueError("Input data for create_asset must contain a '_type' key.")
             
         response = requests_post(full_url, headers=headers, json=data_to_send)
         return response.json()
 
-    def bulk_create_or_update_resources(self, scheme_name: str, data: List[Dict[str, Any]],
+    def bulk_create_or_update_assets(self, scheme_name: str, data: List[Dict[str, Any]],
                                      operation: str = "ADD", dry_run: bool = False) -> Dict[str, Any]:
         """
-        Create or update multiple resources in bulk via the upload API.
+        Create or update multiple assets in bulk via the upload API.
         
-        Each dictionary in the data list must contain a '_type' key specifying the resource type.
+        Each dictionary in the data list must contain a '_type' key specifying the asset type.
         
         Args:
             scheme_name (str): Name of the scheme to upload to (e.g. 'Datennutzungskatalog')
-            data (List[Dict[str, Any]]): List of JSON data for resources to create/update. Each dict must include '_type'.
+            data (List[Dict[str, Any]]): List of JSON data for assets to create/update. Each dict must include '_type'.
             operation (str, optional): Upload operation mode. Defaults to "ADD".
                                       "ADD": Add or update only. Existing items not in the upload remain unchanged.
                                       "REPLACE": Reconcile elements. Items not in the upload are considered obsolete.
@@ -249,7 +249,7 @@ class BaseDataspotClient():
         data_to_send = []
         for i, item in enumerate(data):
             if "_type" not in item:
-                raise ValueError(f"Item at index {i} in data list for bulk_create_or_update_resources is missing the '_type' key.")
+                raise ValueError(f"Item at index {i} in data list for bulk_create_or_update_assets is missing the '_type' key.")
             item_copy = dict(item)
             data_to_send.append(item_copy)
         
@@ -309,15 +309,15 @@ class BaseDataspotClient():
             logging.warning(f"Response was not valid JSON. Content: {response.text[:1000]}...")
             return {"response_text": response.text}
     
-    def _update_resource(self, endpoint: str, data: Dict[str, Any], replace: bool = False) -> Dict[str, Any]:
+    def _update_asset(self, endpoint: str, data: Dict[str, Any], replace: bool = False) -> Dict[str, Any]:
         """
-        Update an existing resource via PUT or PATCH request.
+        Update an existing asset via PUT or PATCH request.
         
-        The provided data dictionary must contain a '_type' key specifying the resource type.
+        The provided data dictionary must contain a '_type' key specifying the asset type.
         
         Args:
             endpoint (str): API endpoint path (will be joined with base_url)
-            data (Dict[str, Any]): JSON data for the resource, must include '_type'
+            data (Dict[str, Any]): JSON data for the asset, must include '_type'
             replace (bool): Whether to completely replace (PUT) or partially update (PATCH)
             
         Returns:
@@ -325,10 +325,10 @@ class BaseDataspotClient():
             
         Raises:
             HTTPError: If the request fails
-            ValueError: If the resource does not exist when using replace=True, or if data is missing '_type' key
+            ValueError: If the asset does not exist when using replace=True, or if data is missing '_type' key
             
         Notes:
-            - All resources will have their status set to 'WORKING' regardless of their previous status.
+            - All assets will have their status set to 'WORKING' regardless of their previous status.
             - When using replace=True for Datasets, the method will preserve the dataset's location
               (inCollection field).
         """
@@ -340,24 +340,24 @@ class BaseDataspotClient():
         
         # Validate that _type is present
         if "_type" not in data_to_send:
-            raise ValueError("Input data for update_resource must contain a '_type' key.")
+            raise ValueError("Input data for update_asset must contain a '_type' key.")
             
         data_to_send['status'] = 'WORKING'
         
         # Get the type from the data itself
-        resource_type = data_to_send.get("_type")
+        asset_type = data_to_send.get("_type")
         
-        if replace and resource_type == "Dataset":
+        if replace and asset_type == "Dataset":
             # When completely replacing a Dataset with PUT, we need to preserve its location
-            current_resource = self._get_resource_if_exists(endpoint)
-            if current_resource is None:
-                raise ValueError(f"Cannot update resource at {endpoint}: resource does not exist")
+            current_asset = self._get_asset_if_exists(endpoint)
+            if current_asset is None:
+                raise ValueError(f"Cannot update asset at {endpoint}: asset does not exist")
             
-            if 'inCollection' in current_resource:
-                data_to_send['inCollection'] = current_resource['inCollection']
+            if 'inCollection' in current_asset:
+                data_to_send['inCollection'] = current_asset['inCollection']
         
         if replace:
-            # Use PUT to completely replace the resource
+            # Use PUT to completely replace the asset
             response = requests_put(full_url, headers=headers, json=data_to_send)
         else:
             # Use PATCH to update only the specified properties
@@ -365,9 +365,9 @@ class BaseDataspotClient():
             
         return response.json()
     
-    def _delete_resource(self, endpoint: str) -> None:
+    def _delete_asset(self, endpoint: str) -> None:
         """
-        Delete a resource via DELETE request.
+        Delete a asset via DELETE request.
         
         Args:
             endpoint (str): API endpoint path (will be joined with base_url)
@@ -379,15 +379,15 @@ class BaseDataspotClient():
         full_url = url_join(self.base_url, endpoint)
         requests_delete(full_url, headers=headers)
 
-    def _get_resource_if_exists(self, endpoint: str) -> Dict[str, Any] | None:
+    def _get_asset_if_exists(self, endpoint: str) -> Dict[str, Any] | None:
         """
-        Get a resource if it exists, return None if it doesn't.
+        Get a asset if it exists, return None if it doesn't.
 
         Args:
             endpoint (str): API endpoint path (will be joined with base_url)
 
         Returns:
-            Dict[str, Any] | None: The resource data (converted to json) if it exists, None if it doesn't
+            Dict[str, Any] | None: The asset data (converted to json) if it exists, None if it doesn't
 
         Raises:
             HTTPError: If API requests fail with status codes other than 404
