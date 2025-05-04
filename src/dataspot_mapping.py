@@ -1,81 +1,15 @@
-import abc
-import csv
 import os
+import csv
 import uuid
 import logging
 from typing import Tuple, Optional, Dict, List
 
 
-class DataspotMappingInterface(abc.ABC):
+class BaseDataspotMapping:
     """
-    Abstract base class for mapping external IDs to Dataspot asset type, UUID, and collection.
-    Implementers need to specify the mapping field name and file path pattern.
-    """
-
-    @abc.abstractmethod
-    def __init__(self, database_name: str, scheme: str):
-        """Initialize the mapping with the database name and scheme"""
-        pass
-
-    @abc.abstractproperty
-    def id_field_name(self) -> str:
-        """Get the field name for the ID in this mapping (e.g., 'ods_id')"""
-        pass
-
-    @abc.abstractmethod
-    def _get_mapping_file_path(self, database_name: str, scheme: str) -> str:
-        """Get the file path for the mapping file based on database name and scheme"""
-        pass
-
-    @property
-    def csv_headers(self) -> List[str]:
-        """Get the CSV headers for this mapping"""
-        return [self.id_field_name, '_type', 'uuid', 'inCollection']
-
-    @abc.abstractmethod
-    def get_entry(self, external_id: str) -> Optional[Tuple[str, str, Optional[str]]]:
-        """Get the mapping entry for an external ID"""
-        pass
-
-    @abc.abstractmethod
-    def add_entry(self, external_id: str, _type: str, uuid_str: str, in_collection: Optional[str] = None) -> bool:
-        """Add a new mapping entry"""
-        pass
-
-    @abc.abstractmethod
-    def remove_entry(self, external_id: str) -> bool:
-        """Remove a mapping entry"""
-        pass
-
-    @abc.abstractmethod
-    def get_type(self, external_id: str) -> Optional[str]:
-        """Get the type for an external ID"""
-        pass
-
-    @abc.abstractmethod
-    def get_uuid(self, external_id: str) -> Optional[str]:
-        """Get the UUID for an external ID"""
-        pass
-
-    @abc.abstractmethod
-    def get_inCollection(self, external_id: str) -> Optional[str]:
-        """Get the inCollection for an external ID"""
-        pass
-
-    @abc.abstractmethod
-    def get_all_entries(self) -> Dict[str, Tuple[str, str, Optional[str]]]:
-        """Get all mapping entries"""
-        pass
-
-    @abc.abstractmethod
-    def get_all_ids(self) -> List[str]:
-        """Get all external IDs in the mapping"""
-        pass
-
-
-class BaseDataspotMapping(DataspotMappingInterface):
-    """
-    Implementation of the BaseDataspotMapping that can be configured for different mapping types.
+    Base class for mapping external IDs to Dataspot asset type, UUID, and collection.
+    This class provides functionality to store and retrieve mappings between external IDs
+    and Dataspot assets (type, UUID, and collection).
     """
 
     def __init__(self, database_name: str, id_field_name: str, file_prefix: str, scheme: str):
@@ -113,6 +47,11 @@ class BaseDataspotMapping(DataspotMappingInterface):
     def id_field_name(self) -> str:
         """Get the field name for the ID in this mapping"""
         return self._id_field_name
+
+    @property
+    def csv_headers(self) -> List[str]:
+        """Get the CSV headers for this mapping"""
+        return [self.id_field_name, '_type', 'uuid', 'inCollection']
 
     def _get_mapping_file_path(self, database_name: str, scheme: str) -> str:
         """Get the file path for the mapping file based on database name and scheme. Format: {database_name}_{scheme}_{file_prefix}-mapping.csv"""

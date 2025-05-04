@@ -29,4 +29,4 @@ class StaatskalenderDataspotMapping(BaseDataspotMapping):
         Returns:
             List[str]: A list of all Staatskalender IDs
         """
-        return self.get_all_ids() 
+        return self.get_all_ids()
