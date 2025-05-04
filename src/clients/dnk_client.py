@@ -8,10 +8,7 @@ from src.clients.base_client import BaseDataspotClient
 from src.clients.org_structure_handler import OrgStructureHandler
 from src.clients.helpers import url_join, get_uuid_from_response
 from src.dataspot_dataset import Dataset
-# TODO (Renato): Do not import requests_get; solve this somehow.
-from src.common import requests_get # BUT DO NOT IMPORT THESE: requests_post, requests_put, requests_patch
 from src.ods_dataspot_mapping import ODSDataspotMapping
-from src.staatskalender_dataspot_mapping import StaatskalenderDataspotMapping
 
 class DNKClient(BaseDataspotClient):
     """Client for interacting with the DNK (Datennutzungskatalog)."""
@@ -27,7 +24,7 @@ class DNKClient(BaseDataspotClient):
                          ods_imports_collection_name=config.ods_imports_collection_name)
         
         # Set up ODS mapping
-        self.mapping = ODSDataspotMapping(database_name=self.database_name, scheme=self.scheme_name_short)
+        self.ods_dataset_mapping = ODSDataspotMapping(database_name=self.database_name, scheme=self.scheme_name_short)
         
         # Initialize the organization handler
         self.org_handler = OrgStructureHandler(self)
@@ -69,13 +66,13 @@ class DNKClient(BaseDataspotClient):
         # Check for datasets in mapping that are not in downloaded datasets
         if not target_ods_ids:
             removed_count = 0
-            for ods_id, entry in list(self.mapping.mapping.items()):
+            for ods_id, entry in list(self.ods_dataset_mapping.mapping.items()):
                 if ods_id not in dataset_by_ods_id:
                     logging.warning(f"Dataset {ods_id} exists in local mapping but not in dataspot. Removing from local mapping.")
                     if len(entry) >= 2:
                         _type, uuid = entry[0], entry[1]
                         logging.debug(f"    - _type: {_type}, uuid: {uuid}")
-                    self.mapping.remove_entry(ods_id)
+                    self.ods_dataset_mapping.remove_entry(ods_id)
                     removed_count += 1
             if removed_count > 0:
                 logging.info(f"Found {removed_count} datasets that exist locally but not in dataspot.")
@@ -108,7 +105,7 @@ class DNKClient(BaseDataspotClient):
                 
                 if uuid and _type:
                     # Check if the mapping has changed before updating
-                    existing_entry = self.mapping.get_entry(ods_id)
+                    existing_entry = self.ods_dataset_mapping.get_entry(ods_id)
                     # Existing entry tuple: (_type, uuid, inCollection)
                     if (existing_entry and
                             existing_entry[0] == _type and
@@ -141,12 +138,12 @@ class DNKClient(BaseDataspotClient):
                         
                         logging.debug(f"    - old_type: {old_type}, old_uuid: {old_uuid}, old_inCollection: {old_inCollection}")
                         logging.debug(f"    - new_type: {_type}, new_uuid: {uuid}, new_inCollection: {inCollection_key}")
-                        self.mapping.add_entry(ods_id, _type, uuid, inCollection_key)
+                        self.ods_dataset_mapping.add_entry(ods_id, _type, uuid, inCollection_key)
                         updated_count += 1
                     else:
                         logging.debug(f"Add dataset {ods_id} with uuid {uuid}")
                         logging.debug(f"    - _type: {_type}, uuid: {uuid}, inCollection: {inCollection_key}")
-                        self.mapping.add_entry(ods_id, _type, uuid, inCollection_key)
+                        self.ods_dataset_mapping.add_entry(ods_id, _type, uuid, inCollection_key)
                         updated_count += 1
                 else:
                     logging.warning(f"Missing UUID or _type for dataset with ODS ID: {ods_id}")
@@ -178,7 +175,7 @@ class DNKClient(BaseDataspotClient):
                 
                 if uuid and _type:
                     # Check if the mapping has changed before updating
-                    existing_entry = self.mapping.get_entry(ods_id)
+                    existing_entry = self.ods_dataset_mapping.get_entry(ods_id)
                     # Existing entry tuple: (_type, uuid, inCollection)
                     if (existing_entry and
                             existing_entry[0] == _type and
@@ -211,12 +208,12 @@ class DNKClient(BaseDataspotClient):
                         
                         logging.debug(f"    - old_type: {old_type}, old_uuid: {old_uuid}, old_inCollection: {old_inCollection}")
                         logging.debug(f"    - new_type: {_type}, new_uuid: {uuid}, new_inCollection: {inCollection_key}")
-                        self.mapping.add_entry(ods_id, _type, uuid, inCollection_key)
+                        self.ods_dataset_mapping.add_entry(ods_id, _type, uuid, inCollection_key)
                         updated_count += 1
                     else:
                         logging.debug(f"Add dataset {ods_id} with uuid {uuid}")
                         logging.debug(f"    - _type: {_type}, uuid: {uuid}, inCollection: {inCollection_key}")
-                        self.mapping.add_entry(ods_id, _type, uuid, inCollection_key)
+                        self.ods_dataset_mapping.add_entry(ods_id, _type, uuid, inCollection_key)
                         updated_count += 1
                 else:
                     logging.warning(f"Missing UUID or _type for dataset with ODS ID: {ods_id}")
@@ -258,7 +255,7 @@ class DNKClient(BaseDataspotClient):
             raise ValueError("Dataset must have an 'ODS_ID' property to use as ODS ID")
         
         # Check if dataset with this ODS ID already exists
-        existing_entry = self.mapping.get_entry(ods_id)
+        existing_entry = self.ods_dataset_mapping.get_entry(ods_id)
         if existing_entry:
             # Entry is now (_type, uuid, inCollection)
             _type, uuid, _ = existing_entry
@@ -324,7 +321,7 @@ class DNKClient(BaseDataspotClient):
                 # For newly created datasets, store the ODS-Imports collection name as the business key
                 # The _type for datasets created here is always "Dataset"
                 logging.debug(f"Adding mapping entry for ODS ID {ods_id} with Type 'Dataset', UUID {uuid}, and inCollection '{self.ods_imports_collection_name}'")
-                self.mapping.add_entry(ods_id, "Dataset", uuid, self.ods_imports_collection_name)
+                self.ods_dataset_mapping.add_entry(ods_id, "Dataset", uuid, self.ods_imports_collection_name)
             else:
                 logging.warning(f"Could not extract UUID from response for dataset '{title}'")
         
@@ -408,7 +405,7 @@ class DNKClient(BaseDataspotClient):
                 logging.debug(f"Processing dataset '{title}' with ODS ID: {ods_id}")
                 
                 # Check if this dataset has a stored inCollection (business key)
-                inCollection = self.mapping.get_inCollection(ods_id)
+                inCollection = self.ods_dataset_mapping.get_inCollection(ods_id)
                 
                 if inCollection:
                     # Use the stored inCollection business key
@@ -514,7 +511,7 @@ class DNKClient(BaseDataspotClient):
             logging.info(f"Updated mappings for {updated_count} out of {len(ods_ids)} datasets")
             
             if updated_count < len(ods_ids):
-                missing_ids = [ods_id for ods_id in ods_ids if not self.mapping.get_entry(ods_id)]
+                missing_ids = [ods_id for ods_id in ods_ids if not self.ods_dataset_mapping.get_entry(ods_id)]
                 if missing_ids:
                     logging.warning(f"Could not find mappings for {len(missing_ids)} ODS IDs: {missing_ids[:5]}" + 
                                    (f"... and {len(missing_ids)-5} more" if len(missing_ids) > 5 else ""))
@@ -550,7 +547,7 @@ class DNKClient(BaseDataspotClient):
         logging.info(f"Updating dataset: '{title}' with ODS ID: {ods_id}")
         
         # Get the inCollection from mapping if available (this is now a business key)
-        inCollection = self.mapping.get_inCollection(ods_id)
+        inCollection = self.ods_dataset_mapping.get_inCollection(ods_id)
         
         # Set inCollection in the dataset JSON
         dataset_json = dataset.to_json()
@@ -596,7 +593,7 @@ class DNKClient(BaseDataspotClient):
                 # Use the determined inCollection value (either from mapping or default)
                 final_inCollection = dataset_json.get('inCollection')
                 logging.debug(f"Updating mapping for ODS ID {ods_id} with Type 'Dataset', UUID {uuid}, inCollection {final_inCollection}")
-                self.mapping.add_entry(ods_id, "Dataset", uuid, final_inCollection)
+                self.ods_dataset_mapping.add_entry(ods_id, "Dataset", uuid, final_inCollection)
             else:
                 logging.warning(f"Could not extract UUID from response for dataset '{title}'")
         
@@ -660,7 +657,7 @@ class DNKClient(BaseDataspotClient):
         
         # Check mapping for existing entry
         logging.debug(f"Checking if dataset with ODS ID {ods_id} exists in mapping")
-        entry = self.mapping.get_entry(ods_id)
+        entry = self.ods_dataset_mapping.get_entry(ods_id)
         if entry:
             dataset_exists = True
             # Build the API href from the UUID (which is the second item in the entry tuple)
@@ -675,7 +672,7 @@ class DNKClient(BaseDataspotClient):
                 # Dataset doesn't exist at the expected location
                 logging.warning(f"Dataset no longer exists at {href}, removing from mapping")
                 dataset_exists = False
-                self.mapping.remove_entry(ods_id)
+                self.ods_dataset_mapping.remove_entry(ods_id)
         
         # Handle according to update strategy
         if dataset_exists:
@@ -715,7 +712,7 @@ class DNKClient(BaseDataspotClient):
             HTTPError: If API requests fail
         """
         # Check if the dataset exists in the mapping
-        entry = self.mapping.get_entry(ods_id)
+        entry = self.ods_dataset_mapping.get_entry(ods_id)
         
         if not entry:
             if fail_if_not_exists:
@@ -732,7 +729,7 @@ class DNKClient(BaseDataspotClient):
         self._delete_asset(href)
         
         # Remove entry from mapping
-        self.mapping.remove_entry(ods_id)
+        self.ods_dataset_mapping.remove_entry(ods_id)
         
         return True
 

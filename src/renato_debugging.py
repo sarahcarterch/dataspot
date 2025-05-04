@@ -266,7 +266,7 @@ def main_5_test_mapping_update():
         mappings_updated = 0
 
         for dataset_id in dataset_ids:
-            entry = dataspot_client.mapping.get_entry(dataset_id)
+            entry = dataspot_client.ods_dataset_mapping.get_entry(dataset_id)
             if entry:
                 uuid, href = entry
                 logging.info(f"Mapping for {dataset_id}: UUID={uuid}, href={href}")
