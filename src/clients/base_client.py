@@ -43,18 +43,18 @@ class DataspotClientInterface(ABC):
 class BaseDataspotClient(DataspotClientInterface):
     """Base class for Dataspot API clients implementing common functionality."""
 
-    def __init__(self):
+    def __init__(self, base_url: str, database_name: str, scheme_name: str, scheme_name_short: str, ods_imports_collection_name: str):
         """
         Initialize the DataspotClient with the necessary credentials and configurations.
         """
         self.auth = DataspotAuth()
 
-        # Load configuration from config.py
-        self.base_url = config.base_url
-        self.database_name = config.database_name
-        self.ods_imports_collection_name = config.ods_imports_collection_name
+        self.base_url = base_url
+        self.database_name = database_name
+        self.scheme_name = scheme_name
+        self.scheme_name_short = scheme_name_short
+        self.ods_imports_collection_name = ods_imports_collection_name
 
-    # TODO (Renato) Important: Resolve this warning
     def require_scheme_exists(self) -> str:
         """
         Assert that the scheme exists and return its API endpoint. Throw an error if it doesn't.

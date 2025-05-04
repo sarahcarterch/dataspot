@@ -20,16 +20,14 @@ class DNKClient(BaseDataspotClient):
         """
         Initialize the DNK client.
         """
-        super().__init__()
+        super().__init__(base_url=config.base_url,
+                         database_name=config.database_name,
+                         scheme_name=config.dnk_scheme_name,
+                         scheme_name_short=config.dnk_scheme_name_short,
+                         ods_imports_collection_name=config.ods_imports_collection_name)
         
         # Set up ODS mapping
-        self.database_name = config.database_name
-        self.scheme_name = config.dnk_scheme_name
-        self.scheme_name_short = config.dnk_scheme_name_short
         self.mapping = ODSDataspotMapping(database_name=self.database_name, scheme=self.scheme_name_short)
-        
-        # Collection name
-        self.ods_imports_collection_name = config.ods_imports_collection_name
         
         # Initialize the organization handler
         self.org_handler = OrgStructureHandler(self)
