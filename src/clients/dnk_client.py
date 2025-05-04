@@ -50,31 +50,8 @@ class DNKClient(BaseDataspotClient):
             HTTPError: If API requests fail
             ValueError: If the response format is unexpected or invalid
         """
-        logging.info(f"Downloading datasets from DNK scheme for mapping update")
-        
-        # Use the download API to retrieve datasets from the scheme
-        download_path = f"/api/{self.database_name}/schemes/{self.scheme_name}/download?format=JSON"
-        full_url = url_join(self.base_url, download_path)
-        
-        logging.debug(f"Downloading datasets from: {full_url}")
-        response = requests_get(full_url, headers=self.auth.get_headers())
-        response.raise_for_status()
-        
-        # Parse the JSON response
-        datasets = response.json()
-        
-        # If we got a list directly, use it
-        if isinstance(datasets, list):
-            # Filter to only include datasets
-            datasets = [item for item in datasets if item.get('_type') == 'Dataset' and item.get('ODS_ID')]
-            datasets.sort(key=lambda x: x.get('ODS_ID'))
-            logging.info(f"Downloaded {len(datasets)} datasets from scheme")
-        else:
-            # We might have received a job ID instead
-            logging.error(f"Received unexpected response format from {full_url}. Expected a list of datasets.")
-            logging.debug(f"Response content: {datasets}")
-            raise ValueError(f"Unexpected response format from download API. Expected a list but got: {type(datasets)}")
-        
+        datasets = self.get_all_assets_from_scheme()
+
         if not datasets:
             logging.warning(f"No datasets with ods_ids found in {self.scheme_name}")
             return 0
@@ -788,10 +765,6 @@ class DNKClient(BaseDataspotClient):
         self.mapping.remove_entry(ods_id)
         
         return True
-
-
-
-
 
     def bulk_create_or_update_organizational_units(self, organizational_units: List[Dict[str, Any]], 
                                         operation: str = "ADD", dry_run: bool = False) -> dict:

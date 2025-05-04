@@ -24,6 +24,40 @@ class BaseDataspotClient():
         self.scheme_name_short = scheme_name_short
         self.ods_imports_collection_name = ods_imports_collection_name
 
+    def get_all_assets_from_scheme(self) -> List[Dict[str, Any]]:
+        """
+        Download all assets from a scheme using the Download API.
+                                        
+        Returns:
+            List[Dict[str, Any]]: List of assets from the scheme
+            
+        Raises:
+            HTTPError: If API requests fail
+            ValueError: If the response format is unexpected or invalid
+        """
+        logging.info(f"Downloading datasets from {self.scheme_name_short} scheme for mapping update")
+
+        # Use the download API to retrieve assets from the scheme
+        download_path = f"/api/{self.database_name}/schemes/{self.scheme_name}/download?format=JSON"
+        full_url = url_join(self.base_url, download_path)
+        
+        logging.debug(f"Downloading all assets from scheme '{self.scheme_name}' at: {full_url}")
+        response = requests_get(full_url, headers=self.auth.get_headers())
+        response.raise_for_status()
+        
+        # Parse the JSON response
+        assets = response.json()
+        
+        # If we got a list directly, use it
+        if isinstance(assets, list):
+            logging.info(f"Downloaded {len(assets)} assets from scheme '{self.scheme_name}'")
+            return assets
+        else:
+            # We might have received a job ID instead
+            logging.error(f"Received unexpected response format from {full_url}. Expected a list of assets.")
+            logging.debug(f"Response content: {assets}")
+            raise ValueError(f"Unexpected response format from download API. Expected a list but got: {type(assets)}")
+
     def _get_asset(self, endpoint: str) -> Dict[str, Any] | None:
         """
         Get a asset if it exists, return None if it doesn't.
