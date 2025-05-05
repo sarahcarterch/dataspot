@@ -1,9 +1,8 @@
-import logging
 from typing import List
 
-from src.dataspot_mapping import BaseDataspotMapping
+from src.mapping_handlers.base_dataspot_mapping import BaseDataspotMapping
 
-class StaatskalenderDataspotMapping(BaseDataspotMapping):
+class OrgStructureMapping(BaseDataspotMapping):
     """
     A lookup table that maps Staatskalender IDs to Dataspot asset type, UUID, and optionally inCollection.
     Stores the mapping in a CSV file for persistence. Handles organizational units.

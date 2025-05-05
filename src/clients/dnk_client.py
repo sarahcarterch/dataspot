@@ -1,13 +1,9 @@
-import logging
 from typing import Dict, Any, List
-
-from requests import HTTPError
 
 from src import config
 from src.clients.base_client import BaseDataspotClient
-from src.clients.org_structure_handler import OrgStructureHandler
-from src.clients.dataset_handler import DatasetHandler
-from src.clients.helpers import url_join, get_uuid_from_response
+from src.mapping_handlers.org_structure_handler import OrgStructureHandler
+from src.mapping_handlers.dataset_handler import DatasetHandler
 from src.dataspot_dataset import Dataset
 
 class DNKClient(BaseDataspotClient):

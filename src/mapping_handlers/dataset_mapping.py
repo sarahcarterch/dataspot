@@ -1,9 +1,8 @@
-import logging
 from typing import List
 
-from src.dataspot_mapping import BaseDataspotMapping
+from src.mapping_handlers.base_dataspot_mapping import BaseDataspotMapping
 
-class ODSDataspotMapping(BaseDataspotMapping):
+class DatasetMapping(BaseDataspotMapping):
     """
     A lookup table that maps ODS IDs to Dataspot asset type, UUID, and optionally inCollection.
     Stores the mapping in a CSV file for persistence. Handles only datasets for now.

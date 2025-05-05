@@ -1,11 +1,11 @@
 import logging
-from typing import Dict, Any, List, Tuple, Set, Optional
+from typing import Dict, Any, List
 from dataclasses import dataclass
 
 from src import config
 from src.clients.base_client import BaseDataspotClient
-from src.clients.helpers import url_join, get_uuid_from_response, escape_special_chars
-from src.staatskalender_dataspot_mapping import StaatskalenderDataspotMapping
+from src.clients.helpers import url_join, escape_special_chars
+from src.mapping_handlers.org_structure_mapping import OrgStructureMapping
 from src.common import requests_get
 
 
@@ -36,7 +36,7 @@ class OrgStructureHandler:
         self.scheme_name_short = config.dnk_scheme_name_short
         
         # Initialize the organization mapping
-        self.org_mapping = StaatskalenderDataspotMapping(database_name=self.database_name, scheme=self.scheme_name_short)
+        self.org_mapping = OrgStructureMapping(database_name=self.database_name, scheme=self.scheme_name_short)
     
     def get_validated_staatskalender_url(self, title: str, url_website: str, validate_url: bool = False) -> str:
         """

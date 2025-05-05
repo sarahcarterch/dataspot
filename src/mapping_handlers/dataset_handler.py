@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, List, Optional
+from typing import List
 
 from requests import HTTPError
 
@@ -7,7 +7,7 @@ from src import config
 from src.clients.base_client import BaseDataspotClient
 from src.clients.helpers import url_join, get_uuid_from_response
 from src.dataspot_dataset import Dataset
-from src.ods_dataspot_mapping import ODSDataspotMapping
+from src.mapping_handlers.dataset_mapping import DatasetMapping
 
 
 class DatasetHandler:
@@ -21,7 +21,7 @@ class DatasetHandler:
             client: BaseDataspotClient instance to use for API operations
         """
         self.client = client
-        
+
         # Load scheme name from config
         self.database_name = client.database_name
         self.scheme_name = client.scheme_name
@@ -29,8 +29,8 @@ class DatasetHandler:
         self.ods_imports_collection_name = client.ods_imports_collection_name
         
         # Initialize the dataset mapping
-        self.ods_dataset_mapping = ODSDataspotMapping(database_name=self.database_name, scheme=self.scheme_name_short)
-    
+        self.ods_dataset_mapping = DatasetMapping(database_name=self.database_name, scheme=self.scheme_name_short)
+
     def _download_and_update_mappings(self, target_ods_ids: List[str] = None) -> int:
         """
         Helper method to download datasets and update ODS ID to Dataspot UUID mappings.

@@ -7,7 +7,7 @@ import ods_utils_py as ods_utils
 from src.clients.dnk_client import DNKClient
 from src.dataspot_dataset import Dataset
 from src.deprecated_files.deprecated_metadata_translator_2 import ods_to_dataspot
-from src.ods_dataspot_mapping import ODSDataspotMapping
+from src.mapping_handlers.dataset_mapping import DatasetMapping
 
 # Configure logging
 logging.basicConfig(
@@ -68,7 +68,7 @@ def test_mapping_operations(mapping_file):
     """Test basic mapping operations"""
     logger.info("Testing mapping operations...")
 
-    mapping = ODSDataspotMapping(mapping_file)
+    mapping = DatasetMapping(mapping_file)
 
     # Add some test entries
     mapping.add_entry("test-id-1", "test-uuid-1", "https://example.com/datasets/1")
@@ -87,7 +87,7 @@ def test_mapping_operations(mapping_file):
     assert mapping.get_entry("test-id-2") is None
 
     # Create new instance to test persistence
-    new_mapping = ODSDataspotMapping(mapping_file)
+    new_mapping = DatasetMapping(mapping_file)
     assert new_mapping.get_uuid("test-id-1") == "updated-uuid-1"
     assert new_mapping.get_entry("test-id-2") is None
 
