@@ -7,10 +7,11 @@ from src import config
 from src.clients.base_client import BaseDataspotClient
 from src.clients.helpers import url_join, get_uuid_from_response
 from src.dataspot_dataset import Dataset
+from src.mapping_handlers.base_dataspot_handler import BaseDataspotHandler
 from src.mapping_handlers.dataset_mapping import DatasetMapping
 
 
-class DatasetHandler:
+class DatasetHandler(BaseDataspotHandler):
     """Handler for dataset operations in Dataspot."""
     
     def __init__(self, client: BaseDataspotClient):
@@ -20,16 +21,14 @@ class DatasetHandler:
         Args:
             client: BaseDataspotClient instance to use for API operations
         """
-        self.client = client
-
-        # Load scheme name from config
-        self.database_name = client.database_name
-        self.scheme_name = client.scheme_name
-        self.scheme_name_short = client.scheme_name_short
-        self.ods_imports_collection_name = client.ods_imports_collection_name
-        
         # Initialize the dataset mapping
-        self.ods_dataset_mapping = DatasetMapping(database_name=self.database_name, scheme=self.scheme_name_short)
+        self.ods_dataset_mapping = DatasetMapping(database_name=client.database_name, scheme=client.scheme_name_short)
+        
+        # Call parent's __init__ method
+        super().__init__(client, self.ods_dataset_mapping)
+        
+        # Store ODS imports collection name
+        self.ods_imports_collection_name = client.ods_imports_collection_name
 
     def _download_and_update_mappings(self, target_ods_ids: List[str] = None) -> int:
         """
@@ -220,107 +219,20 @@ class DatasetHandler:
         logging.info(f"Updated mappings for {updated_count} datasets. Did not update mappings for the other {len(datasets) - updated_count} datasets.")
         return updated_count
 
-    def create_dataset(self, dataset: Dataset) -> dict:
+    def update_mappings_from_upload(self, ods_ids: List[str]) -> None:
         """
-        Create a new dataset in the 'Datennutzungskatalog/ODS-Imports' in Dataspot.
+        Updates the mapping between ODS IDs and Dataspot UUIDs after uploading datasets.
+        Uses the download API to retrieve all datasets and then updates the mapping for matching ODS IDs.
         
         Args:
-            dataset (Dataset): The dataset instance to be uploaded.
-            
-        Returns:
-            dict: The JSON response from the API containing the dataset data
+            ods_ids (List[str]): List of ODS IDs to update in the mapping
             
         Raises:
-            ValueError: If the dataset is missing required properties
             HTTPError: If API requests fail
-            json.JSONDecodeError: If response parsing fails
+            ValueError: If unable to retrieve dataset information
         """
-        # Preload mapping from DNK to ensure we have the latest mapping data
-        try:
-            logging.info("Preloading ODS ID to Dataspot mappings from DNK system")
-            self._download_and_update_mappings()
-        except Exception as e:
-            logging.warning(f"Failed to preload mappings, continuing with existing mappings: {str(e)}")
-        
-        # Get ODS ID from dataset
-        ods_id = dataset.to_json().get('customProperties', {}).get('ODS_ID')
-        if not ods_id:
-            logging.error("Dataset missing 'ODS_ID' property required for ODS ID")
-            raise ValueError("Dataset must have an 'ODS_ID' property to use as ODS ID")
-        
-        # Check if dataset with this ODS ID already exists
-        existing_entry = self.ods_dataset_mapping.get_entry(ods_id)
-        if existing_entry:
-            # Entry is now (_type, uuid, inCollection)
-            _type, uuid, _ = existing_entry
-            logging.info(f"Dataset with ODS ID {ods_id} already exists (Type: {_type}, UUID: {uuid}). Use update_dataset or create_or_update_dataset method to update.")
-            raise ValueError(f"Dataset with ODS ID {ods_id} already exists. Use update_dataset or create_or_update_dataset method.")
-        
-        # Read the dataset title
-        title = dataset.to_json()['label']
-        logging.info(f"Creating dataset: '{title}' with ODS ID: {ods_id}")
-        
-        # Ensure ODS-Imports collection exists
-        logging.debug(f"Ensuring ODS-Imports collection exists")
-        collection_data = self.client.ensure_ods_imports_collection_exists()
-        logging.debug(f"Collection info: {collection_data}")
-
-        # Get the collection UUID
-        collection_uuid = get_uuid_from_response(collection_data)
-
-        if not collection_uuid:
-            error_msg = "Failed to get collection UUID"
-            logging.error(error_msg)
-            raise ValueError(error_msg)
-
-        collection_href = url_join('rest', self.database_name, 'datasets', collection_uuid, leading_slash=True)
-        logging.debug(f"Using collection UUID: {collection_uuid} and constructed href: {collection_href}")
-        
-        # Create a new dataset
-        dataset_creation_endpoint = url_join(collection_href, "datasets")
-        
-        # Ensure inCollection property is set with the full path
-        dataset_json = dataset.to_json()
-        collection_path = getattr(config, 'ods_imports_collection_path', [])
-        
-        if collection_path:
-            # Build the full business key path for inCollection
-            # If path is ['A', 'B', 'C'], then inCollection should be "A/B/C/ODS-Imports"
-            full_path = '/'.join(collection_path + [self.ods_imports_collection_name])
-            
-            # Check for slashes in the path components which would require escaping
-            has_special_chars = any('/' in folder for folder in collection_path)
-            
-            if has_special_chars:
-                # We need to escape the whole path with quotes since it contains slashes
-                from src.clients.helpers import escape_special_chars
-                full_path = escape_special_chars(full_path)
-                
-            logging.debug(f"Using full path inCollection: '{full_path}'")
-            dataset_json['inCollection'] = full_path
-        else:
-            # No path, just use the collection name directly
-            logging.debug(f"Using default inCollection: '{self.ods_imports_collection_name}'")
-            dataset_json['inCollection'] = self.ods_imports_collection_name
-        
-        response = self.client._create_asset(
-            endpoint=dataset_creation_endpoint,
-            data=dataset_json
-        )
-        
-        # Store the mapping for future reference
-        if ods_id:
-            uuid = get_uuid_from_response(response)
-            if uuid:
-                # For newly created datasets, store the ODS-Imports collection name as the business key
-                # The _type for datasets created here is always "Dataset"
-                logging.debug(f"Adding mapping entry for ODS ID {ods_id} with Type 'Dataset', UUID {uuid}, and inCollection '{self.ods_imports_collection_name}'")
-                self.ods_dataset_mapping.add_entry(ods_id, "Dataset", uuid, self.ods_imports_collection_name)
-            else:
-                logging.warning(f"Could not extract UUID from response for dataset '{title}'")
-        
-        logging.info(f"Successfully created dataset '{title}'")
-        return response
+        # Call the base class method with our specific ID type
+        super().update_mappings_from_upload(ods_ids)
 
     def bulk_create_or_update_datasets(self, datasets: List[Dataset],
                                       operation: str = "ADD", dry_run: bool = False) -> dict:
@@ -485,32 +397,116 @@ class DatasetHandler:
             logging.error(f"Unexpected error during bulk upload: {str(e)}")
             raise
     
-    def update_mappings_from_upload(self, ods_ids: List[str]) -> None:
+    def get_all_ods_ids(self) -> List[str]:
         """
-        Updates the mapping between ODS IDs and Dataspot UUIDs after uploading datasets.
-        Uses the download API to retrieve all datasets and then updates the mapping for matching ODS IDs.
+        Get a list of all ODS IDs in the mapping.
+        
+        Returns:
+            List[str]: A list of all ODS IDs
+        """
+        return self.get_all_external_ids()
+
+    def create_dataset(self, dataset: Dataset) -> dict:
+        """
+        Create a new dataset in the 'Datennutzungskatalog/ODS-Imports' in Dataspot.
         
         Args:
-            ods_ids (List[str]): List of ODS IDs to update in the mapping
+            dataset (Dataset): The dataset instance to be uploaded.
+            
+        Returns:
+            dict: The JSON response from the API containing the dataset data
             
         Raises:
+            ValueError: If the dataset is missing required properties
             HTTPError: If API requests fail
-            ValueError: If unable to retrieve dataset information
+            json.JSONDecodeError: If response parsing fails
         """
-        logging.info(f"Updating mappings for {len(ods_ids)} datasets using download API")
-        
+        # Preload mapping from DNK to ensure we have the latest mapping data
         try:
-            updated_count = self._download_and_update_mappings(ods_ids)
-            logging.info(f"Updated mappings for {updated_count} out of {len(ods_ids)} datasets")
-            
-            if updated_count < len(ods_ids):
-                missing_ids = [ods_id for ods_id in ods_ids if not self.ods_dataset_mapping.get_entry(ods_id)]
-                if missing_ids:
-                    logging.warning(f"Could not find mappings for {len(missing_ids)} ODS IDs: {missing_ids[:5]}" + 
-                                   (f"... and {len(missing_ids)-5} more" if len(missing_ids) > 5 else ""))
+            logging.info("Preloading ODS ID to Dataspot mappings from DNK system")
+            self._download_and_update_mappings()
         except Exception as e:
-            logging.error(f"Error updating mappings: {str(e)}")
-            raise
+            logging.warning(f"Failed to preload mappings, continuing with existing mappings: {str(e)}")
+        
+        # Get ODS ID from dataset
+        ods_id = dataset.to_json().get('customProperties', {}).get('ODS_ID')
+        if not ods_id:
+            logging.error("Dataset missing 'ODS_ID' property required for ODS ID")
+            raise ValueError("Dataset must have an 'ODS_ID' property to use as ODS ID")
+        
+        # Check if dataset with this ODS ID already exists
+        existing_entry = self.ods_dataset_mapping.get_entry(ods_id)
+        if existing_entry:
+            # Entry is now (_type, uuid, inCollection)
+            _type, uuid, _ = existing_entry
+            logging.info(f"Dataset with ODS ID {ods_id} already exists (Type: {_type}, UUID: {uuid}). Use update_dataset or create_or_update_dataset method to update.")
+            raise ValueError(f"Dataset with ODS ID {ods_id} already exists. Use update_dataset or create_or_update_dataset method.")
+        
+        # Read the dataset title
+        title = dataset.to_json()['label']
+        logging.info(f"Creating dataset: '{title}' with ODS ID: {ods_id}")
+        
+        # Ensure ODS-Imports collection exists
+        logging.debug(f"Ensuring ODS-Imports collection exists")
+        collection_data = self.client.ensure_ods_imports_collection_exists()
+        logging.debug(f"Collection info: {collection_data}")
+
+        # Get the collection UUID
+        collection_uuid = get_uuid_from_response(collection_data)
+
+        if not collection_uuid:
+            error_msg = "Failed to get collection UUID"
+            logging.error(error_msg)
+            raise ValueError(error_msg)
+
+        collection_href = url_join('rest', self.database_name, 'datasets', collection_uuid, leading_slash=True)
+        logging.debug(f"Using collection UUID: {collection_uuid} and constructed href: {collection_href}")
+        
+        # Create a new dataset
+        dataset_creation_endpoint = url_join(collection_href, "datasets")
+        
+        # Ensure inCollection property is set with the full path
+        dataset_json = dataset.to_json()
+        collection_path = getattr(config, 'ods_imports_collection_path', [])
+        
+        if collection_path:
+            # Build the full business key path for inCollection
+            # If path is ['A', 'B', 'C'], then inCollection should be "A/B/C/ODS-Imports"
+            full_path = '/'.join(collection_path + [self.ods_imports_collection_name])
+            
+            # Check for slashes in the path components which would require escaping
+            has_special_chars = any('/' in folder for folder in collection_path)
+            
+            if has_special_chars:
+                # We need to escape the whole path with quotes since it contains slashes
+                from src.clients.helpers import escape_special_chars
+                full_path = escape_special_chars(full_path)
+                
+            logging.debug(f"Using full path inCollection: '{full_path}'")
+            dataset_json['inCollection'] = full_path
+        else:
+            # No path, just use the collection name directly
+            logging.debug(f"Using default inCollection: '{self.ods_imports_collection_name}'")
+            dataset_json['inCollection'] = self.ods_imports_collection_name
+        
+        response = self.client._create_asset(
+            endpoint=dataset_creation_endpoint,
+            data=dataset_json
+        )
+        
+        # Store the mapping for future reference
+        if ods_id:
+            uuid = get_uuid_from_response(response)
+            if uuid:
+                # For newly created datasets, store the ODS-Imports collection name as the business key
+                # The _type for datasets created here is always "Dataset"
+                logging.debug(f"Adding mapping entry for ODS ID {ods_id} with Type 'Dataset', UUID {uuid}, and inCollection '{self.ods_imports_collection_name}'")
+                self.ods_dataset_mapping.add_entry(ods_id, "Dataset", uuid, self.ods_imports_collection_name)
+            else:
+                logging.warning(f"Could not extract UUID from response for dataset '{title}'")
+        
+        logging.info(f"Successfully created dataset '{title}'")
+        return response
 
     def update_dataset(self, dataset: Dataset, href: str, force_replace: bool = False) -> dict:
         """

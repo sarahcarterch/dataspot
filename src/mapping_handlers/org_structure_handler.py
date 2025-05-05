@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from src import config
 from src.clients.base_client import BaseDataspotClient
 from src.clients.helpers import url_join, escape_special_chars
+from src.mapping_handlers.base_dataspot_handler import BaseDataspotHandler
 from src.mapping_handlers.org_structure_mapping import OrgStructureMapping
 from src.common import requests_get
 
@@ -18,7 +19,7 @@ class OrgUnitChange:
     details: Dict[str, Any]  # Details about the change
 
 
-class OrgStructureHandler:
+class OrgStructureHandler(BaseDataspotHandler):
     """Handler for organizational structure operations in Dataspot."""
     
     def __init__(self, client: BaseDataspotClient):
@@ -28,15 +29,11 @@ class OrgStructureHandler:
         Args:
             client: BaseDataspotClient instance to use for API operations
         """
-        self.client = client
-        
-        # Load scheme name from config
-        self.database_name = config.database_name
-        self.scheme_name = config.dnk_scheme_name
-        self.scheme_name_short = config.dnk_scheme_name_short
-        
         # Initialize the organization mapping
-        self.org_mapping = OrgStructureMapping(database_name=self.database_name, scheme=self.scheme_name_short)
+        self.org_mapping = OrgStructureMapping(database_name=client.database_name, scheme=client.scheme_name_short)
+        
+        # Call parent's __init__ method
+        super().__init__(client, self.org_mapping)
     
     def get_validated_staatskalender_url(self, title: str, url_website: str, validate_url: bool = False) -> str:
         """
@@ -71,7 +68,7 @@ class OrgStructureHandler:
         # If no URL or validation failed, return empty string
         return ""
     
-    def _download_and_update_staatskalender_mappings(self, target_staatskalender_ids: List[str] = None) -> int:
+    def _download_and_update_mappings(self, target_staatskalender_ids: List[str] = None) -> int:
         """
         Helper method to download organizational units and update Staatskalender ID to Dataspot UUID mappings.
         
@@ -306,20 +303,8 @@ class OrgStructureHandler:
             HTTPError: If API requests fail
             ValueError: If unable to retrieve organizational unit information
         """
-        logging.info(f"Updating mappings for {len(staatskalender_ids)} organizational units using download API")
-        
-        try:
-            updated_count = self._download_and_update_staatskalender_mappings(staatskalender_ids)
-            logging.info(f"Updated mappings for {updated_count} out of {len(staatskalender_ids)} organizational units")
-            
-            if updated_count < len(staatskalender_ids):
-                missing_ids = [staatskalender_id for staatskalender_id in staatskalender_ids if not self.org_mapping.get_entry(staatskalender_id)]
-                if missing_ids:
-                    logging.warning(f"Could not find mappings for {len(missing_ids)} Staatskalender IDs: {missing_ids[:5]}" + 
-                                   (f"... and {len(missing_ids)-5} more" if len(missing_ids) > 5 else ""))
-        except Exception as e:
-            logging.error(f"Error updating organizational unit mappings: {str(e)}")
-            raise
+        # Call the base class method with our specific ID type
+        self.update_mappings_from_upload(staatskalender_ids)
     
     def bulk_create_or_update_organizational_units(self, organizational_units: List[Dict[str, Any]], 
                                         operation: str = "ADD", dry_run: bool = False) -> dict:
@@ -341,31 +326,19 @@ class OrgStructureHandler:
             ValueError: If no organizational units are provided or if the DNK scheme doesn't exist
             HTTPError: If API requests fail
         """
-        # Verify we have organizational units to process
-        if not organizational_units:
-            logging.warning("No organizational units provided for bulk upload")
-            return {"status": "error", "message": "No organizational units provided"}
-        
-        # Count of units
-        num_units = len(organizational_units)
-        logging.debug(f"Bulk creating {num_units} organizational units (operation: {operation}, dry_run: {dry_run})...")
-        
-        # Bulk create organizational units using the scheme name
-        try:
-            response = self.client.bulk_create_or_update_assets(
-                scheme_name=self.scheme_name,
-                data=organizational_units,
-                operation=operation,
-                dry_run=dry_run
-            )
-
-            logging.info(f"Bulk creation of organizational units complete")
-            return response
-            
-        except Exception as e:
-            logging.error(f"Unexpected error during bulk upload: {str(e)}")
-            raise
+        # Call the base class method with our specific asset type
+        return self.bulk_create_or_update_assets(organizational_units, operation, dry_run)
     
+    def get_all_staatskalender_ids(self) -> List[str]:
+        """
+        Get a list of all Staatskalender IDs in the mapping.
+        
+        Returns:
+            List[str]: A list of all Staatskalender IDs
+        """
+        # Call the base class method
+        return self.get_all_external_ids()
+
     def transform_organization_for_bulk_upload(self, org_data: Dict[str, Any], validate_urls: bool = False) -> List[Dict[str, Any]]:
         """
         Build organization hierarchy from flat data using parent_id and children_id fields.
@@ -690,7 +663,7 @@ class OrgStructureHandler:
         # Preload mappings from DNK to ensure we have the latest mapping data
         try:
             logging.info("Preloading Staatskalender ID to Dataspot mappings from DNK system")
-            self._download_and_update_staatskalender_mappings()
+            self._download_and_update_mappings()
         except Exception as e:
             logging.warning(f"Failed to preload organizational unit mappings, continuing with existing mappings: {str(e)}")
             
@@ -857,7 +830,7 @@ class OrgStructureHandler:
             staatskalender_ids = [change.staatskalender_id for change in changes]
             logging.info(f"Updating mappings for {len(staatskalender_ids)} changed organizational units")
             try:
-                self._download_and_update_staatskalender_mappings(staatskalender_ids)
+                self._download_and_update_mappings(staatskalender_ids)
             except Exception as e:
                 logging.error(f"Error updating mappings: {str(e)}")
         
