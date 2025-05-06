@@ -645,7 +645,7 @@ def main_10_sync_organization_structure():
     logging.info("Synchronizing organization data with Dataspot...")
     try:
         # Use the sync method with URL validation feature flag
-        sync_result = dataspot_client.sync_staatskalender_org_units(
+        sync_result = dataspot_client.sync_org_units(
             all_organizations,
             validate_urls=validate_urls
         )
