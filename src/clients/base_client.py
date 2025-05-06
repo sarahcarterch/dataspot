@@ -205,6 +205,7 @@ class BaseDataspotClient():
         """
         Ensures that the ODS-Imports collection exists within the scheme.
 
+        # TODO: set ods:imports_collection_path as a variable of BaseDataspotClient and only load it once.
         The path is defined by config.ods_imports_collection_path, which is a list of folder names.
         For example, if config.ods_imports_collection_path is ['A', 'B', 'C'], the function:
         1. First checks if 'A/B/C' path already exists

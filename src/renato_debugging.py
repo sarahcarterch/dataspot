@@ -527,7 +527,9 @@ def main_8_test_bulk_ods_datasets_upload_and_delete(cleanup_after_test: bool = T
         try:
             # Bulk create all datasets
             logging.info(f"Step 3: Bulk uploading all {len(all_datasets)} datasets to dataspot...") # Comment: This line is confusing, as it we do not upload right here and there, but before that there is more setup.
-            
+
+            dataspot_client.ensure_ods_imports_collection_exists()
+
             # Perform the bulk upload
             create_response = dataspot_client.bulk_create_or_update_datasets(
                 datasets=all_datasets,
@@ -675,7 +677,7 @@ if __name__ == "__main__":
 
     # main_9_build_organization_structure_in_dnk()
     main_10_sync_organization_structure()
-    # main_8_test_bulk_ods_datasets_upload_and_delete(cleanup_after_test=False, max_datasets=5)
+    main_8_test_bulk_ods_datasets_upload_and_delete(cleanup_after_test=False)
 
     logging.info('Job successful!')
     

@@ -23,6 +23,9 @@ class DNKClient(BaseDataspotClient):
         self.org_handler = OrgStructureHandler(self)
         self.dataset_handler = DatasetHandler(self)
 
+        # FIXME (large language model): This should be implemented in the BaseDataspotClient directly
+        self.ods_imports_collection_path = config.ods_imports_collection_path
+
     # Direct API operations for datasets
     def create_dataset(self, dataset: Dataset) -> dict:
         """
@@ -44,6 +47,7 @@ class DNKClient(BaseDataspotClient):
             
         # Prepare dataset for upload with proper inCollection value
         dataset_json = dataset.to_json()
+        # TODO: Inspect this, it should potentially be: dataset_json['inCollection'] = collection_data.get('label')
         dataset_json['inCollection'] = self.ods_imports_collection_name
         
         # Create the dataset directly
@@ -92,11 +96,14 @@ class DNKClient(BaseDataspotClient):
         Returns:
             dict: The JSON response containing the upload results
         """
+        # Create full path to the ODS-Imports collection
+        full_collection_path = f"{'/'.join(self.ods_imports_collection_path)}/{self.ods_imports_collection_name}"
+        
         dataset_jsons = [dataset.to_json() for dataset in datasets]
         
-        # Set inCollection for each dataset
+        # Set inCollection for each dataset using the full path
         for dataset_json in dataset_jsons:
-            dataset_json['inCollection'] = self.ods_imports_collection_name
+            dataset_json['inCollection'] = full_collection_path
             
         return self.bulk_create_or_update_assets(
             scheme_name=self.scheme_name,
