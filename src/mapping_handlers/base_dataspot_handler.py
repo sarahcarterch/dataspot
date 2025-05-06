@@ -15,7 +15,6 @@ class BaseDataspotHandler:
     # Configuration values to be set by subclasses
     asset_id_field = None  # Field name for the external ID (e.g., 'ODS_ID', 'id_im_staatskalender')
     asset_type_filter = None  # Filter function or criteria for asset type
-    download_method = None  # Method to use for downloading assets
     
     mapping: BaseDataspotMapping
 
@@ -47,18 +46,14 @@ class BaseDataspotHandler:
             logging.error("asset_id_field not set in subclass")
             raise NotImplementedError("Subclasses must set asset_id_field")
         
-        if not self.download_method:
-            logging.error("download_method not set in subclass")
-            raise NotImplementedError("Subclasses must set download_method")
-        
         if not self.asset_type_filter:
             logging.error("asset_type_filter not set in subclass")
             raise NotImplementedError("Subclasses must set asset_type_filter")
         
         logging.info(f"Downloading assets from {self.scheme_name} scheme")
         
-        # Get assets using the configured download method
-        assets = self.download_method()
+        # Get assets from the scheme
+        assets = self.client.get_all_assets_from_scheme()
         
         if not assets:
             logging.warning(f"No assets found in {self.scheme_name}")

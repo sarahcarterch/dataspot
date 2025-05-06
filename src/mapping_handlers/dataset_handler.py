@@ -35,22 +35,8 @@ class DatasetHandler(BaseDataspotHandler):
         # Store ODS imports collection name
         self.ods_imports_collection_name = client.ods_imports_collection_name
         
-        # Set the download method for the base handler
-        self.download_method = self._get_datasets
-        
         # Set the asset type filter based on asset_id_field
         self.asset_type_filter = lambda asset: asset.get(self.asset_id_field) is not None
-
-    # TODO IMMEDIATELY (Renato): Is this necessary?
-    def _get_datasets(self):
-        """
-        Get all datasets from the scheme.
-        This method is used as the download_method for the base handler.
-        
-        Returns:
-            List[Dict[str, Any]]: List of datasets
-        """
-        return self.client.get_all_assets_from_scheme()
 
     def sync_datasets(self, target_ods_ids: List[str] = None) -> Dict[str, Any]:
         """

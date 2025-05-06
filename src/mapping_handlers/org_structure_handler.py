@@ -38,10 +38,6 @@ class OrgStructureHandler(BaseDataspotHandler):
         # Initialize the organization mapping
         self.mapping = OrgStructureMapping(database_name=client.database_name, scheme=client.scheme_name_short)
         
-        # Set the download method for the base handler
-        # Use the client's method instead of duplicating functionality
-        self.download_method = self.client.get_all_assets_from_scheme
-        
         # Set the asset type filter based on asset_id_field and stereotype
         self.asset_type_filter = lambda asset: (
             asset.get('_type') == 'Collection' and 
