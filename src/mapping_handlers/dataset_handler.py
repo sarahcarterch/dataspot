@@ -57,15 +57,6 @@ class DatasetHandler(BaseDataspotHandler):
             "updated_count": updated_count
         }
 
-    def get_all_ods_ids(self) -> List[str]:
-        """
-        Get a list of all ODS IDs in the mapping.
-        
-        Returns:
-            List[str]: A list of all ODS IDs
-        """
-        return self.mapping.get_all_ods_ids()
-
     def update_mappings_from_upload(self, ods_ids: List[str]) -> None:
         """
         Updates the mapping between ODS IDs and Dataspot UUIDs after uploading datasets.

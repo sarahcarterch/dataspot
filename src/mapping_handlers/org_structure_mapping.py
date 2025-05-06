@@ -20,12 +20,3 @@ class OrgStructureMapping(BaseDataspotMapping):
             scheme (str): Name of the scheme (e.g., 'DNK', 'TDM')
         """
         super().__init__(database_name, "staatskalender_id", "staatskalender-dataspot", scheme)
-        
-    def get_all_staatskalender_ids(self) -> List[str]:
-        """
-        Get a list of all Staatskalender IDs in the mapping.
-
-        Returns:
-            List[str]: A list of all Staatskalender IDs
-        """
-        return self.get_all_ids()

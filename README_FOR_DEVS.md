@@ -69,7 +69,6 @@ classDiagram
         +_download_and_update_mappings()
         +update_mappings_from_upload()
         +bulk_create_or_update_assets()
-        +get_all_external_ids()
     }
     
     class DatasetHandler {
@@ -78,7 +77,6 @@ classDiagram
         -asset_id_field: str
         -asset_type_filter: function
         +sync_datasets()
-        +get_all_ods_ids()
         +update_mappings_from_upload()
         +bulk_create_or_update_datasets()
         +create_dataset()
@@ -101,7 +99,6 @@ classDiagram
         +sync_org_units()
         +get_validated_staatskalender_url()
         +update_staatskalender_mappings_from_upload()
-        +get_all_staatskalender_ids()
         +transform_organization_for_bulk_upload()
         +build_organization_hierarchy_from_ods_bulk()
         +bulk_create_or_update_organizational_units()
@@ -142,14 +139,12 @@ classDiagram
         -_id_field_name: str
         -_file_prefix: str
         -_scheme: str
-        +get_all_ods_ids()
     }
 
     class OrgStructureMapping {
         -_id_field_name: str
         -_file_prefix: str
         -_scheme: str
-        +get_all_staatskalender_ids()
     }
     
     %% Dataset Classes

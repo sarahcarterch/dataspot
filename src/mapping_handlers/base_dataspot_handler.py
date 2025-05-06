@@ -304,12 +304,3 @@ class BaseDataspotHandler:
         except Exception as e:
             logging.error(f"Unexpected error during bulk upload: {str(e)}")
             raise
-    
-    def get_all_external_ids(self) -> List[str]:
-        """
-        Get a list of all external IDs in the mapping.
-        
-        Returns:
-            List[str]: A list of all external IDs
-        """
-        return self.mapping.get_all_ids() 

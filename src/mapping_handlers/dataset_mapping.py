@@ -20,12 +20,3 @@ class DatasetMapping(BaseDataspotMapping):
             scheme (str): Name of the scheme (e.g., 'DNK', 'TDM')
         """
         super().__init__(database_name, "ods_id", "ods-dataspot", scheme)
-        
-    def get_all_ods_ids(self) -> List[str]:
-        """
-        Get a list of all ODS IDs in the mapping.
-
-        Returns:
-            List[str]: A list of all ODS IDs
-        """
-        return self.get_all_ids()

@@ -96,7 +96,7 @@ class OrgStructureHandler(BaseDataspotHandler):
     def bulk_create_or_update_organizational_units(self, organizational_units: List[Dict[str, Any]], 
                                         operation: str = "ADD", dry_run: bool = False) -> dict:
         """
-        Create multiple organizational units in bulk in the Datennutzungskatalog scheme in Dataspot.
+        Create multiple organizational units in bulk in Dataspot.
         
         Args:
             organizational_units (List[Dict[str, Any]]): List of organizational unit data to upload
@@ -116,16 +116,6 @@ class OrgStructureHandler(BaseDataspotHandler):
         # Call the base class method with our specific asset type
         return self.bulk_create_or_update_assets(organizational_units, operation, dry_run)
     
-    def get_all_staatskalender_ids(self) -> List[str]:
-        """
-        Get a list of all Staatskalender IDs in the mapping.
-        
-        Returns:
-            List[str]: A list of all Staatskalender IDs
-        """
-        # Call the base class method
-        return self.get_all_external_ids()
-
     def transform_organization_for_bulk_upload(self, org_data: Dict[str, Any], validate_urls: bool = False) -> List[Dict[str, Any]]:
         """
         Build organization hierarchy from flat data using parent_id and children_id fields.
