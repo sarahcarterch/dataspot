@@ -1,5 +1,5 @@
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Callable
 
 from requests import HTTPError
 
@@ -16,6 +16,8 @@ class DatasetHandler(BaseDataspotHandler):
     Handler for dataset synchronization operations in Dataspot.
     Provides methods to sync datasets between ODS and Dataspot.
     """
+    # Set configuration values for the base handler
+    asset_id_field = 'ODS_ID'
     
     def __init__(self, client: BaseDataspotClient):
         """
@@ -32,6 +34,23 @@ class DatasetHandler(BaseDataspotHandler):
         
         # Store ODS imports collection name
         self.ods_imports_collection_name = client.ods_imports_collection_name
+        
+        # Set the download method for the base handler
+        self.download_method = self._get_datasets
+        
+        # Set the asset type filter based on asset_id_field
+        self.asset_type_filter = lambda asset: asset.get(self.asset_id_field) is not None
+
+    # TODO IMMEDIATELY (Renato): Is this necessary?
+    def _get_datasets(self):
+        """
+        Get all datasets from the scheme.
+        This method is used as the download_method for the base handler.
+        
+        Returns:
+            List[Dict[str, Any]]: List of datasets
+        """
+        return self.client.get_all_assets_from_scheme()
 
     def sync_datasets(self, target_ods_ids: List[str] = None) -> Dict[str, Any]:
         """
@@ -51,191 +70,6 @@ class DatasetHandler(BaseDataspotHandler):
             "message": f"Successfully synchronized {updated_count} datasets",
             "updated_count": updated_count
         }
-
-    def _download_and_update_mappings(self, target_ods_ids: List[str] = None) -> int:
-        """
-        Helper method to download datasets and update ODS ID to Dataspot UUID mappings.
-        
-        Args:
-            target_ods_ids: If provided, only update mappings for these ODS IDs.
-                            If None, update all mappings found.
-        
-        Returns:
-            int: Number of mappings successfully updated
-        """
-        datasets = self.client.get_all_assets_from_scheme()
-
-        if not datasets:
-            logging.warning(f"No datasets with ods_ids found in {self.scheme_name}")
-            return 0
-        
-        # Create a lookup dictionary for faster access
-        dataset_by_ods_id = {}
-        for dataset in datasets:
-            ods_id = dataset.get('ODS_ID')
-            if ods_id:
-                dataset_by_ods_id[ods_id] = dataset
-        
-        # Process each dataset and update the mapping
-        updated_count = 0
-        
-        # Check for datasets in mapping that are not in downloaded datasets
-        if not target_ods_ids:
-            removed_count = 0
-            for ods_id, entry in list(self.ods_dataset_mapping.mapping.items()):
-                if ods_id not in dataset_by_ods_id:
-                    logging.warning(f"Dataset {ods_id} exists in local mapping but not in dataspot. Removing from local mapping.")
-                    if len(entry) >= 2:
-                        _type, uuid = entry[0], entry[1]
-                        logging.debug(f"    - _type: {_type}, uuid: {uuid}")
-                    self.ods_dataset_mapping.remove_entry(ods_id)
-                    removed_count += 1
-            if removed_count > 0:
-                logging.info(f"Found {removed_count} datasets that exist locally but not in dataspot.")
-        
-        # If we have target IDs, prioritize those
-        if target_ods_ids and len(target_ods_ids) > 0:
-            total_targets = len(target_ods_ids)
-            target_ods_ids.sort()
-            for idx, ods_id in enumerate(target_ods_ids, 1):
-                logging.debug(f"[{idx}/{total_targets}] Processing dataset with ODS ID: {ods_id}")
-                
-                # Find this ODS ID in our downloaded datasets
-                dataset = dataset_by_ods_id.get(ods_id)
-                if not dataset:
-                    logging.warning(f"Could not find dataset with ODS ID {ods_id} in downloaded data, skipping")
-                    continue
-                
-                # Get the UUID and _type
-                uuid = dataset.get('id')
-                _type = dataset.get('_type') # Get the _type
-                if not uuid:
-                    logging.warning(f"Dataset with ODS ID {ods_id} missing UUID, skipping")
-                    continue
-                if not _type:
-                    logging.warning(f"Dataset with ODS ID {ods_id} missing _type, skipping")
-                    continue
-                
-                # Extract inCollection business key directly from the downloaded dataset
-                inCollection_key = dataset.get('inCollection')
-                
-                if uuid and _type:
-                    # Check if the mapping has changed before updating
-                    existing_entry = self.ods_dataset_mapping.get_entry(ods_id)
-                    # Existing entry tuple: (_type, uuid, inCollection)
-                    if (existing_entry and
-                            existing_entry[0] == _type and
-                            existing_entry[1] == uuid and
-                            existing_entry[2] == inCollection_key):
-                        logging.debug(f"No changes in dataset {ods_id}. Skipping")
-                        logging.debug(f"    - _type: {_type}, uuid: {uuid}, inCollection: {inCollection_key}")
-                    elif existing_entry:
-                        old_type = existing_entry[0] if len(existing_entry) > 0 else None
-                        old_uuid = existing_entry[1] if len(existing_entry) > 1 else None
-                        old_inCollection = existing_entry[2] if len(existing_entry) > 2 else None
-
-                        # Only log UUID update warning if the UUID actually changed
-                        if old_uuid != uuid:
-                            logging.warning(f"Update dataset {ods_id} uuid from {old_uuid} to {uuid}")
-                        else:
-                            logging.info(f"Updating dataset {ods_id} metadata")
-
-                        # Log changes in type if they occur
-                        if old_type != _type:
-                            logging.warning(f"Dataset {ods_id} type changed from '{old_type}' to '{_type}'")
-
-                        # Log a more meaningful message if inCollection has changed
-                        if old_inCollection != inCollection_key and old_inCollection and inCollection_key:
-                            logging.info(f"Dataset {ods_id} has been moved from '{old_inCollection}' to '{inCollection_key}'")
-                        elif not old_inCollection and inCollection_key:
-                            logging.info(f"Dataset {ods_id} has been placed in '{inCollection_key}'")
-                        elif old_inCollection and not inCollection_key:
-                            logging.info(f"Dataset {ods_id} has been removed from '{old_inCollection}'")
-                        
-                        logging.debug(f"    - old_type: {old_type}, old_uuid: {old_uuid}, old_inCollection: {old_inCollection}")
-                        logging.debug(f"    - new_type: {_type}, new_uuid: {uuid}, new_inCollection: {inCollection_key}")
-                        self.ods_dataset_mapping.add_entry(ods_id, _type, uuid, inCollection_key)
-                        updated_count += 1
-                    else:
-                        logging.debug(f"Add dataset {ods_id} with uuid {uuid}")
-                        logging.debug(f"    - _type: {_type}, uuid: {uuid}, inCollection: {inCollection_key}")
-                        self.ods_dataset_mapping.add_entry(ods_id, _type, uuid, inCollection_key)
-                        updated_count += 1
-                else:
-                    logging.warning(f"Missing UUID or _type for dataset with ODS ID: {ods_id}")
-        else:
-            # No target IDs, process all datasets
-            total_datasets = len(datasets)
-            for idx, dataset in enumerate(datasets, 1):
-                # Extract the ID from customProperties
-                ods_id = dataset.get('ODS_ID')
-                
-                # Skip if this dataset doesn't have an ODS ID
-                if not ods_id:
-                    continue
-                
-                logging.debug(f"[{idx}/{total_datasets}] Processing dataset with ODS ID: {ods_id}")
-                
-                # Get the UUID and _type
-                uuid = dataset.get('id')
-                _type = dataset.get('_type') # Get the _type
-                if not uuid:
-                    logging.warning(f"Dataset with ODS ID {ods_id} missing UUID, skipping")
-                    continue
-                if not _type:
-                    logging.warning(f"Dataset with ODS ID {ods_id} missing _type, skipping")
-                    continue
-
-                # Extract inCollection business key directly from the downloaded dataset
-                inCollection_key = dataset.get('inCollection')
-                
-                if uuid and _type:
-                    # Check if the mapping has changed before updating
-                    existing_entry = self.ods_dataset_mapping.get_entry(ods_id)
-                    # Existing entry tuple: (_type, uuid, inCollection)
-                    if (existing_entry and
-                            existing_entry[0] == _type and
-                            existing_entry[1] == uuid and
-                            existing_entry[2] == inCollection_key):
-                        logging.debug(f"No changes in dataset {ods_id}. Skipping")
-                        logging.debug(f"    - _type: {_type}, uuid: {uuid}, inCollection: {inCollection_key}")
-                    elif existing_entry:
-                        old_type = existing_entry[0] if len(existing_entry) > 0 else None
-                        old_uuid = existing_entry[1] if len(existing_entry) > 1 else None
-                        old_inCollection = existing_entry[2] if len(existing_entry) > 2 else None
-
-                        # Only log UUID update warning if the UUID actually changed
-                        if old_uuid != uuid:
-                            logging.warning(f"Update dataset {ods_id} uuid from {old_uuid} to {uuid}")
-                        else:
-                            logging.info(f"Updating dataset {ods_id} metadata")
-
-                        # Log changes in type if they occur
-                        if old_type != _type:
-                            logging.warning(f"Dataset {ods_id} type changed from '{old_type}' to '{_type}'")
-
-                        # Log a more meaningful message if inCollection has changed
-                        if old_inCollection != inCollection_key and old_inCollection and inCollection_key:
-                            logging.info(f"Dataset {ods_id} has been moved from '{old_inCollection}' to '{inCollection_key}'")
-                        elif not old_inCollection and inCollection_key:
-                            logging.info(f"Dataset {ods_id} has been placed in '{inCollection_key}'")
-                        elif old_inCollection and not inCollection_key:
-                            logging.info(f"Dataset {ods_id} has been removed from '{old_inCollection}'")
-                        
-                        logging.debug(f"    - old_type: {old_type}, old_uuid: {old_uuid}, old_inCollection: {old_inCollection}")
-                        logging.debug(f"    - new_type: {_type}, new_uuid: {uuid}, new_inCollection: {inCollection_key}")
-                        self.ods_dataset_mapping.add_entry(ods_id, _type, uuid, inCollection_key)
-                        updated_count += 1
-                    else:
-                        logging.debug(f"Add dataset {ods_id} with uuid {uuid}")
-                        logging.debug(f"    - _type: {_type}, uuid: {uuid}, inCollection: {inCollection_key}")
-                        self.ods_dataset_mapping.add_entry(ods_id, _type, uuid, inCollection_key)
-                        updated_count += 1
-                else:
-                    logging.warning(f"Missing UUID or _type for dataset with ODS ID: {ods_id}")
-        
-        logging.info(f"Updated mappings for {updated_count} datasets. Did not update mappings for the other {len(datasets) - updated_count} datasets.")
-        return updated_count
 
     def get_all_ods_ids(self) -> List[str]:
         """

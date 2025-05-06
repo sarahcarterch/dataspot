@@ -1,5 +1,5 @@
 import logging
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Callable
 
 from src import config
 from src.clients.base_client import BaseDataspotClient
@@ -12,6 +12,11 @@ class BaseDataspotHandler:
     Base class for Dataspot handlers that manage different types of assets.
     This class provides common functionality for dataset and organizational unit handlers.
     """
+    # Configuration values to be set by subclasses
+    asset_id_field = None  # Field name for the external ID (e.g., 'ODS_ID', 'id_im_staatskalender')
+    asset_type_filter = None  # Filter function or criteria for asset type
+    download_method = None  # Method to use for downloading assets
+    
     # mapping: BaseDataspotMapping # TODO: Probably use this, and remove the init method.
     
     # TODO (large language model): Remove the mapping parameter and use the mapping attribute instead. Implement the entire init in the subclasses.
@@ -32,7 +37,6 @@ class BaseDataspotHandler:
         self.scheme_name = client.scheme_name
         self.scheme_name_short = client.scheme_name_short
     
-    # TODO (Renato): Is it possible to implement this here?
     def _download_and_update_mappings(self, target_ids: List[str] = None) -> int:
         """
         Base method for downloading assets and updating mappings.
@@ -42,12 +46,205 @@ class BaseDataspotHandler:
             
         Returns:
             int: Number of mappings successfully updated
-            
-        Note:
-            This method should be overridden by subclasses to implement
-            asset-specific download and mapping updates.
         """
-        raise NotImplementedError("Subclasses must implement _download_and_update_mappings")
+        if not self.asset_id_field:
+            self.logger.error("asset_id_field not set in subclass")
+            raise NotImplementedError("Subclasses must set asset_id_field")
+        
+        if not self.download_method:
+            self.logger.error("download_method not set in subclass")
+            raise NotImplementedError("Subclasses must set download_method")
+        
+        if not self.asset_type_filter:
+            self.logger.error("asset_type_filter not set in subclass")
+            raise NotImplementedError("Subclasses must set asset_type_filter")
+        
+        self.logger.info(f"Downloading assets from {self.scheme_name} scheme")
+        
+        # Get assets using the configured download method
+        assets = self.download_method()
+        
+        if not assets:
+            self.logger.warning(f"No assets found in {self.scheme_name}")
+            return 0
+        
+        # Apply asset type filtering if it's a function
+        if callable(self.asset_type_filter):
+            assets = [asset for asset in assets if self.asset_type_filter(asset)]
+        
+        # Create a lookup dictionary for faster access
+        asset_by_id = {}
+        for asset in assets:
+            # Get the ID field value
+            id_value = asset.get(self.asset_id_field)
+            if id_value is not None:  # Check if the ID exists
+                # Ensure the key is always a string
+                id_str = str(id_value)
+                asset_by_id[id_str] = asset
+            else:
+                # Log if an asset is missing the ID
+                self.logger.debug(f"Found asset missing '{self.asset_id_field}': {asset.get('id', 'Unknown ID')}")
+        
+        # Process each asset and update the mapping
+        updated_count = 0
+        
+        # Check for assets in mapping that are not in downloaded assets
+        if not target_ids:
+            removed_count = 0
+            for id_value, entry in list(self.mapping.mapping.items()):
+                if id_value not in asset_by_id:
+                    self.logger.warning(f"Asset {id_value} exists in local mapping but not in dataspot. Removing from local mapping.")
+                    if len(entry) >= 2:
+                        _type, uuid = entry[0], entry[1]
+                        self.logger.debug(f"    - _type: {_type}, uuid: {uuid}")
+                    self.mapping.remove_entry(id_value)
+                    removed_count += 1
+            if removed_count > 0:
+                self.logger.info(f"Found {removed_count} assets that exist locally but not in dataspot.")
+        
+        # If we have target IDs, prioritize those
+        if target_ids and len(target_ids) > 0:
+            total_targets = len(target_ids)
+            target_ids.sort()
+            for idx, id_value in enumerate(target_ids, 1):
+                self.logger.debug(f"[{idx}/{total_targets}] Processing asset with ID: {id_value}")
+                
+                # Find this ID in our downloaded assets
+                asset = asset_by_id.get(id_value)
+                if not asset:
+                    self.logger.warning(f"Could not find asset with ID {id_value} in downloaded data, skipping")
+                    continue
+                
+                # Get the UUID and _type
+                uuid = asset.get('id')
+                _type = asset.get('_type')
+                if not uuid:
+                    self.logger.warning(f"Asset with ID {id_value} missing UUID, skipping")
+                    continue
+                if not _type:
+                    self.logger.warning(f"Asset with ID {id_value} missing _type, skipping")
+                    continue
+                
+                # Extract inCollection business key directly from the downloaded asset
+                inCollection_key = asset.get('inCollection')
+                
+                if uuid and _type:
+                    # Check if the mapping has changed before updating
+                    existing_entry = self.mapping.get_entry(id_value)
+                    # Existing entry tuple: (_type, uuid, inCollection)
+                    if (existing_entry and
+                            existing_entry[0] == _type and
+                            existing_entry[1] == uuid and
+                            existing_entry[2] == inCollection_key):
+                        self.logger.debug(f"No changes in asset {id_value}. Skipping")
+                        self.logger.debug(f"    - _type: {_type}, uuid: {uuid}, inCollection: {inCollection_key}")
+                    elif existing_entry:
+                        old_type = existing_entry[0] if len(existing_entry) > 0 else None
+                        old_uuid = existing_entry[1] if len(existing_entry) > 1 else None
+                        old_inCollection = existing_entry[2] if len(existing_entry) > 2 else None
+
+                        # Only log UUID update warning if the UUID actually changed
+                        if old_uuid != uuid:
+                            self.logger.warning(f"Update asset {id_value} uuid from {old_uuid} to {uuid}")
+                        else:
+                            self.logger.info(f"Updating asset {id_value} metadata")
+
+                        # Log changes in type if they occur
+                        if old_type != _type:
+                            self.logger.warning(f"Asset {id_value} type changed from '{old_type}' to '{_type}'")
+
+                        # Log a more meaningful message if inCollection has changed
+                        if old_inCollection != inCollection_key and old_inCollection and inCollection_key:
+                            self.logger.info(f"Asset {id_value} has been moved from '{old_inCollection}' to '{inCollection_key}'")
+                        elif not old_inCollection and inCollection_key:
+                            self.logger.info(f"Asset {id_value} has been placed in '{inCollection_key}'")
+                        elif old_inCollection and not inCollection_key:
+                            self.logger.info(f"Asset {id_value} has been removed from '{old_inCollection}'")
+                        
+                        self.logger.debug(f"    - old_type: {old_type}, old_uuid: {old_uuid}, old_inCollection: {old_inCollection}")
+                        self.logger.debug(f"    - new_type: {_type}, new_uuid: {uuid}, new_inCollection: {inCollection_key}")
+                        self.mapping.add_entry(id_value, _type, uuid, inCollection_key)
+                        updated_count += 1
+                    else:
+                        self.logger.debug(f"Add asset {id_value} with uuid {uuid}")
+                        self.logger.debug(f"    - _type: {_type}, uuid: {uuid}, inCollection: {inCollection_key}")
+                        self.mapping.add_entry(id_value, _type, uuid, inCollection_key)
+                        updated_count += 1
+                else:
+                    self.logger.warning(f"Missing UUID or _type for asset with ID: {id_value}")
+        else:
+            # No target IDs, process all assets
+            total_assets = len(assets)
+            for idx, asset in enumerate(assets, 1):
+                # Extract the ID from the asset
+                id_value_raw = asset.get(self.asset_id_field)
+                
+                # Skip if this asset doesn't have the required ID
+                if id_value_raw is None:
+                    continue
+                
+                # Ensure we use the string version for lookup/processing
+                id_value = str(id_value_raw)
+                
+                self.logger.debug(f"[{idx}/{total_assets}] Processing asset with ID: {id_value}")
+                
+                # Get the UUID and _type
+                uuid = asset.get('id')
+                _type = asset.get('_type')
+                if not uuid:
+                    self.logger.warning(f"Asset with ID {id_value} missing UUID, skipping")
+                    continue
+                if not _type:
+                    self.logger.warning(f"Asset with ID {id_value} missing _type, skipping")
+                    continue
+
+                # Extract inCollection business key directly from the downloaded asset
+                inCollection_key = asset.get('inCollection')
+                
+                if uuid and _type:
+                    # Check if the mapping has changed before updating
+                    existing_entry = self.mapping.get_entry(id_value)
+                    # Existing entry tuple: (_type, uuid, inCollection)
+                    if (existing_entry and
+                            existing_entry[0] == _type and
+                            existing_entry[1] == uuid and
+                            existing_entry[2] == inCollection_key):
+                        self.logger.debug(f"No changes in asset {id_value}. Skipping")
+                        self.logger.debug(f"    - _type: {_type}, uuid: {uuid}, inCollection: {inCollection_key}")
+                    elif existing_entry:
+                        old_type = existing_entry[0] if len(existing_entry) > 0 else None
+                        old_uuid = existing_entry[1] if len(existing_entry) > 1 else None
+                        old_inCollection = existing_entry[2] if len(existing_entry) > 2 else None
+
+                        # Only log UUID update warning if the UUID actually changed
+                        if old_uuid != uuid:
+                            self.logger.warning(f"Update asset {id_value} uuid from {old_uuid} to {uuid}")
+                        else:
+                            self.logger.info(f"Updating asset {id_value} metadata")
+
+                        # Log changes in type if they occur
+                        if old_type != _type:
+                            self.logger.warning(f"Asset {id_value} type changed from '{old_type}' to '{_type}'")
+
+                        # Log a more meaningful message if inCollection has changed
+                        if old_inCollection != inCollection_key and old_inCollection and inCollection_key:
+                            self.logger.info(f"Asset {id_value} has been moved from '{old_inCollection}' to '{inCollection_key}'")
+                        elif not old_inCollection and inCollection_key:
+                            self.logger.info(f"Asset {id_value} has been placed in '{inCollection_key}'")
+                        elif old_inCollection and not inCollection_key:
+                            self.logger.info(f"Asset {id_value} has been removed from '{old_inCollection}'")
+                        
+                        self.mapping.add_entry(id_value, _type, uuid, inCollection_key)
+                        updated_count += 1
+                    else:
+                        self.logger.debug(f"Add asset {id_value} with uuid {uuid}")
+                        self.mapping.add_entry(id_value, _type, uuid, inCollection_key)
+                        updated_count += 1
+                else:
+                    self.logger.warning(f"Missing UUID or _type for asset with ID: {id_value}")
+        
+        self.logger.info(f"Updated mappings for {updated_count} assets. Did not update mappings for the other {len(assets) - updated_count} assets.")
+        return updated_count
     
     def update_mappings_from_upload(self, ids: List[str]) -> None:
         """
