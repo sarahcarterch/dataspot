@@ -1,10 +1,8 @@
 import logging
-from typing import List, Dict, Any, Optional, Tuple, Callable
+from typing import List, Dict, Any
 
-from src import config
 from src.clients.base_client import BaseDataspotClient
 from src.mapping_handlers.base_dataspot_mapping import BaseDataspotMapping
-from src.clients.helpers import url_join, get_uuid_from_response
 
 
 class BaseDataspotHandler:

@@ -229,12 +229,12 @@ classDiagram
     DatasetHandler --|> BaseDataspotHandler : extends
     OrgStructureHandler --|> BaseDataspotHandler : extends
     OrgStructureHandler ..> OrgUnitChange : uses
-    DatasetHandler o-- DatasetMapping : uses
-    OrgStructureHandler o-- OrgStructureMapping : uses
     
     %% Mapping relationships
     BaseDataspotMapping <|-- DatasetMapping : extends
     BaseDataspotMapping <|-- OrgStructureMapping : extends
+    DatasetHandler *-- DatasetMapping : contains
+    OrgStructureHandler *-- OrgStructureMapping : contains
     
     %% Helper relationships
     BaseDataspotClient ..> helpers : uses
@@ -254,8 +254,8 @@ classDiagram
 
 3. **Handlers**:
    - **BaseDataspotHandler**: Base class for handlers that manage different types of assets in Dataspot.
-   - **DatasetHandler**: Extends `BaseDataspotHandler` to handle dataset synchronization operations.
-   - **OrgStructureHandler**: Extends `BaseDataspotHandler` to handle organizational unit synchronization operations.
+   - **DatasetHandler**: Extends `BaseDataspotHandler` to handle dataset synchronization operations. Contains the `DatasetMapping` class for managing ODS ID to Dataspot UUID mappings.
+   - **OrgStructureHandler**: Extends `BaseDataspotHandler` to handle organizational unit synchronization operations. Contains the `OrgStructureMapping` class for managing Staatskalender ID to Dataspot UUID mappings.
    - **OrgUnitChange**: Data class used by OrgStructureHandler to track changes to organizational units.
 
 4. **Data Models**:
@@ -265,8 +265,8 @@ classDiagram
 
 5. **Mapping**:
    - **BaseDataspotMapping**: Base class providing mapping functionality for external IDs to Dataspot UUIDs.
-   - **DatasetMapping**: Extends BaseDataspotMapping to specifically map ODS dataset IDs to Dataspot UUIDs.
-   - **OrgStructureMapping**: Extends BaseDataspotMapping to map Staatskalender organization IDs to Dataspot UUIDs.
+   - **DatasetMapping**: Extends BaseDataspotMapping to specifically map ODS dataset IDs to Dataspot UUIDs. Contained within the `DatasetHandler` file.
+   - **OrgStructureMapping**: Extends BaseDataspotMapping to map Staatskalender organization IDs to Dataspot UUIDs. Contained within the `OrgStructureHandler` file.
 
 6. **HTTP Utilities**:
    - **common**: Module providing standardized HTTP request functions with consistent error handling.
@@ -281,7 +281,7 @@ classDiagram
 1. **Dataset Synchronization**:
    - The process begins with fetching dataset metadata from OpenDataSoft using ODSClient.
    - This metadata is transformed into Dataspot's format using functions in the dataset_transformer module.
-   - The DNKClient delegates operations to DatasetHandler, which uses DatasetMapping to track relationships between systems.
+   - The DNKClient delegates operations to DatasetHandler, which uses its internal DatasetMapping to track relationships between systems.
    - DatasetHandler creates, updates, or deletes datasets in Dataspot's DNK, with each operation requiring authentication via DataspotAuth.
    - For bulk operations, multiple datasets can be processed in a single API call.
 
@@ -289,7 +289,7 @@ classDiagram
    - Organization data is retrieved from OpenDataSoft via ODSClient.
    - DNKClient delegates operations to OrgStructureHandler, which transforms the flat organization data into a hierarchical structure.
    - The hierarchical data is uploaded to Dataspot level by level to preserve parent-child relationships.
-   - OrgStructureMapping is used to track the mapping between Staatskalender IDs and Dataspot UUIDs.
+   - OrgStructureHandler uses its internal OrgStructureMapping to track the mapping between Staatskalender IDs and Dataspot UUIDs.
    - OrgUnitChange instances track creations, updates, and deletions of organizational units during synchronization.
 
 This architecture enables synchronization of both datasets and organizational units between OpenDataSoft and Dataspot while maintaining mappings between the systems.

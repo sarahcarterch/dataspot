@@ -1,7 +1,7 @@
 import os
 import unittest
 import uuid
-from src.mapping_handlers.dataset_mapping import DatasetMapping
+from src.mapping_handlers.dataset_handler import DatasetMapping
 
 
 class TestODSDataspotMapping(unittest.TestCase):

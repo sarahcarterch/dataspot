@@ -1,13 +1,33 @@
 import logging
-from typing import Dict, Any, List, Callable
+from typing import Dict, Any, List
 from dataclasses import dataclass
 
 from src import config
 from src.clients.base_client import BaseDataspotClient
 from src.clients.helpers import url_join, escape_special_chars
 from src.mapping_handlers.base_dataspot_handler import BaseDataspotHandler
-from src.mapping_handlers.org_structure_mapping import OrgStructureMapping
+from src.mapping_handlers.base_dataspot_mapping import BaseDataspotMapping
 from src.common import requests_get
+
+
+class OrgStructureMapping(BaseDataspotMapping):
+    """
+    A lookup table that maps Staatskalender IDs to Dataspot asset type, UUID, and optionally inCollection.
+    Stores the mapping in a CSV file for persistence. Handles organizational units.
+    The REST endpoint is constructed dynamically.
+    """
+
+    def __init__(self, database_name: str, scheme: str):
+        """
+        Initialize the mapping table for organizational units.
+        The CSV filename is derived from the database_name and scheme.
+
+        Args:
+            database_name (str): Name of the database to use for file naming.
+                                 Example: "feature-staatskalender_DNK_staatskalender-dataspot-mapping.csv"
+            scheme (str): Name of the scheme (e.g., 'DNK', 'TDM')
+        """
+        super().__init__(database_name, "staatskalender_id", "staatskalender-dataspot", scheme)
 
 
 @dataclass
