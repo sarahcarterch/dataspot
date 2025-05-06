@@ -22,7 +22,6 @@ class BaseDataspotMapping:
             file_prefix (str): Prefix for the mapping file (e.g., 'ods-dataspot', 'staatskalender-dataspot')
             scheme (str): Name of the scheme (e.g., 'DNK', 'TDM')
         """
-        self.logger = logging.getLogger(__name__)
         self._id_field_name = id_field_name
         self._file_prefix = file_prefix
         self._scheme = scheme
@@ -37,7 +36,7 @@ class BaseDataspotMapping:
 
         # Derive csv_file_path from the mandatory database_name and scheme
         self.csv_file_path = self._get_mapping_file_path(database_name, scheme)
-        self.logger.info(f"Using mapping file: {self.csv_file_path}")
+        logging.info(f"Using mapping file: {self.csv_file_path}")
 
         # Mapping: Dict[str, Tuple[str, str, Optional[str]]] -> Dict[external_id, (_type, uuid, inCollection)]
         self.mapping: Dict[str, Tuple[str, str, Optional[str]]] = {}
@@ -66,7 +65,7 @@ class BaseDataspotMapping:
                     writer = csv.writer(csvfile)
                     writer.writerow(self.csv_headers)  # Use defined headers
             except (IOError, PermissionError) as e:
-                self.logger.warning(f"Could not create mapping file: %s", str(e))
+                logging.warning(f"Could not create mapping file: %s", str(e))
             return
 
         try:
@@ -74,7 +73,7 @@ class BaseDataspotMapping:
                 reader = csv.DictReader(csvfile)
                 # Check headers
                 if reader.fieldnames != self.csv_headers:
-                    self.logger.warning(f"CSV file header mismatch in {self.csv_file_path}. "
+                    logging.warning(f"CSV file header mismatch in {self.csv_file_path}. "
                                         f"Expected: {self.csv_headers}, Found: {reader.fieldnames}. "
                                         f"Attempting to load anyway, but data might be misinterpreted or fail.")
 
@@ -84,7 +83,7 @@ class BaseDataspotMapping:
                     # 'inCollection' is optional in the data, but the column must exist
                     required_fields = [self.id_field_name, '_type', 'uuid']
                     if not all(h in row for h in required_fields):
-                        self.logger.warning(f"Skipping row due to missing required columns ({', '.join(required_fields)}): {row}")
+                        logging.warning(f"Skipping row due to missing required columns ({', '.join(required_fields)}): {row}")
                         continue
 
                     external_id = row[self.id_field_name]
@@ -98,11 +97,11 @@ class BaseDataspotMapping:
                     self.mapping[external_id] = (_type, uuid_val, inCollection)
 
         except (IOError, PermissionError) as e:
-            self.logger.warning(f"Could not read mapping file: %s", str(e))
+            logging.warning(f"Could not read mapping file: %s", str(e))
         except KeyError as e:
-            self.logger.warning(f"Missing expected column '{e}' while parsing row in {self.csv_file_path}. Check header format.")
+            logging.warning(f"Missing expected column '{e}' while parsing row in {self.csv_file_path}. Check header format.")
         except Exception as e:
-            self.logger.warning(f"Error parsing mapping file: %s", str(e))
+            logging.warning(f"Error parsing mapping file: %s", str(e))
 
     def _save_mapping(self) -> None:
         """Save the current mapping to the CSV file."""
@@ -116,7 +115,7 @@ class BaseDataspotMapping:
                     # Ensure inCollection is written as empty string if None
                     writer.writerow([external_id, _type, uuid_val, inCollection or ''])
         except (IOError, PermissionError) as e:
-            self.logger.warning(f"Could not write to mapping file: %s", str(e))
+            logging.warning(f"Could not write to mapping file: %s", str(e))
 
     def _is_valid_uuid(self, uuid_str: str) -> bool:
         """
@@ -170,15 +169,15 @@ class BaseDataspotMapping:
             empty_params.append("uuid_str")
 
         if empty_params:
-            self.logger.warning("Cannot add entry with empty values for: %s", ", ".join(empty_params))
-            self.logger.warning("Provided values - %s: '%s', _type: '%s', uuid_str: '%s'",
+            logging.warning("Cannot add entry with empty values for: %s", ", ".join(empty_params))
+            logging.warning("Provided values - %s: '%s', _type: '%s', uuid_str: '%s'",
                                self.id_field_name, external_id, _type, uuid_str)
             return False
 
         # Validate UUID format
         if not self._is_valid_uuid(uuid_str):
-            self.logger.warning("Invalid UUID format: '%s' for %s '%s'", uuid_str, self.id_field_name, external_id)
-            self.logger.warning("UUID must match the format: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' (8-4-4-4-12 hex digits)")
+            logging.warning("Invalid UUID format: '%s' for %s '%s'", uuid_str, self.id_field_name, external_id)
+            logging.warning("UUID must match the format: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' (8-4-4-4-12 hex digits)")
             return False
 
         # Store the entry including _type

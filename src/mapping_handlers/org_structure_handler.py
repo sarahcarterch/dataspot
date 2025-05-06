@@ -61,7 +61,7 @@ class OrgStructureHandler(BaseDataspotHandler):
         download_path = f"/api/{self.database_name}/schemes/{self.scheme_name}/download?format=JSON"
         full_url = url_join(self.client.base_url, download_path)
         
-        self.logger.debug(f"Downloading collections from: {full_url}")
+        logging.debug(f"Downloading collections from: {full_url}")
         response = requests_get(full_url, headers=self.client.auth.get_headers())
         response.raise_for_status()
         
@@ -75,8 +75,8 @@ class OrgStructureHandler(BaseDataspotHandler):
         else:
             # We might have received a job ID instead
             error_msg = f"Received unexpected response format from {full_url}. Expected a list of items."
-            self.logger.error(error_msg)
-            self.logger.debug(f"Response content: {all_items}")
+            logging.error(error_msg)
+            logging.debug(f"Response content: {all_items}")
             raise ValueError(f"Unexpected response format from download API. Expected a list but got: {type(all_items)}")
     
     def get_validated_staatskalender_url(self, title: str, url_website: str, validate_url: bool = False) -> str:
