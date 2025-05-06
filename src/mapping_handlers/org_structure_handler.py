@@ -913,21 +913,28 @@ class OrgStructureHandler(BaseDataspotHandler):
                 
                 logging.info(f"Updating org unit '{change.title}' (ID: {change.staatskalender_id})")
                 
-                # Prepare update data
-                update_data = change.details.get("current_unit", {}).copy()
+                # Create minimal update data with only necessary fields
+                update_data = {
+                    "_type": "Collection",
+                    "stereotype": "Organisationseinheit"
+                }
                 
                 # Apply changes
                 for field, change_info in change.details.get("changes", {}).items():
                     if field == "customProperties":
-                        # For customProperties, we need to merge with existing
+                        # For customProperties, only include what's changed
                         if "customProperties" not in update_data:
                             update_data["customProperties"] = {}
                         
                         for prop, prop_change in change_info.items():
                             update_data["customProperties"][prop] = prop_change["new"]
                     else:
-                        # For simple fields, just update directly
+                        # For simple fields, only include what's changed
                         update_data[field] = change_info["new"]
+                
+                # Add id_im_staatskalender if not already included in the changes
+                if "id_im_staatskalender" not in update_data:
+                    update_data["id_im_staatskalender"] = change.staatskalender_id
                 
                 # If we're updating the URL, validate it if requested
                 if validate_urls and "customProperties" in update_data and "link_zum_staatskalender" in update_data["customProperties"]:
@@ -935,8 +942,8 @@ class OrgStructureHandler(BaseDataspotHandler):
                     validated_url = self.get_validated_staatskalender_url(change.title, url, validate_url=True)
                     update_data["customProperties"]["link_zum_staatskalender"] = validated_url
                 
-                # Update the asset
-                self.client._update_asset(endpoint, update_data, replace=True)
+                # Update the asset - using replace=False to only update provided fields
+                self.client._update_asset(endpoint, update_data, replace=False)
                 stats["updated"] += 1
                 
             except Exception as e:
