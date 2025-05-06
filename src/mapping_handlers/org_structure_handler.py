@@ -32,11 +32,11 @@ class OrgStructureHandler(BaseDataspotHandler):
         Args:
             client: BaseDataspotClient instance to use for API operations
         """
-        # Initialize the organization mapping
-        self.org_mapping = OrgStructureMapping(database_name=client.database_name, scheme=client.scheme_name_short)
+        # Call parent's __init__ method first
+        super().__init__(client)
         
-        # Call parent's __init__ method
-        super().__init__(client, self.org_mapping)
+        # Initialize the organization mapping
+        self.mapping = OrgStructureMapping(database_name=client.database_name, scheme=client.scheme_name_short)
         
         # Set the download method for the base handler
         self.download_method = self._download_organizational_units
@@ -924,7 +924,7 @@ class OrgStructureHandler(BaseDataspotHandler):
                 stats["deleted"] += 1
                 
                 # Remove from mapping
-                self.org_mapping.remove_entry(change.staatskalender_id)
+                self.mapping.remove_entry(change.staatskalender_id)
                 
             except Exception as e:
                 logging.error(f"Error deleting org unit '{change.title}' (ID: {change.staatskalender_id}): {str(e)}")

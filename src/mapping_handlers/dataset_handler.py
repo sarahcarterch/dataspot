@@ -26,11 +26,11 @@ class DatasetHandler(BaseDataspotHandler):
         Args:
             client: BaseDataspotClient instance to use for API operations
         """
-        # Initialize the dataset mapping
-        self.ods_dataset_mapping = DatasetMapping(database_name=client.database_name, scheme=client.scheme_name_short)
+        # Call parent's __init__ method first
+        super().__init__(client)
         
-        # Call parent's __init__ method
-        super().__init__(client, self.ods_dataset_mapping)
+        # Initialize the dataset mapping
+        self.mapping = DatasetMapping(database_name=client.database_name, scheme=client.scheme_name_short)
         
         # Store ODS imports collection name
         self.ods_imports_collection_name = client.ods_imports_collection_name
@@ -78,7 +78,7 @@ class DatasetHandler(BaseDataspotHandler):
         Returns:
             List[str]: A list of all ODS IDs
         """
-        return self.ods_dataset_mapping.get_all_ods_ids()
+        return self.mapping.get_all_ods_ids()
 
     def update_mappings_from_upload(self, ods_ids: List[str]) -> None:
         """
@@ -172,7 +172,7 @@ class DatasetHandler(BaseDataspotHandler):
                 logging.debug(f"Processing dataset '{title}' with ODS ID: {ods_id}")
                 
                 # Check if this dataset has a stored inCollection (business key)
-                inCollection = self.ods_dataset_mapping.get_inCollection(ods_id)
+                inCollection = self.mapping.get_inCollection(ods_id)
                 
                 if inCollection:
                     # Use the stored inCollection business key
@@ -287,7 +287,7 @@ class DatasetHandler(BaseDataspotHandler):
             raise ValueError("Dataset must have an 'ODS_ID' property to use as ODS ID")
         
         # Check if dataset with this ODS ID already exists
-        existing_entry = self.ods_dataset_mapping.get_entry(ods_id)
+        existing_entry = self.mapping.get_entry(ods_id)
         if existing_entry:
             # Entry is now (_type, uuid, inCollection)
             _type, uuid, _ = existing_entry
@@ -353,7 +353,7 @@ class DatasetHandler(BaseDataspotHandler):
                 # For newly created datasets, store the ODS-Imports collection name as the business key
                 # The _type for datasets created here is always "Dataset"
                 logging.debug(f"Adding mapping entry for ODS ID {ods_id} with Type 'Dataset', UUID {uuid}, and inCollection '{self.ods_imports_collection_name}'")
-                self.ods_dataset_mapping.add_entry(ods_id, "Dataset", uuid, self.ods_imports_collection_name)
+                self.mapping.add_entry(ods_id, "Dataset", uuid, self.ods_imports_collection_name)
             else:
                 logging.warning(f"Could not extract UUID from response for dataset '{title}'")
         
@@ -388,7 +388,7 @@ class DatasetHandler(BaseDataspotHandler):
         logging.info(f"Updating dataset: '{title}' with ODS ID: {ods_id}")
         
         # Get the inCollection from mapping if available (this is now a business key)
-        inCollection = self.ods_dataset_mapping.get_inCollection(ods_id)
+        inCollection = self.mapping.get_inCollection(ods_id)
         
         # Set inCollection in the dataset JSON
         dataset_json = dataset.to_json()
@@ -434,7 +434,7 @@ class DatasetHandler(BaseDataspotHandler):
                 # Use the determined inCollection value (either from mapping or default)
                 final_inCollection = dataset_json.get('inCollection')
                 logging.debug(f"Updating mapping for ODS ID {ods_id} with Type 'Dataset', UUID {uuid}, inCollection {final_inCollection}")
-                self.ods_dataset_mapping.add_entry(ods_id, "Dataset", uuid, final_inCollection)
+                self.mapping.add_entry(ods_id, "Dataset", uuid, final_inCollection)
             else:
                 logging.warning(f"Could not extract UUID from response for dataset '{title}'")
         
@@ -498,7 +498,7 @@ class DatasetHandler(BaseDataspotHandler):
         
         # Check mapping for existing entry
         logging.debug(f"Checking if dataset with ODS ID {ods_id} exists in mapping")
-        entry = self.ods_dataset_mapping.get_entry(ods_id)
+        entry = self.mapping.get_entry(ods_id)
         if entry:
             dataset_exists = True
             # Build the API href from the UUID (which is the second item in the entry tuple)
@@ -513,7 +513,7 @@ class DatasetHandler(BaseDataspotHandler):
                 # Dataset doesn't exist at the expected location
                 logging.warning(f"Dataset no longer exists at {href}, removing from mapping")
                 dataset_exists = False
-                self.ods_dataset_mapping.remove_entry(ods_id)
+                self.mapping.remove_entry(ods_id)
         
         # Handle according to update strategy
         if dataset_exists:
@@ -553,7 +553,7 @@ class DatasetHandler(BaseDataspotHandler):
             HTTPError: If API requests fail
         """
         # Check if the dataset exists in the mapping
-        entry = self.ods_dataset_mapping.get_entry(ods_id)
+        entry = self.mapping.get_entry(ods_id)
         
         if not entry:
             if fail_if_not_exists:
@@ -570,6 +570,6 @@ class DatasetHandler(BaseDataspotHandler):
         self.client._delete_asset(href)
         
         # Remove entry from mapping
-        self.ods_dataset_mapping.remove_entry(ods_id)
+        self.mapping.remove_entry(ods_id)
         
         return True 

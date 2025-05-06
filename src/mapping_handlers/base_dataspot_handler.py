@@ -17,19 +17,16 @@ class BaseDataspotHandler:
     asset_type_filter = None  # Filter function or criteria for asset type
     download_method = None  # Method to use for downloading assets
     
-    # mapping: BaseDataspotMapping # TODO: Probably use this, and remove the init method.
-    
-    # TODO (large language model): Remove the mapping parameter and use the mapping attribute instead. Implement the entire init in the subclasses.
-    def __init__(self, client: BaseDataspotClient, mapping: BaseDataspotMapping):
+    mapping: BaseDataspotMapping
+
+    def __init__(self, client: BaseDataspotClient):
         """
         Initialize the base handler.
         
         Args:
             client: BaseDataspotClient instance to use for API operations
-            mapping: BaseDataspotMapping instance to use for ID-to-UUID mappings
         """
         self.client = client
-        self.mapping = mapping
         
         # Load common properties from client
         self.database_name = client.database_name
