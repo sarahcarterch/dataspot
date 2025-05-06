@@ -269,7 +269,7 @@ class TestODSDataspotMapping(unittest.TestCase):
         self.assertEqual(all_entries["ods-2"], (self.test_type, uuid2, inColl2))
         self.assertEqual(all_entries["ods-3"], (self.test_type, uuid3, None))
     
-    def test_get_all_ods_ids(self):
+    def test_get_all_ids(self):
         # Add multiple entries
         uuid1 = "caeb7cb4-3279-46c5-b7cc-19e0c58d7031"
         uuid2 = "caeb7cb4-3279-46c5-b7cc-19e0c58d7032"
@@ -278,8 +278,8 @@ class TestODSDataspotMapping(unittest.TestCase):
         self.mapping.add_entry("ods-a", self.test_type, uuid1, inColl1)
         self.mapping.add_entry("ods-b", self.test_type, uuid2)
         
-        # Get all ODS IDs
-        all_ids = self.mapping.get_all_ods_ids()
+        # Get all IDs directly using the base method
+        all_ids = self.mapping.get_all_ids()
         
         # Check IDs
         self.assertEqual(len(all_ids), 2)
