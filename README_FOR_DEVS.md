@@ -20,8 +20,6 @@ classDiagram
 
     %% Base Client
     class BaseDataspotClient {
-        <<abstract>>
-        -auth: DataspotAuth
         -base_url: str
         -database_name: str
         -scheme_name: str
@@ -66,17 +64,20 @@ classDiagram
         -scheme_name: str
         -scheme_name_short: str
         -logger: Logger
-        +_download_and_update_mappings()*
+        -asset_id_field: str
+        -asset_type_filter: function
+        +_download_and_update_mappings()
         +update_mappings_from_upload()
         +bulk_create_or_update_assets()
         +get_all_external_ids()
     }
     
     class DatasetHandler {
-        -ods_dataset_mapping: DatasetMapping
+        -mapping: DatasetMapping
         -ods_imports_collection_name: str
+        -asset_id_field: str
+        -asset_type_filter: function
         +sync_datasets()
-        +_download_and_update_mappings()
         +get_all_ods_ids()
         +update_mappings_from_upload()
         +bulk_create_or_update_datasets()
@@ -86,16 +87,24 @@ classDiagram
         +delete_dataset()
     }
     
+    class OrgUnitChange {
+        +staatskalender_id: str
+        +title: str
+        +change_type: str
+        +details: Dict
+    }
+    
     class OrgStructureHandler {
-        -org_mapping: OrgStructureMapping
+        -mapping: OrgStructureMapping
+        -asset_id_field: str
+        -asset_type_filter: function
         +sync_org_units()
-        +_download_and_update_mappings()
+        +get_validated_staatskalender_url()
         +update_staatskalender_mappings_from_upload()
         +get_all_staatskalender_ids()
-        +build_organization_hierarchy_from_ods_bulk()
         +transform_organization_for_bulk_upload()
+        +build_organization_hierarchy_from_ods_bulk()
         +bulk_create_or_update_organizational_units()
-        +get_validated_staatskalender_url()
         -_sync_staatskalender_org_units()
         -_transform_org_data_to_layers()
         -_fetch_current_org_units()
@@ -130,10 +139,16 @@ classDiagram
     }
 
     class DatasetMapping {
+        -_id_field_name: str
+        -_file_prefix: str
+        -_scheme: str
         +get_all_ods_ids()
     }
 
     class OrgStructureMapping {
+        -_id_field_name: str
+        -_file_prefix: str
+        -_scheme: str
         +get_all_staatskalender_ids()
     }
     
@@ -146,6 +161,7 @@ classDiagram
     }
 
     class BasicDataset {
+        +kurzbeschreibung: str
         +beschreibung: str
         +schluesselwoerter: List[str]
         +aktualisierungszyklus: str
@@ -163,7 +179,16 @@ classDiagram
         +stereotype: str
     }
 
-    %% HTTP Request Function Modules
+    %% Helper Functions
+    class helpers {
+        <<module>>
+        +url_join()
+        +get_uuid_from_response()
+        +escape_special_chars()
+        +generate_potential_staatskalender_url()
+    }
+
+    %% HTTP Utilities
     class common {
         <<module>>
         +requests_get()
@@ -177,15 +202,6 @@ classDiagram
     class retry {
         <<function>>
         +retry(ExceptionToCheck, tries, delay, backoff, logger)
-    }
-
-    %% Helper Function Module
-    class helpers {
-        <<module>>
-        +url_join()
-        +get_uuid_from_response()
-        +escape_special_chars()
-        +generate_potential_staatskalender_url()
     }
 
     %% Transformer Function Module
@@ -217,6 +233,7 @@ classDiagram
     BaseDataspotHandler o-- BaseDataspotMapping : uses
     DatasetHandler --|> BaseDataspotHandler : extends
     OrgStructureHandler --|> BaseDataspotHandler : extends
+    OrgStructureHandler ..> OrgUnitChange : uses
     DatasetHandler o-- DatasetMapping : uses
     OrgStructureHandler o-- OrgStructureMapping : uses
     
@@ -236,14 +253,15 @@ classDiagram
 1. **Authentication (DataspotAuth)**: Handles OAuth token management for Dataspot API access.
 
 2. **Clients**:
-   - **BaseDataspotClient**: Abstract base class providing common functionality for Dataspot API interaction.
+   - **BaseDataspotClient**: Base class providing common functionality for Dataspot API interaction.
    - **DNKClient**: Extends `BaseDataspotClient` to specifically work with the Datennutzungskatalog (DNK). Delegates handling to specialized handlers.
    - **ODSClient**: Interfaces with the OpenDataSoft API to retrieve dataset and organization information.
 
 3. **Handlers**:
-   - **BaseDataspotHandler**: Abstract base class for handlers that manage different types of assets in Dataspot.
+   - **BaseDataspotHandler**: Base class for handlers that manage different types of assets in Dataspot.
    - **DatasetHandler**: Extends `BaseDataspotHandler` to handle dataset synchronization operations.
    - **OrgStructureHandler**: Extends `BaseDataspotHandler` to handle organizational unit synchronization operations.
+   - **OrgUnitChange**: Data class used by OrgStructureHandler to track changes to organizational units.
 
 4. **Data Models**:
    - **Dataset**: Abstract base class for all dataset types.
@@ -277,6 +295,7 @@ classDiagram
    - DNKClient delegates operations to OrgStructureHandler, which transforms the flat organization data into a hierarchical structure.
    - The hierarchical data is uploaded to Dataspot level by level to preserve parent-child relationships.
    - OrgStructureMapping is used to track the mapping between Staatskalender IDs and Dataspot UUIDs.
+   - OrgUnitChange instances track creations, updates, and deletions of organizational units during synchronization.
 
 This architecture enables synchronization of both datasets and organizational units between OpenDataSoft and Dataspot while maintaining mappings between the systems.
 
