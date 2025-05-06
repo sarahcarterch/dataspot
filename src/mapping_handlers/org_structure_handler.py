@@ -835,7 +835,8 @@ class OrgStructureHandler(BaseDataspotHandler):
         
         # Check custom properties - specifically link_zum_staatskalender
         source_url = source_unit.get("customProperties", {}).get("link_zum_staatskalender", "")
-        dataspot_url = dataspot_unit.get("customProperties", {}).get("link_zum_staatskalender", "")
+        # For dataspot_unit, check at root level because Download API returns flat structure
+        dataspot_url = dataspot_unit.get("link_zum_staatskalender", "")
         
         if source_url != dataspot_url:
             if "customProperties" not in changes:
