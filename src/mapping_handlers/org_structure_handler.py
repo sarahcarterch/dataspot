@@ -920,6 +920,11 @@ class OrgStructureHandler(BaseDataspotHandler):
                     "stereotype": "Organisationseinheit"
                 }
                 
+                # Check if there are any changes to apply
+                if not change.details.get("changes"):
+                    logging.debug(f"No changes needed for org unit '{change.title}' (ID: {change.staatskalender_id}), skipping update")
+                    continue
+                
                 # Apply changes
                 for field, change_info in change.details.get("changes", {}).items():
                     if field == "customProperties":
@@ -932,6 +937,16 @@ class OrgStructureHandler(BaseDataspotHandler):
                     else:
                         # For simple fields, only include what's changed
                         update_data[field] = change_info["new"]
+                
+                # If we have an empty customProperties after filtering, remove it
+                if "customProperties" in update_data and not update_data["customProperties"]:
+                    del update_data["customProperties"]
+                    
+                # If nothing changed (only _type is in update_data), skip the update
+                # FIXME: This could have an 'inCollection' field, which is not included in the update_data but unchanged.
+                if len(update_data) == 2:
+                    logging.debug(f"No changes needed for org unit '{change.title}' (ID: {change.staatskalender_id}), skipping update")
+                    continue
                 
                 # For PATCH requests, id_im_staatskalender needs to be in customProperties
                 # This ensures correct placement for the update operation
