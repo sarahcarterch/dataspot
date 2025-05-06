@@ -900,8 +900,21 @@ class OrgStructureHandler(BaseDataspotHandler):
                 logging.error(f"Error deleting org unit '{change.title}' (ID: {change.staatskalender_id}): {str(e)}")
                 stats["errors"] += 1
         
-        # Next, handle updates
-        for change in changes_by_type["update"]:
+        # Process updates one at a time and re-evaluate after each update
+        remaining_updates = changes_by_type["update"].copy()
+        processed_updates = 0
+
+        # Fetch initial data
+        dataspot_units = self._fetch_current_org_units()
+        dataspot_units_by_id = {
+            str(unit.get("id_im_staatskalender")): unit 
+            for unit in dataspot_units
+        }
+        
+        while remaining_updates:
+            # Process one update at a time
+            change = remaining_updates.pop(0)
+            
             try:
                 uuid = change.details.get("uuid")
                 if not uuid:
@@ -942,8 +955,8 @@ class OrgStructureHandler(BaseDataspotHandler):
                 if "customProperties" in update_data and not update_data["customProperties"]:
                     del update_data["customProperties"]
                     
-                # If nothing changed (only _type is in update_data), skip the update
-                # FIXME: This could have an 'inCollection' field, which is not included in the update_data but unchanged.
+                # If nothing changed (only _type and stereotype is in update_data), skip the update
+                # FIXME: This could have an 'inCollection' field, which is not included in the update_data but unchanged. But we also can't just ignore this field, as the inCollection might've actually changed.
                 if len(update_data) == 2:
                     logging.debug(f"No changes needed for org unit '{change.title}' (ID: {change.staatskalender_id}), skipping update")
                     continue
@@ -963,7 +976,52 @@ class OrgStructureHandler(BaseDataspotHandler):
                 
                 # Update the asset
                 self.client._update_asset(endpoint, update_data, replace=False)
+                
+                # Re-fetch data after update to ensure we have the latest state
+                # This is crucial to handle cases where Dataspot automatically updates inCollection paths
+                logging.debug(f"Re-fetching data after updating org unit '{change.title}' to ensure latest state")
+                dataspot_units = self._fetch_current_org_units()
+                dataspot_units_by_id = {
+                    str(unit.get("id_im_staatskalender")): unit 
+                    for unit in dataspot_units
+                }
+
+                # TODO (large language model): We currently update a number that is too big when updating a collection label (inCollection of all children). Probably related to the FIXME above.
                 stats["updated"] += 1
+                processed_updates += 1
+                
+                # Re-evaluate all remaining updates with the latest data
+                if remaining_updates:
+                    new_remaining_updates = []
+                    for remaining_change in remaining_updates:
+                        # Get current data for this unit
+                        current_unit = dataspot_units_by_id.get(remaining_change.staatskalender_id)
+                        if not current_unit:
+                            logging.warning(f"Org unit '{remaining_change.title}' (ID: {remaining_change.staatskalender_id}) no longer exists, skipping update")
+                            continue
+                            
+                        # Re-evaluate changes needed based on current data
+                        source_unit = remaining_change.details.get("source_unit", {})
+                        changes_needed = self._check_for_unit_changes(source_unit, current_unit)
+                        
+                        if changes_needed:
+                            # Create an updated change object with fresh comparison data
+                            new_change = OrgUnitChange(
+                                staatskalender_id=remaining_change.staatskalender_id,
+                                title=remaining_change.title,
+                                change_type="update",
+                                details={
+                                    "uuid": current_unit.get("id"),
+                                    "changes": changes_needed,
+                                    "source_unit": source_unit,
+                                    "current_unit": current_unit
+                                }
+                            )
+                            new_remaining_updates.append(new_change)
+                    
+                    # Update remaining changes list with re-evaluated changes
+                    remaining_updates = new_remaining_updates
+                    logging.debug(f"Re-evaluated remaining changes: {len(remaining_updates)} updates still needed")
                 
             except Exception as e:
                 logging.error(f"Error updating org unit '{change.title}' (ID: {change.staatskalender_id}): {str(e)}")
