@@ -22,75 +22,8 @@ class DNKClient(BaseDataspotClient):
         # Initialize the handlers
         self.org_handler = OrgStructureHandler(self)
         self.dataset_handler = DatasetHandler(self)
-        
-        # Provide direct access to mappings if needed
-        self.org_mapping = self.org_handler.mapping
-        self.ods_dataset_mapping = self.dataset_handler.mapping
 
-    # Organization structure methods
-    def sync_staatskalender_org_units(self, org_data: Dict[str, Any], validate_urls: bool = False) -> Dict[str, Any]:
-        """
-        Synchronize organizational units in Dataspot with data from the Staatskalender ODS API.
-        
-        Args:
-            org_data: Dictionary containing organization data from ODS API
-            validate_urls: Whether to validate Staatskalender URLs
-            
-        Returns:
-            Dict: Summary of the synchronization process
-        """
-        return self.org_handler.sync_staatskalender_org_units(org_data, validate_urls)
-    
-    def build_organization_hierarchy_from_ods_bulk(self, org_data: Dict[str, Any], validate_urls: bool = False) -> dict:
-        """
-        Build organization hierarchy in the DNK based on data from ODS API using bulk upload.
-        
-        Args:
-            org_data: Dictionary containing organization data from ODS API
-            validate_urls: Whether to validate Staatskalender URLs
-            
-        Returns:
-            dict: The response from the final bulk upload with status information
-        """
-        return self.org_handler.build_organization_hierarchy_from_ods_bulk(org_data, validate_urls)
-
-    def bulk_create_or_update_organizational_units(self, organizational_units: List[Dict[str, Any]], 
-                                                 operation: str = "ADD", dry_run: bool = False) -> dict:
-        """
-        Create multiple organizational units in bulk in Dataspot.
-        
-        Args:
-            organizational_units: List of organizational unit data to upload
-            operation: Upload operation mode (ADD, REPLACE, FULL_LOAD)
-            dry_run: Whether to perform a test run without changing data
-            
-        Returns:
-            dict: The JSON response containing the upload results
-        """
-        return self.org_handler.bulk_create_or_update_organizational_units(organizational_units, operation, dry_run)
-
-    def get_all_staatskalender_ids(self) -> List[str]:
-        """
-        Get a list of all Staatskalender IDs in the mapping.
-        
-        Returns:
-            List[str]: A list of all Staatskalender IDs
-        """
-        return self.org_handler.get_all_staatskalender_ids()
-
-    # Dataset methods
-    def update_dataset_mappings(self, target_ods_ids: List[str] = None) -> int:
-        """
-        Download datasets and update ODS ID to Dataspot UUID mappings.
-        
-        Args:
-            target_ods_ids: If provided, only update mappings for these ODS IDs
-            
-        Returns:
-            int: Number of mappings successfully updated
-        """
-        return self.dataset_handler._download_and_update_mappings(target_ods_ids)
-    
+    # Direct API operations for datasets
     def create_dataset(self, dataset: Dataset) -> dict:
         """
         Create a new dataset in the 'Datennutzungskatalog/ODS-Imports' in Dataspot.
@@ -101,7 +34,50 @@ class DNKClient(BaseDataspotClient):
         Returns:
             dict: The JSON response containing the dataset data
         """
-        return self.dataset_handler.create_dataset(dataset)
+        # Ensure ODS-Imports collection exists
+        collection_data = self.ensure_ods_imports_collection_exists()
+        
+        # Create dataset endpoint
+        collection_uuid = collection_data.get('id')
+        if not collection_uuid:
+            raise ValueError("Failed to get collection UUID")
+            
+        # Prepare dataset for upload with proper inCollection value
+        dataset_json = dataset.to_json()
+        dataset_json['inCollection'] = self.ods_imports_collection_name
+        
+        # Create the dataset directly
+        endpoint = f"/rest/{self.database_name}/datasets/{collection_uuid}/datasets"
+        return self._create_asset(endpoint=endpoint, data=dataset_json)
+    
+    def update_dataset(self, dataset: Dataset, uuid: str, force_replace: bool = False) -> dict:
+        """
+        Update an existing dataset in the DNK.
+        
+        Args:
+            dataset: The dataset instance with updated data
+            uuid: The UUID of the dataset to update
+            force_replace: Whether to completely replace the dataset
+            
+        Returns:
+            dict: The JSON response containing the updated dataset data
+        """
+        endpoint = f"/rest/{self.database_name}/datasets/{uuid}"
+        return self._update_asset(endpoint=endpoint, data=dataset.to_json(), replace=force_replace)
+    
+    def delete_dataset(self, uuid: str) -> bool:
+        """
+        Delete a dataset from the DNK.
+        
+        Args:
+            uuid: The UUID of the dataset to delete
+            
+        Returns:
+            bool: True if the dataset was deleted
+        """
+        endpoint = f"/rest/{self.database_name}/datasets/{uuid}"
+        self._delete_asset(endpoint)
+        return True
     
     def bulk_create_or_update_datasets(self, datasets: List[Dataset],
                                       operation: str = "ADD", dry_run: bool = False) -> dict:
@@ -116,64 +92,62 @@ class DNKClient(BaseDataspotClient):
         Returns:
             dict: The JSON response containing the upload results
         """
-        return self.dataset_handler.bulk_create_or_update_datasets(datasets, operation, dry_run)
+        dataset_jsons = [dataset.to_json() for dataset in datasets]
+        
+        # Set inCollection for each dataset
+        for dataset_json in dataset_jsons:
+            dataset_json['inCollection'] = self.ods_imports_collection_name
+            
+        return self.bulk_create_or_update_assets(
+            scheme_name=self.scheme_name,
+            data=dataset_jsons,
+            operation=operation,
+            dry_run=dry_run
+        )
     
-    def update_dataset_mappings_from_upload(self, ods_ids: List[str]) -> None:
+    # Direct API operations for org units
+    def bulk_create_or_update_organizational_units(self, organizational_units: List[Dict[str, Any]], 
+                                                operation: str = "ADD", dry_run: bool = False) -> dict:
         """
-        Update the mapping between ODS IDs and Dataspot UUIDs after uploading datasets.
+        Create multiple organizational units in bulk in Dataspot.
         
         Args:
-            ods_ids: List of ODS IDs to update in the mapping
-        """
-        return self.dataset_handler.update_mappings_from_upload(ods_ids)
-    
-    def update_dataset(self, dataset: Dataset, href: str, force_replace: bool = False) -> dict:
-        """
-        Update an existing dataset in the DNK.
-        
-        Args:
-            dataset: The dataset instance with updated data
-            href: The href of the dataset to update
-            force_replace: Whether to completely replace the dataset
+            organizational_units: List of organizational unit data to upload
+            operation: Upload operation mode (ADD, REPLACE, FULL_LOAD)
+            dry_run: Whether to perform a test run without changing data
             
         Returns:
-            dict: The JSON response containing the updated dataset data
+            dict: The JSON response containing the upload results
         """
-        return self.dataset_handler.update_dataset(dataset, href, force_replace)
+        return self.bulk_create_or_update_assets(
+            scheme_name=self.scheme_name,
+            data=organizational_units,
+            operation=operation,
+            dry_run=dry_run
+        )
     
-    def create_or_update_dataset(self, dataset: Dataset, update_strategy: str = 'create_or_update',
-                                force_replace: bool = False) -> dict:
+    # Synchronization methods delegated to handlers
+    def sync_org_units(self, org_data: Dict[str, Any], validate_urls: bool = False) -> Dict[str, Any]:
         """
-        Create a new dataset or update an existing dataset in Dataspot.
+        Synchronize organizational units in Dataspot with data from the Staatskalender ODS API.
         
         Args:
-            dataset: The dataset instance to be uploaded
-            update_strategy: Strategy for handling dataset existence
-            force_replace: Whether to completely replace an existing dataset
+            org_data: Dictionary containing organization data from ODS API
+            validate_urls: Whether to validate Staatskalender URLs
             
         Returns:
-            dict: The JSON response containing the dataset data
+            Dict: Summary of the synchronization process
         """
-        return self.dataset_handler.create_or_update_dataset(dataset, update_strategy, force_replace)
+        return self.org_handler.sync_org_units(org_data, validate_urls)
     
-    def delete_dataset(self, ods_id: str, fail_if_not_exists: bool = False) -> bool:
+    def sync_datasets(self, target_ods_ids: List[str] = None) -> Dict[str, Any]:
         """
-        Delete a dataset from the DNK.
+        Synchronize datasets between ODS and Dataspot.
         
         Args:
-            ods_id: The ODS ID of the dataset to delete
-            fail_if_not_exists: Whether to raise an error if the dataset doesn't exist
+            target_ods_ids: If provided, only sync mappings for these ODS IDs
             
         Returns:
-            bool: True if the dataset was deleted, False if it didn't exist
+            Dict: Summary of the synchronization process
         """
-        return self.dataset_handler.delete_dataset(ods_id, fail_if_not_exists)
-    
-    def get_all_ods_ids(self) -> List[str]:
-        """
-        Get a list of all ODS IDs in the mapping.
-        
-        Returns:
-            List[str]: A list of all ODS IDs
-        """
-        return self.dataset_handler.get_all_ods_ids()
+        return self.dataset_handler.sync_datasets(target_ods_ids)

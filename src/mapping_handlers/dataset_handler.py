@@ -1,5 +1,5 @@
 import logging
-from typing import List
+from typing import List, Dict, Any
 
 from requests import HTTPError
 
@@ -12,7 +12,10 @@ from src.mapping_handlers.dataset_mapping import DatasetMapping
 
 
 class DatasetHandler(BaseDataspotHandler):
-    """Handler for dataset operations in Dataspot."""
+    """
+    Handler for dataset synchronization operations in Dataspot.
+    Provides methods to sync datasets between ODS and Dataspot.
+    """
     
     def __init__(self, client: BaseDataspotClient):
         """
@@ -30,20 +33,35 @@ class DatasetHandler(BaseDataspotHandler):
         # Store ODS imports collection name
         self.ods_imports_collection_name = client.ods_imports_collection_name
 
+    def sync_datasets(self, target_ods_ids: List[str] = None) -> Dict[str, Any]:
+        """
+        Synchronize datasets between ODS and Dataspot by updating mappings.
+        This is the main public method for dataset synchronization.
+        
+        Args:
+            target_ods_ids: If provided, only sync mappings for these ODS IDs
+            
+        Returns:
+            Dict[str, Any]: Summary of the synchronization process
+        """
+        updated_count = self._download_and_update_mappings(target_ods_ids)
+        
+        return {
+            "status": "success",
+            "message": f"Successfully synchronized {updated_count} datasets",
+            "updated_count": updated_count
+        }
+
     def _download_and_update_mappings(self, target_ods_ids: List[str] = None) -> int:
         """
         Helper method to download datasets and update ODS ID to Dataspot UUID mappings.
         
         Args:
-            target_ods_ids (List[str], optional): If provided, only update mappings for these ODS IDs.
-                                                If None, update all mappings found.
+            target_ods_ids: If provided, only update mappings for these ODS IDs.
+                            If None, update all mappings found.
         
         Returns:
             int: Number of mappings successfully updated
-            
-        Raises:
-            HTTPError: If API requests fail
-            ValueError: If the response format is unexpected or invalid
         """
         datasets = self.client.get_all_assets_from_scheme()
 
@@ -218,6 +236,15 @@ class DatasetHandler(BaseDataspotHandler):
         
         logging.info(f"Updated mappings for {updated_count} datasets. Did not update mappings for the other {len(datasets) - updated_count} datasets.")
         return updated_count
+
+    def get_all_ods_ids(self) -> List[str]:
+        """
+        Get a list of all ODS IDs in the mapping.
+        
+        Returns:
+            List[str]: A list of all ODS IDs
+        """
+        return self.ods_dataset_mapping.get_all_ods_ids()
 
     def update_mappings_from_upload(self, ods_ids: List[str]) -> None:
         """
@@ -397,15 +424,6 @@ class DatasetHandler(BaseDataspotHandler):
             logging.error(f"Unexpected error during bulk upload: {str(e)}")
             raise
     
-    def get_all_ods_ids(self) -> List[str]:
-        """
-        Get a list of all ODS IDs in the mapping.
-        
-        Returns:
-            List[str]: A list of all ODS IDs
-        """
-        return self.get_all_external_ids()
-
     def create_dataset(self, dataset: Dataset) -> dict:
         """
         Create a new dataset in the 'Datennutzungskatalog/ODS-Imports' in Dataspot.

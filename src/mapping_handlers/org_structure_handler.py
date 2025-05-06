@@ -774,9 +774,23 @@ class OrgStructureHandler(BaseDataspotHandler):
             
         return result
 
-    def sync_staatskalender_org_units(self, org_data: Dict[str, Any], validate_urls: bool = False) -> Dict[str, Any]:
+    def sync_org_units(self, org_data: Dict[str, Any], validate_urls: bool = False) -> Dict[str, Any]:
         """
         Synchronize organizational units in Dataspot with data from the Staatskalender ODS API.
+        This is the main public method for organizational unit synchronization.
+        
+        Args:
+            org_data: Dictionary containing organization data from ODS API
+            validate_urls: Whether to validate Staatskalender URLs
+            
+        Returns:
+            Dict: Summary of the synchronization process
+        """
+        return self._sync_staatskalender_org_units(org_data, validate_urls)
+    
+    def _sync_staatskalender_org_units(self, org_data: Dict[str, Any], validate_urls: bool = False) -> Dict[str, Any]:
+        """
+        Internal implementation to synchronize organizational units in Dataspot with data from the Staatskalender ODS API.
         
         This method implements the following algorithm:
         1. Fetch source org data from ODS (Staatskalender)
@@ -788,8 +802,8 @@ class OrgStructureHandler(BaseDataspotHandler):
         7. Generate a summary of changes
         
         Args:
-            org_data (Dict[str, Any]): Dictionary containing organization data from ODS API
-            validate_urls (bool): Whether to validate Staatskalender URLs (can be slow)
+            org_data: Dictionary containing organization data from ODS API
+            validate_urls: Whether to validate Staatskalender URLs (can be slow)
             
         Returns:
             Dict[str, Any]: Summary of the synchronization process
