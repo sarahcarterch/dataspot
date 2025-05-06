@@ -834,8 +834,8 @@ class OrgStructureHandler(BaseDataspotHandler):
             }
         
         # Check custom properties - specifically link_zum_staatskalender
+        # Source units have properties in customProperties, but download API returns properties flat
         source_url = source_unit.get("customProperties", {}).get("link_zum_staatskalender", "")
-        # For dataspot_unit, check at root level because Download API returns flat structure
         dataspot_url = dataspot_unit.get("link_zum_staatskalender", "")
         
         if source_url != dataspot_url:
@@ -933,9 +933,12 @@ class OrgStructureHandler(BaseDataspotHandler):
                         # For simple fields, only include what's changed
                         update_data[field] = change_info["new"]
                 
-                # Add id_im_staatskalender if not already included in the changes
-                if "id_im_staatskalender" not in update_data:
-                    update_data["id_im_staatskalender"] = change.staatskalender_id
+                # For PATCH requests, id_im_staatskalender needs to be in customProperties
+                # This ensures correct placement for the update operation
+                if "id_im_staatskalender" not in update_data.get("customProperties", {}):
+                    if "customProperties" not in update_data:
+                        update_data["customProperties"] = {}
+                    update_data["customProperties"]["id_im_staatskalender"] = change.staatskalender_id
                 
                 # If we're updating the URL, validate it if requested
                 if validate_urls and "customProperties" in update_data and "link_zum_staatskalender" in update_data["customProperties"]:
@@ -943,7 +946,7 @@ class OrgStructureHandler(BaseDataspotHandler):
                     validated_url = self.get_validated_staatskalender_url(change.title, url, validate_url=True)
                     update_data["customProperties"]["link_zum_staatskalender"] = validated_url
                 
-                # Update the asset - using replace=False to only update provided fields
+                # Update the asset
                 self.client._update_asset(endpoint, update_data, replace=False)
                 stats["updated"] += 1
                 
