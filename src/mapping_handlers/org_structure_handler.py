@@ -39,7 +39,8 @@ class OrgStructureHandler(BaseDataspotHandler):
         self.mapping = OrgStructureMapping(database_name=client.database_name, scheme=client.scheme_name_short)
         
         # Set the download method for the base handler
-        self.download_method = self._download_organizational_units
+        # Use the client's method instead of duplicating functionality
+        self.download_method = self.client.get_all_assets_from_scheme
         
         # Set the asset type filter based on asset_id_field and stereotype
         self.asset_type_filter = lambda asset: (
@@ -47,37 +48,6 @@ class OrgStructureHandler(BaseDataspotHandler):
             asset.get('stereotype') == 'Organisationseinheit' and 
             asset.get(self.asset_id_field) is not None
         )
-    
-    # TODO IMMEDIATELY: This method is unnecessary, I think! We already have it in the base client class.
-    def _download_organizational_units(self):
-        """
-        Download organizational units from the scheme.
-        This method is used as the download_method for the base handler.
-        
-        Returns:
-            List[Dict[str, Any]]: List of organizational units
-        """
-        # Use the download API to retrieve collections from the scheme
-        download_path = f"/api/{self.database_name}/schemes/{self.scheme_name}/download?format=JSON"
-        full_url = url_join(self.client.base_url, download_path)
-        
-        logging.debug(f"Downloading collections from: {full_url}")
-        response = requests_get(full_url, headers=self.client.auth.get_headers())
-        response.raise_for_status()
-        
-        # Parse the JSON response
-        all_items = response.json()
-        
-        # If we got a list directly, use it
-        if isinstance(all_items, list):
-            # Filter already done by asset_type_filter in the base class
-            return all_items
-        else:
-            # We might have received a job ID instead
-            error_msg = f"Received unexpected response format from {full_url}. Expected a list of items."
-            logging.error(error_msg)
-            logging.debug(f"Response content: {all_items}")
-            raise ValueError(f"Unexpected response format from download API. Expected a list but got: {type(all_items)}")
     
     def get_validated_staatskalender_url(self, title: str, url_website: str, validate_url: bool = False) -> str:
         """
