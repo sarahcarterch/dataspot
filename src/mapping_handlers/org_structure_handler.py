@@ -1069,11 +1069,25 @@ class OrgStructureHandler(BaseDataspotHandler):
                 )
                 
                 # Check for errors
-                errors = response.get("errors", [])
+                infos = [message for message in response if message['level'] == 'INFO']
+                if infos:
+                    logging.info(f"Returned {len(infos)} infos:")
+                    for info in infos:
+                        logging.info(f"  - {info['message']}")
+
+                debugs = [message for message in response if message['level'] == 'DEBUG']
+                if debugs:
+                    logging.debug(f"Returned {len(infos)} debug infos:")
+                    for deb in debugs:
+                        logging.debug(f"  - {deb['message']}")
+
+                errors = [message for message in response if message['level'] == 'ERROR']
                 if errors:
-                    logging.warning(f"Bulk creation completed with {len(errors)} errors")
+                    logging.warning(f"Bulk creation completed with {len(errors)} errors:")
                     stats["errors"] += len(errors)
                     stats["created"] += len(prepared_units) - len(errors)
+                    for error in errors:
+                        logging.error(f"  - {error['message']}")
                 else:
                     stats["created"] += len(prepared_units)
                 
