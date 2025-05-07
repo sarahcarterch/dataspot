@@ -2,7 +2,6 @@ from typing import Dict, Any, List
 import logging
 import json
 
-from src import config
 from src.dataspot_auth import DataspotAuth
 from src.common import requests_get, requests_delete, requests_post, requests_put, requests_patch
 from src.clients.helpers import url_join
@@ -12,7 +11,7 @@ from requests import HTTPError
 class BaseDataspotClient():
     """Base class for Dataspot API clients implementing common functionality."""
 
-    def __init__(self, base_url: str, database_name: str, scheme_name: str, scheme_name_short: str, ods_imports_collection_name: str):
+    def __init__(self, base_url: str, database_name: str, scheme_name: str, scheme_name_short: str, ods_imports_collection_name: str, ods_imports_collection_path: str):
         """
         Initialize the DataspotClient with the necessary credentials and configurations.
         """
@@ -23,6 +22,7 @@ class BaseDataspotClient():
         self.scheme_name = scheme_name
         self.scheme_name_short = scheme_name_short
         self.ods_imports_collection_name = ods_imports_collection_name
+        self.ods_imports_collection_path = ods_imports_collection_path
 
     def get_all_assets_from_scheme(self) -> List[Dict[str, Any]]:
         """
@@ -205,9 +205,8 @@ class BaseDataspotClient():
         """
         Ensures that the ODS-Imports collection exists within the scheme.
 
-        # TODO: set ods:imports_collection_path as a variable of BaseDataspotClient and only load it once.
-        The path is defined by config.ods_imports_collection_path, which is a list of folder names.
-        For example, if config.ods_imports_collection_path is ['A', 'B', 'C'], the function:
+        The path is defined by self.ods_imports_collection_path, which is a list of folder names.
+        For example, if self.ods_imports_collection_path is ['A', 'B', 'C'], the function:
         1. First checks if 'A/B/C' path already exists
         2. If the path doesn't exist, logs an error and throws an exception
         3. If the path exists, checks if ODS-Imports collection exists at that location
@@ -224,24 +223,21 @@ class BaseDataspotClient():
         # Assert that the scheme exists.
         self.require_scheme_exists()
 
-        # Get the path from config
-        collection_path = getattr(config, 'ods_imports_collection_path', [])
-
         # Validate that the path contains only strings
-        for item in collection_path:
+        for item in self.ods_imports_collection_path:
             if type(item) != str:
                 logging.error(f"Path defined in config.py contains {item}, which is not a string.")
                 raise ValueError(
                     f"Invalid path component in ods_imports_collection_path: {item}. All path components must be strings.")
 
-        if collection_path:
-            logging.debug(f"Using configured path for ODS-Imports: {'/'.join(collection_path)}")
+        if self.ods_imports_collection_path:
+            logging.debug(f"Using configured path for ODS-Imports: {'/'.join(self.ods_imports_collection_path)}")
         else:
             logging.debug("No specific path configured for ODS-Imports, using scheme root")
 
         # Check for special characters that would prevent using business keys
         has_special_chars = False
-        for folder in collection_path:
+        for folder in self.ods_imports_collection_path:
             if '/' in folder:
                 has_special_chars = True
                 logging.warning(
@@ -249,7 +245,7 @@ class BaseDataspotClient():
                 break
 
         # Check if the configured path exists
-        if not collection_path:
+        if not self.ods_imports_collection_path:
             # No path specified, check directly under scheme
             parent_endpoint = url_join('rest', self.database_name, 'schemes', self.scheme_name)
             parent_response = self._get_asset(parent_endpoint)
@@ -287,7 +283,7 @@ class BaseDataspotClient():
             path_elements = ['rest', self.database_name, 'schemes', self.scheme_name]
 
             # Build up the path with 'collections' between each element
-            for folder in collection_path:
+            for folder in self.ods_imports_collection_path:
                 path_elements.append('collections')
                 path_elements.append(folder)
 
@@ -297,7 +293,7 @@ class BaseDataspotClient():
 
             if not parent_response:
                 # Parent path doesn't exist - throw error instead of creating it
-                error_msg = (f"Configured path '{'/'.join(collection_path)}' not found. "
+                error_msg = (f"Configured path '{'/'.join(self.ods_imports_collection_path)}' not found. "
                              f"Please make sure the ods_imports_collection_path field in config.py is set correctly!")
                 logging.error(error_msg)
                 raise ValueError(error_msg)
@@ -326,7 +322,7 @@ class BaseDataspotClient():
             # Return existing or create new
             if ods_imports_exists:
                 logging.debug(f"ODS-Imports collection already exists under the correct parent, using it as is")
-                path_str = "/".join(collection_path) if collection_path else "scheme root"
+                path_str = "/".join(self.ods_imports_collection_path) if self.ods_imports_collection_path else "scheme root"
                 logging.info(f"ODS-Imports collection found at: {path_str}")
                 return existing_collection
             else:
@@ -339,7 +335,7 @@ class BaseDataspotClient():
                     endpoint=collections_endpoint,
                     data=collection_data
                 )
-                path_str = "/".join(collection_path) if collection_path else "scheme root"
+                path_str = "/".join(self.ods_imports_collection_path) if self.ods_imports_collection_path else "scheme root"
                 logging.info(f"Created ODS-Imports collection at: {path_str}")
                 return response_json
 

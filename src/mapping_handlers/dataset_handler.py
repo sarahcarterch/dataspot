@@ -176,21 +176,18 @@ class DatasetHandler(BaseDataspotHandler):
                     logging.debug(f"Using stored inCollection '{inCollection}' for dataset with ODS ID: {ods_id}")
                     dataset_json['inCollection'] = inCollection
                 else:
-                    # Default to ODS-Imports collection with full path
-                    collection_path = getattr(config, 'ods_imports_collection_path', [])
-                    
-                    if collection_path:
+                    if self.client.ods_imports_collection_path:
                         # Build the full business key path for inCollection
                         # If path is ['A', 'B', 'C'], then inCollection should be "A/B/C/ODS-Imports"
-                        full_path = '/'.join(collection_path + [self.ods_imports_collection_name])
+                        full_path = f"{'/'.join(self.client.ods_imports_collection_path)}/{self.client.ods_imports_collection_name}"
                         
                         # Check for slashes in the path components which would require escaping
-                        has_special_chars = any('/' in folder for folder in collection_path)
-                        
+                        has_special_chars = any('/' in folder for folder in self.client.ods_imports_collection_path)
+
                         if has_special_chars:
                             # We need to escape the whole path with quotes since it contains slashes
                             from src.clients.helpers import escape_special_chars
-                            full_path = escape_special_chars(full_path)
+                            full_path = escape_special_chars(full_path)  # FIXME: This is very likely not correct
                             
                         logging.debug(f"Using full path inCollection: '{full_path}' for dataset with ODS ID: {ods_id}")
                         dataset_json['inCollection'] = full_path
@@ -316,7 +313,7 @@ class DatasetHandler(BaseDataspotHandler):
         
         # Ensure inCollection property is set with the full path
         dataset_json = dataset.to_json()
-        collection_path = getattr(config, 'ods_imports_collection_path', [])
+        collection_path = self.client.ods_imports_collection_path
         
         if collection_path:
             # Build the full business key path for inCollection
@@ -394,7 +391,7 @@ class DatasetHandler(BaseDataspotHandler):
             logging.debug(f"Using stored inCollection '{inCollection}' from mapping")
         else:
             # Default to ODS-Imports collection with full path
-            collection_path = getattr(config, 'ods_imports_collection_path', [])
+            collection_path = self.client.ods_imports_collection_path
             
             if collection_path:
                 # Build the full business key path for inCollection
