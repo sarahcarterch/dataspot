@@ -494,6 +494,11 @@ class OrgStructureHandler(BaseDataspotHandler):
         level_result = {}
         upload_errors = []
         
+        # Check for existing organizational units to determine if this is an initial run
+        existing_units = self._fetch_current_org_units()
+        is_initial_run = len(existing_units) == 0
+        logging.info(f"This is {'an initial run' if is_initial_run else 'not an initial run'} (found {len(existing_units)} existing org units)")
+        
         # Process each depth level in order
         for depth in sorted(units_by_depth.keys()):
             level_units = units_by_depth[depth]
@@ -582,6 +587,7 @@ class OrgStructureHandler(BaseDataspotHandler):
         Returns:
             Dict: Summary of the synchronization process
         
+        # TODO (Renato): Think about refactoring; it looks messy this way.
         This method implements the following algorithm:
         1. Fetch source org data from ODS (Staatskalender)
         2. Transform the data to a tree structure by layer
@@ -600,22 +606,28 @@ class OrgStructureHandler(BaseDataspotHandler):
         """
         logging.info("Starting synchronization of organizational units...")
         
+        # Fetch current org data from Dataspot
+        dataspot_units = self._fetch_current_org_units()
+        
+        # Check if this is an initial run (no org units in Dataspot that match our filter)
+        is_initial_run = len(dataspot_units) == 0
+        
+        # If this is an initial run, perform bulk upload
+        if is_initial_run:
+            logging.info("No organizational units found in Dataspot. Performing initial bulk upload...")
+            result = self.build_organization_hierarchy_from_ods_bulk(org_data, validate_urls=validate_urls)
+            return {
+                "status": result.get("status", "unknown"),
+                "message": "Performed initial bulk upload as no existing organizational units were found",
+                "details": result
+            }
+        
+        # Otherwise, perform the incremental synchronization
         # Step 1 & 2: Transform source org data to a tree structure by layer
         source_units_by_layer = self._transform_org_data_to_layers(org_data)
         logging.info(f"Transformed source data into {len(source_units_by_layer)} layers")
         
-        # Step 3: Fetch current org data from Dataspot
-        dataspot_units = self._fetch_current_org_units()
-        
-        # Check if we have any org units in Dataspot
-        if not dataspot_units:
-            logging.info("No organizational units found in Dataspot. Performing bulk upload...")
-            result = self.build_organization_hierarchy_from_ods_bulk(org_data, validate_urls=validate_urls)
-            return {
-                "status": result.get("status", "unknown"),
-                "message": "Performed bulk upload as no existing organizational units were found",
-                "details": result
-            }
+        # Step 3: We already fetched current org data from Dataspot
         
         # Step 4: Build a similar tree structure from Dataspot data
         dataspot_units_by_id = {
@@ -627,7 +639,7 @@ class OrgStructureHandler(BaseDataspotHandler):
         changes = self._compare_org_structures(source_units_by_layer, dataspot_units_by_id)
         
         # Step 6: Apply changes
-        self._apply_org_unit_changes(changes, validate_urls)
+        self._apply_org_unit_changes(changes, validate_urls, is_initial_run=False)
         
         # Step 7: Update mappings after changes
         if changes:
@@ -702,11 +714,8 @@ class OrgStructureHandler(BaseDataspotHandler):
             
             # If we got a list directly, use it
             if isinstance(all_items, list):
-                # Filter to only include collections with stereotype Organisationseinheit and id_im_staatskalender
-                org_units = [item for item in all_items if 
-                        item.get('_type') == 'Collection' and 
-                        item.get('stereotype') == 'Organisationseinheit' and 
-                        item.get('id_im_staatskalender')]
+                # Filter using the asset_type_filter defined in the class
+                org_units = [item for item in all_items if self.asset_type_filter(item)]
                 
                 logging.info(f"Found {len(org_units)} organizational units in Dataspot")
                 return org_units
@@ -849,13 +858,14 @@ class OrgStructureHandler(BaseDataspotHandler):
         
         return changes
     
-    def _apply_org_unit_changes(self, changes: List[OrgUnitChange], validate_urls: bool = False) -> Dict[str, int]:
+    def _apply_org_unit_changes(self, changes: List[OrgUnitChange], validate_urls: bool = False, is_initial_run: bool = False) -> Dict[str, int]:
         """
         Apply the identified changes to Dataspot.
         
         Args:
             changes: List of changes to apply
             validate_urls: Whether to validate URLs when creating or updating org units
+            is_initial_run: Whether this is an initial run with no existing org units
             
         Returns:
             Dict[str, int]: Statistics about applied changes
@@ -904,12 +914,15 @@ class OrgStructureHandler(BaseDataspotHandler):
         remaining_updates = changes_by_type["update"].copy()
         processed_updates = 0
 
-        # Fetch initial data
-        dataspot_units = self._fetch_current_org_units()
-        dataspot_units_by_id = {
-            str(unit.get("id_im_staatskalender")): unit 
-            for unit in dataspot_units
-        }
+        # Fetch initial data if not an initial run
+        dataspot_units = None
+        dataspot_units_by_id = {}
+        if not is_initial_run and remaining_updates:
+            dataspot_units = self._fetch_current_org_units()
+            dataspot_units_by_id = {
+                str(unit.get("id_im_staatskalender")): unit 
+                for unit in dataspot_units
+            }
         
         while remaining_updates:
             # Process one update at a time
@@ -977,21 +990,22 @@ class OrgStructureHandler(BaseDataspotHandler):
                 # Update the asset
                 self.client._update_asset(endpoint, update_data, replace=False)
                 
-                # Re-fetch data after update to ensure we have the latest state
+                # Re-fetch data after update to ensure we have the latest state, but only if not an initial run
                 # This is crucial to handle cases where Dataspot automatically updates inCollection paths
-                logging.debug(f"Re-fetching data after updating org unit '{change.title}' to ensure latest state")
-                dataspot_units = self._fetch_current_org_units()
-                dataspot_units_by_id = {
-                    str(unit.get("id_im_staatskalender")): unit 
-                    for unit in dataspot_units
-                }
+                if not is_initial_run and remaining_updates:
+                    logging.debug(f"Re-fetching data after updating org unit '{change.title}' to ensure latest state")
+                    dataspot_units = self._fetch_current_org_units()
+                    dataspot_units_by_id = {
+                        str(unit.get("id_im_staatskalender")): unit 
+                        for unit in dataspot_units
+                    }
 
                 # TODO (large language model): We currently update a number that is too big when updating a collection label (inCollection of all children). Probably related to the FIXME above.
                 stats["updated"] += 1
                 processed_updates += 1
                 
                 # Re-evaluate all remaining updates with the latest data
-                if remaining_updates:
+                if not is_initial_run and remaining_updates:
                     new_remaining_updates = []
                     for remaining_change in remaining_updates:
                         # Get current data for this unit

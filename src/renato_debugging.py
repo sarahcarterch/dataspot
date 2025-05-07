@@ -677,7 +677,7 @@ if __name__ == "__main__":
 
     # main_9_build_organization_structure_in_dnk()
     main_10_sync_organization_structure()
-    main_8_test_bulk_ods_datasets_upload_and_delete(cleanup_after_test=False)
+    main_8_test_bulk_ods_datasets_upload_and_delete(cleanup_after_test=False, max_datasets=3)
 
     logging.info('Job successful!')
     
