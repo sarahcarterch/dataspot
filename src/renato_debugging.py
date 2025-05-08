@@ -562,64 +562,6 @@ def main_8_test_bulk_ods_datasets_upload_and_delete(cleanup_after_test: bool = T
     
     return processed_ids
 
-def main_9_build_organization_structure_in_dnk():
-    """
-    Build the organization structure in Dataspot's DNK scheme based on data from the ODS API.
-    Uses the bulk upload approach.
-
-    This method:
-    1. Retrieves organization data from the ODS API
-    2. Builds the organization hierarchy in Dataspot using bulk upload
-    3. Provides options to limit the number of batches processed
-    """
-    logging.info("Starting organization structure build...")
-
-    # Initialize clients
-    ods_client = ODSClient()
-    dataspot_client = DNKClient()
-
-    # Configuration for data retrieval and processing
-    validate_urls = False  # Set to False to skip URL validation (much faster)
-
-    # Fetch organization data from ODS API
-    logging.info("Fetching organization data from ODS API...")
-    all_organizations = ods_client.get_all_organization_data(batch_size=100)
-    logging.info(f"Total organizations retrieved: {len(all_organizations['results'])} (out of {all_organizations['total_count']})")
-
-    # Build the organization hierarchy in Dataspot using bulk upload
-    logging.info(f"Building organization hierarchy in Dataspot using bulk upload (validate_urls={validate_urls})...")
-    try:
-        # Use the bulk upload method with URL validation feature flag
-        upload_response = dataspot_client.build_organization_hierarchy_from_ods_bulk(
-            all_organizations, 
-            validate_urls=validate_urls
-        )
-        
-        logging.info(f"Organization structure bulk upload complete. Response summary: {upload_response}")
-        
-        # Log the organization mapping entries
-        org_mappings = dataspot_client.org_mapping.get_all_entries()
-        if org_mappings:
-            logging.info(f"Organization mapping contains {len(org_mappings)} entries")
-            # Log a few sample mappings
-            sample_count = min(5, len(org_mappings))
-            sample_entries = list(org_mappings.items())[:sample_count]
-            
-            for staatskalender_id, (type_, uuid, in_collection) in sample_entries:
-                logging.info(f"Sample mapping - Staatskalender ID: {staatskalender_id}, Type: {type_}, UUID: {uuid}, inCollection: {in_collection or 'None'}")
-            
-            # Show mappings file path for reference
-            logging.info(f"Organization mappings saved to: {dataspot_client.org_mapping.csv_file_path}")
-        else:
-            logging.warning("No organization mappings were created")
-        
-    except Exception as e:
-        logging.error(f"Error building organization hierarchy: {str(e)}")
-        logging.info("Organization structure build failed")
-
-    logging.info("Organization structure build process finished")
-    logging.info("=============================================")
-
 def main_10_sync_organization_structure():
     """
     Synchronize organizational structure in Dataspot with the latest data from ODS API.
