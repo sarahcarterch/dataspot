@@ -97,22 +97,7 @@ class OrgStructureHandler(BaseDataspotHandler):
                 
         # If no URL or validation failed, return empty string
         return ""
-    
-    def update_staatskalender_mappings_from_upload(self, staatskalender_ids: List[str]) -> None:
-        """
-        Updates the mapping between Staatskalender IDs and Dataspot UUIDs after uploading organizational units.
-        Uses the download API to retrieve all organizational units and then updates the mapping for matching Staatskalender IDs.
-        
-        Args:
-            staatskalender_ids (List[str]): List of Staatskalender IDs to update in the mapping
-            
-        Raises:
-            HTTPError: If API requests fail
-            ValueError: If unable to retrieve organizational unit information
-        """
-        # Call the base class method with our specific ID type
-        self.update_mappings_after_upload(staatskalender_ids)
-    
+
     def bulk_create_or_update_organizational_units(self, organizational_units: List[Dict[str, Any]], 
                                         operation: str = "ADD", dry_run: bool = False) -> dict:
         """
@@ -538,18 +523,6 @@ class OrgStructureHandler(BaseDataspotHandler):
                 error_msg = f"Error uploading level {depth}: {str(e)}"
                 logging.error(error_msg)
                 upload_errors.append(error_msg)
-        
-        # Update mappings for all uploaded organizations
-        try:
-            if staatskalender_ids:
-                logging.info(f"Updating mappings for {len(staatskalender_ids)} organizational units")
-                self.update_staatskalender_mappings_from_upload(staatskalender_ids)
-        except Exception as e:
-            logging.warning(f"Error updating organizational unit mappings: {str(e)}")
-            # Add to errors but continue
-            upload_errors.append(f"Error updating mappings: {str(e)}")
-        
-        logging.info("Organization hierarchy build completed")
         
         # Determine overall result
         if upload_errors:
