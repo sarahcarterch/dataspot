@@ -3,7 +3,6 @@ from typing import List, Dict, Any
 
 from requests import HTTPError
 
-from src import config
 from src.clients.base_client import BaseDataspotClient
 from src.clients.helpers import url_join, get_uuid_from_response
 from src.dataspot_dataset import Dataset
@@ -51,12 +50,25 @@ class DatasetHandler(BaseDataspotHandler):
         
         # Initialize the dataset mapping
         self.mapping = DatasetMapping(database_name=client.database_name, scheme=client.scheme_name_short)
-        
-        # Store ODS imports collection name
-        self.ods_imports_collection_name = client.ods_imports_collection_name
-        
+
         # Set the asset type filter based on asset_id_field
         self.asset_type_filter = lambda asset: asset.get(self.asset_id_field) is not None
+
+        # Check for special characters in the default path and name
+        if any('/' in folder for folder in self.client.ods_imports_collection_path) \
+            or any('.' in folder for folder in self.client.ods_imports_collection_path) \
+            or ('/' in self.client.ods_imports_collection_name) \
+            or '.' in self.client.ods_imports_collection_name:
+            # TODO: Implement escaping of special characters in the default dataset path
+            logging.error("The default path or name in config.py contains special characters ('/' or '.') that need escaping. This functionality is not yet supported and needs to be properly implemented as needed.")
+            raise ValueError("The default path or name in config.py contains special characters ('/' or '.') that need escaping. This functionality is not yet supported and needs to be properly implemented as needed.")
+
+        if self.client.ods_imports_collection_path:
+            self.default_dataset_path_full = url_join(*self.client.ods_imports_collection_path, self.client.ods_imports_collection_name)
+        else:
+            self.default_dataset_path_full = self.client.ods_imports_collection_name
+
+        logging.debug(f"Default dataset path: {self.default_dataset_path_full}")
 
     def sync_datasets(self, datasets: List[Dataset]) -> Dict[str, Any]:
         """
@@ -68,7 +80,7 @@ class DatasetHandler(BaseDataspotHandler):
         2. Uploads datasets using bulk_create_or_update_datasets
         3. Updates mappings after upload
         4. Saves mappings to CSV
-        
+
         Args:
             datasets: List of Dataset objects to synchronize with Dataspot
             
@@ -82,16 +94,16 @@ class DatasetHandler(BaseDataspotHandler):
                 "message": "No datasets provided for synchronization",
                 "datasets_processed": 0
             }
-        
+
         logging.info(f"Starting synchronization of {len(datasets)} datasets...")
-        
+
         # Step 1: Update mappings before upload
         logging.info("Step 1: Updating mappings before upload...")
         try:
             self.update_mappings_before_upload()
         except Exception as e:
             logging.warning(f"Failed to update mappings before upload: {str(e)}")
-            
+
         # Step 2: Extract ODS IDs for later mapping updates
         ods_ids = []
         for dataset in datasets:
@@ -99,7 +111,7 @@ class DatasetHandler(BaseDataspotHandler):
             ods_id = dataset_json.get('customProperties', {}).get('ODS_ID')
             if ods_id:
                 ods_ids.append(ods_id)
-        
+
         # Step 3: Upload datasets using bulk_create_or_update_datasets
         logging.info(f"Step 3: Uploading {len(datasets)} datasets...")
         upload_result = self.bulk_create_or_update_datasets(
@@ -107,7 +119,7 @@ class DatasetHandler(BaseDataspotHandler):
             operation="ADD",
             dry_run=False
         )
-        
+
         # Step 4: Update mappings after upload
         logging.info("Step 4: Updating mappings after upload...")
         if ods_ids:
@@ -115,11 +127,11 @@ class DatasetHandler(BaseDataspotHandler):
                 self.update_mappings_after_upload(ods_ids)
             except Exception as e:
                 logging.error(f"Error updating mappings after upload: {str(e)}")
-        
+
         # Step 5: Save mappings to CSV
         logging.info("Step 5: Saving mappings to CSV...")
         self.mapping.save_to_csv()
-        
+
         # Generate result summary
         result = {
             "status": "success",
@@ -127,7 +139,7 @@ class DatasetHandler(BaseDataspotHandler):
             "datasets_processed": len(datasets),
             "upload_result": upload_result
         }
-        
+
         logging.info(f"Dataset synchronization completed successfully")
         return result
 
@@ -230,25 +242,9 @@ class DatasetHandler(BaseDataspotHandler):
                     logging.debug(f"Using stored inCollection '{inCollection}' for dataset with ODS ID: {ods_id}")
                     dataset_json['inCollection'] = inCollection
                 else:
-                    if self.client.ods_imports_collection_path:
-                        # Build the full business key path for inCollection
-                        # If path is ['A', 'B', 'C'], then inCollection should be "A/B/C/ODS-Imports"
-                        full_path = f"{'/'.join(self.client.ods_imports_collection_path)}/{self.client.ods_imports_collection_name}"
-                        
-                        # Check for slashes in the path components which would require escaping
-                        has_special_chars = any('/' in folder for folder in self.client.ods_imports_collection_path)
-
-                        if has_special_chars:
-                            # We need to escape the whole path with quotes since it contains slashes
-                            from src.clients.helpers import escape_special_chars
-                            full_path = escape_special_chars(full_path)  # FIXME: This is very likely not correct
-                            
-                        logging.debug(f"Using full path inCollection: '{full_path}' for dataset with ODS ID: {ods_id}")
-                        dataset_json['inCollection'] = full_path
-                    else:
-                        # No path, just use the collection name directly
-                        logging.debug(f"Using default inCollection: '{self.ods_imports_collection_name}' for dataset with ODS ID: {ods_id}")
-                        dataset_json['inCollection'] = self.ods_imports_collection_name
+                    # Use the centralized default dataset path
+                    logging.debug(f"Using default dataset path: '{self.default_dataset_path_full}' for dataset with ODS ID: {ods_id}")
+                    dataset_json['inCollection'] = self.default_dataset_path_full
                 
                 dataset_jsons.append(dataset_json)
             except Exception as e:
@@ -370,24 +366,13 @@ class DatasetHandler(BaseDataspotHandler):
         collection_path = self.client.ods_imports_collection_path
         
         if collection_path:
-            # Build the full business key path for inCollection
-            # If path is ['A', 'B', 'C'], then inCollection should be "A/B/C/ODS-Imports"
-            full_path = '/'.join(collection_path + [self.ods_imports_collection_name])
-            
-            # Check for slashes in the path components which would require escaping
-            has_special_chars = any('/' in folder for folder in collection_path)
-            
-            if has_special_chars:
-                # We need to escape the whole path with quotes since it contains slashes
-                from src.clients.helpers import escape_special_chars
-                full_path = escape_special_chars(full_path)
-                
-            logging.debug(f"Using full path inCollection: '{full_path}'")
-            dataset_json['inCollection'] = full_path
+            # Use the centralized default dataset path
+            logging.debug(f"Using default dataset path: '{self.default_dataset_path_full}'")
+            dataset_json['inCollection'] = self.default_dataset_path_full
         else:
             # No path, just use the collection name directly
-            logging.debug(f"Using default inCollection: '{self.ods_imports_collection_name}'")
-            dataset_json['inCollection'] = self.ods_imports_collection_name
+            logging.debug(f"Using default inCollection: '{self.client.ods_imports_collection_name}'")
+            dataset_json['inCollection'] = self.client.ods_imports_collection_name
         
         response = self.client._create_asset(
             endpoint=dataset_creation_endpoint,
@@ -400,8 +385,8 @@ class DatasetHandler(BaseDataspotHandler):
             if uuid:
                 # For newly created datasets, store the ODS-Imports collection name as the business key
                 # The _type for datasets created here is always "Dataset"
-                logging.debug(f"Adding mapping entry for ODS ID {ods_id} with Type 'Dataset', UUID {uuid}, and inCollection '{self.ods_imports_collection_name}'")
-                self.mapping.add_entry(ods_id, "Dataset", uuid, self.ods_imports_collection_name)
+                logging.debug(f"Adding mapping entry for ODS ID {ods_id} with Type 'Dataset', UUID {uuid}, and inCollection '{self.client.ods_imports_collection_name}'")
+                self.mapping.add_entry(ods_id, "Dataset", uuid, self.client.ods_imports_collection_name)
             else:
                 logging.warning(f"Could not extract UUID from response for dataset '{title}'")
         
@@ -448,23 +433,13 @@ class DatasetHandler(BaseDataspotHandler):
             collection_path = self.client.ods_imports_collection_path
             
             if collection_path:
-                # Build the full business key path for inCollection
-                full_path = '/'.join(collection_path + [self.ods_imports_collection_name])
-                
-                # Check for slashes in the path components which would require escaping
-                has_special_chars = any('/' in folder for folder in collection_path)
-                
-                if has_special_chars:
-                    # We need to escape the whole path with quotes since it contains slashes
-                    from src.clients.helpers import escape_special_chars
-                    full_path = escape_special_chars(full_path)
-                    
-                logging.debug(f"Using full path inCollection: '{full_path}'")
-                dataset_json['inCollection'] = full_path
+                # Use the centralized default dataset path
+                logging.debug(f"Using default dataset path: '{self.default_dataset_path_full}'")
+                dataset_json['inCollection'] = self.default_dataset_path_full
             else:
                 # No path, just use the collection name directly
-                logging.debug(f"Using default inCollection: '{self.ods_imports_collection_name}'")
-                dataset_json['inCollection'] = self.ods_imports_collection_name
+                logging.debug(f"Using default inCollection: '{self.client.ods_imports_collection_name}'")
+                dataset_json['inCollection'] = self.client.ods_imports_collection_name
         
         # Update the existing dataset
         logging.debug(f"Update method: {'PUT (replace)' if force_replace else 'PATCH (partial update)'}")
