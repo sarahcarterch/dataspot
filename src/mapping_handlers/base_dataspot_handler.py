@@ -235,7 +235,25 @@ class BaseDataspotHandler:
         logging.info(f"Updated mappings for {updated_count} assets. Did not update mappings for the other {len(assets) - updated_count} assets.")
         return updated_count
     
-    def update_mappings_from_upload(self, ids: List[str]) -> None:
+    def update_mappings_before_upload(self) -> int:
+        """
+        Updates mappings from Dataspot before uploading any assets.
+        Ensures we have the latest mapping data for proper updates.
+        
+        Returns:
+            int: Number of mappings successfully updated
+        """
+        logging.info("Updating mappings from Dataspot before upload")
+        
+        try:
+            updated_count = self._download_and_update_mappings()
+            logging.info(f"Updated {updated_count} mappings before upload")
+            return updated_count
+        except Exception as e:
+            logging.warning(f"Failed to update mappings before upload: {str(e)}")
+            raise
+    
+    def update_mappings_after_upload(self, ids: List[str]) -> None:
         """
         Updates the mapping between external IDs and Dataspot UUIDs after uploading assets.
         
@@ -251,7 +269,8 @@ class BaseDataspotHandler:
         try:
             updated_count = self._download_and_update_mappings(ids)
             logging.info(f"Updated mappings for {updated_count} out of {len(ids)} assets")
-            
+
+            # FIXME: I think this is buggy (we should not compare the number, but the actual ids, right??)
             if updated_count < len(ids):
                 missing_ids = [id_value for id_value in ids if not self.mapping.get_entry(id_value)]
                 if missing_ids:

@@ -77,7 +77,7 @@ class DatasetHandler(BaseDataspotHandler):
             "updated_count": updated_count
         }
 
-    def update_mappings_from_upload(self, ods_ids: List[str]) -> None:
+    def update_mappings_after_upload(self, ods_ids: List[str]) -> None:
         """
         Updates the mapping between ODS IDs and Dataspot UUIDs after uploading datasets.
         Uses the download API to retrieve all datasets and then updates the mapping for matching ODS IDs.
@@ -90,7 +90,7 @@ class DatasetHandler(BaseDataspotHandler):
             ValueError: If unable to retrieve dataset information
         """
         # Call the base class method with our specific ID type
-        super().update_mappings_from_upload(ods_ids)
+        super().update_mappings_after_upload(ods_ids)
 
     def bulk_create_or_update_datasets(self, datasets: List[Dataset],
                                       operation: str = "ADD", dry_run: bool = False) -> dict:
@@ -231,7 +231,7 @@ class DatasetHandler(BaseDataspotHandler):
             if not dry_run:
                 try:
                     # After bulk upload, retrieve the datasets and update mapping
-                    self.update_mappings_from_upload(ods_ids)
+                    self.update_mappings_after_upload(ods_ids)
                 except Exception as e:
                     logging.warning(f"Failed to update mapping after bulk upload: {str(e)}")
                     # Continue despite mapping update failure - the upload was successful

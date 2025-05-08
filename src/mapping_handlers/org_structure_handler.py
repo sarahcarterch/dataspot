@@ -111,7 +111,7 @@ class OrgStructureHandler(BaseDataspotHandler):
             ValueError: If unable to retrieve organizational unit information
         """
         # Call the base class method with our specific ID type
-        self.update_mappings_from_upload(staatskalender_ids)
+        self.update_mappings_after_upload(staatskalender_ids)
     
     def bulk_create_or_update_organizational_units(self, organizational_units: List[Dict[str, Any]], 
                                         operation: str = "ADD", dry_run: bool = False) -> dict:
