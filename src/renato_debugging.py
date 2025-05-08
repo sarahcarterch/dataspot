@@ -452,7 +452,7 @@ def main_7_test_bulk_few_ods_datasets_upload(cleanup_after_test=True):
                     logging.warning(f"Failed to delete dataset {dataset_id}: {str(e)}")
             logging.info("Cleanup completed")
 
-def main_8_test_bulk_ods_datasets_upload_and_delete(cleanup_after_test: bool = True, max_datasets: int = None):
+def main_8_test_bulk_ods_datasets_upload_and_delete(max_datasets: int = None):
     """
     Test the bulk upload of all public ODS datasets to Dataspot.
     
@@ -464,7 +464,6 @@ def main_8_test_bulk_ods_datasets_upload_and_delete(cleanup_after_test: bool = T
     5. Provides options to limit the number of datasets processed
 
     Args:
-        cleanup_after_test (bool, optional): Whether to delete datasets after testing. Defaults to True.
         max_datasets (int, optional): Maximum number of datasets to process (set to None for all). Defaults to None.
     
     Returns:
@@ -474,9 +473,6 @@ def main_8_test_bulk_ods_datasets_upload_and_delete(cleanup_after_test: bool = T
     
     # Initialize clients
     dataspot_client = DNKClient()
-    
-    # Configuration
-    request_delay = 1.0  # Delay in seconds between API calls
     
     # Get all public dataset IDs
     logging.info(f"Step 1: Retrieving {max_datasets or 'all'} public dataset IDs from ODS...")
@@ -542,24 +538,6 @@ def main_8_test_bulk_ods_datasets_upload_and_delete(cleanup_after_test: bool = T
         except Exception as e:
             logging.error(f"Error during bulk upload: {str(e)}")
 
-    # Clean up if requested
-    if cleanup_after_test and processed_ids:
-        logging.info(f"Step 3: Cleaning up {len(processed_ids)} uploaded datasets...")
-        
-        for idx, dataset_id in enumerate(processed_ids):
-            try:
-                delete_success = dataspot_client.delete_dataset(
-                    ods_id=dataset_id,
-                    fail_if_not_exists=False
-                )
-                logging.info(f"[{idx+1}/{len(processed_ids)}] Deleted dataset {dataset_id}: {delete_success}")
-                # Be kind to the server during cleanup
-                sleep(request_delay)
-            except Exception as e:
-                logging.warning(f"[{idx+1}/{len(processed_ids)}] Failed to delete dataset {dataset_id}: {str(e)}")
-        
-        logging.info("Cleanup completed")
-    
     return processed_ids
 
 def main_10_sync_organization_structure():
@@ -619,7 +597,7 @@ if __name__ == "__main__":
 
     # main_9_build_organization_structure_in_dnk()
     main_10_sync_organization_structure()
-    main_8_test_bulk_ods_datasets_upload_and_delete(cleanup_after_test=False, max_datasets=3)
+    main_8_test_bulk_ods_datasets_upload_and_delete(max_datasets=3)
 
     logging.info('Job successful!')
     
