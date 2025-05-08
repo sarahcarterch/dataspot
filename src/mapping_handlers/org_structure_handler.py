@@ -580,34 +580,37 @@ class OrgStructureHandler(BaseDataspotHandler):
         """
         Synchronize organizational units in Dataspot with data from the Staatskalender ODS API.
         
+        This method handles both initial uploads (when no org units exist) and incremental updates.
+        For initial uploads, it performs a bulk upload of the entire hierarchy.
+        For incremental updates, it compares source and current data and applies only necessary changes.
+        
+        The synchronization process follows these steps:
+        1. ✓ Source org data from ODS (already provided as input parameter)
+        2. Update local mappings from Dataspot to ensure latest state
+        3. Check if this is an initial run (no existing org units in Dataspot)
+           a. If initial: Perform bulk hierarchy upload
+           b. If incremental: Continue with comparison-based sync
+        4. Transform source data to a layer-based tree structure
+        5. Fetch and transform current org data from Dataspot
+        6. Compare the two structures to identify needed changes
+        7. Apply changes to Dataspot via REST API
+        8. Update mappings after changes and save to CSV
+        9. Generate and return a summary of changes
+        
         Args:
-            org_data: Dictionary containing organization data from ODS API
-            validate_urls: Whether to validate Staatskalender URLs
+            org_data (Dict[str, Any]): Dictionary containing organization data from ODS API
+            validate_urls (bool, optional): Whether to validate Staatskalender URLs (can be slow). Defaults to False.
             
         Returns:
-            Dict: Summary of the synchronization process
-        
-        # TODO (Renato): Think about refactoring; it looks messy this way.
-        This method implements the following algorithm:
-        1. Fetch source org data from ODS (Staatskalender)
-        2. Transform the data to a tree structure by layer
-        3. Fetch current org data from Dataspot via Download API
-        4. Compare the two trees
-        5. Apply changes to Dataspot via REST API
-        6. Update mappings after changes
-        7. Generate a summary of changes
-        
-        Args:
-            org_data: Dictionary containing organization data from ODS API
-            validate_urls: Whether to validate Staatskalender URLs (can be slow)
-            
-        Returns:
-            Dict[str, Any]: Summary of the synchronization process
+            Dict[str, Any]: Summary of the synchronization process including statistics and sample changes
         """
         logging.info("Starting synchronization of organizational units...")
         
         # Fetch current org data from Dataspot
         dataspot_units = self._fetch_current_org_units()
+
+        # Update mappings before upload
+        self.update_mappings_before_upload()
         
         # Check if this is an initial run (no org units in Dataspot that match our filter)
         is_initial_run = len(dataspot_units) == 0
@@ -616,6 +619,13 @@ class OrgStructureHandler(BaseDataspotHandler):
         if is_initial_run:
             logging.info("No organizational units found in Dataspot. Performing initial bulk upload...")
             result = self.build_organization_hierarchy_from_ods_bulk(org_data, validate_urls=validate_urls)
+
+            staatskalender_ids = [org_unit['id'] for org_unit in org_data.get('results')]
+
+            # Update mappings after upload and save to CSV
+            self.update_mappings_after_upload(staatskalender_ids)
+            self.mapping.save_to_csv()
+            
             return {
                 "status": result.get("status", "unknown"),
                 "message": "Performed initial bulk upload as no existing organizational units were found",
@@ -646,7 +656,8 @@ class OrgStructureHandler(BaseDataspotHandler):
             staatskalender_ids = [change.staatskalender_id for change in changes]
             logging.info(f"Updating mappings for {len(staatskalender_ids)} changed organizational units")
             try:
-                self._download_and_update_mappings(staatskalender_ids)
+                self.update_mappings_after_upload(staatskalender_ids)
+                self.mapping.save_to_csv()
             except Exception as e:
                 logging.error(f"Error updating mappings: {str(e)}")
         
@@ -1113,7 +1124,8 @@ class OrgStructureHandler(BaseDataspotHandler):
                      f"{stats['deleted']} deleted, {stats['errors']} errors")
         
         return stats
-    
+
+    # TODO: Give a FULL summary
     def _generate_sync_summary(self, changes: List[OrgUnitChange]) -> Dict[str, Any]:
         """
         Generate a human-readable summary of the synchronization.

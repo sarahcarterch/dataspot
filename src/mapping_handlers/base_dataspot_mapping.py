@@ -103,7 +103,7 @@ class BaseDataspotMapping:
         except Exception as e:
             logging.warning(f"Error parsing mapping file: %s", str(e))
 
-    def _save_mapping(self) -> None:
+    def save_to_csv(self) -> None:
         """Save the current mapping to the CSV file."""
         try:
             # Sort the items by external_id
@@ -182,7 +182,7 @@ class BaseDataspotMapping:
 
         # Store the entry including _type
         self.mapping[external_id] = (_type, uuid_str, in_collection)
-        self._save_mapping()
+        self.save_to_csv()
         return True
 
     def remove_entry(self, external_id: str) -> bool:
@@ -197,7 +197,7 @@ class BaseDataspotMapping:
         """
         if external_id in self.mapping:
             del self.mapping[external_id]
-            self._save_mapping()
+            self.save_to_csv()
             return True
         return False
 
