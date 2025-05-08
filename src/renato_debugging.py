@@ -523,14 +523,9 @@ def main_8_test_bulk_ods_datasets_upload_and_delete(max_datasets: int = None):
 
             dataspot_client.ensure_ods_imports_collection_exists()
 
-            # Perform the bulk upload
-            create_response = dataspot_client.bulk_create_or_update_datasets(
-                datasets=all_datasets,
-                operation="ADD",
-                dry_run=False
-            )
-            
-            logging.info(f"Bulk upload completed. Response summary: {create_response}")
+            creation_summary = dataspot_client.sync_datasets(datasets=all_datasets)
+
+            logging.info(f"Bulk upload completed. Response summary: {creation_summary}")
             
         except Exception as e:
             logging.error(f"Error during bulk upload: {str(e)}")
