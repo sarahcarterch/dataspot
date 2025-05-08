@@ -145,14 +145,14 @@ class DNKClient(BaseDataspotClient):
         """
         return self.org_handler.sync_org_units(org_data, validate_urls)
     
-    def sync_datasets(self, target_ods_ids: List[str] = None) -> Dict[str, Any]:
+    def sync_datasets(self, datasets: List[Dataset]) -> Dict[str, Any]:
         """
         Synchronize datasets between ODS and Dataspot.
         
         Args:
-            target_ods_ids: If provided, only sync mappings for these ODS IDs
+            datasets: List of Dataset objects to synchronize
             
         Returns:
             Dict: Summary of the synchronization process
         """
-        return self.dataset_handler.sync_datasets(target_ods_ids)
+        return self.dataset_handler.sync_datasets(datasets)

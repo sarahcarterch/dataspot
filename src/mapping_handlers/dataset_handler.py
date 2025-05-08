@@ -58,24 +58,78 @@ class DatasetHandler(BaseDataspotHandler):
         # Set the asset type filter based on asset_id_field
         self.asset_type_filter = lambda asset: asset.get(self.asset_id_field) is not None
 
-    def sync_datasets(self, target_ods_ids: List[str] = None) -> Dict[str, Any]:
+    def sync_datasets(self, datasets: List[Dataset]) -> Dict[str, Any]:
         """
-        Synchronize datasets between ODS and Dataspot by updating mappings.
+        Synchronize datasets between ODS and Dataspot.
         This is the main public method for dataset synchronization.
         
+        The method:
+        1. Updates mappings before upload
+        2. Uploads datasets using bulk_create_or_update_datasets
+        3. Updates mappings after upload
+        4. Saves mappings to CSV
+        
         Args:
-            target_ods_ids: If provided, only sync mappings for these ODS IDs
+            datasets: List of Dataset objects to synchronize with Dataspot
             
         Returns:
             Dict[str, Any]: Summary of the synchronization process
         """
-        updated_count = self._download_and_update_mappings(target_ods_ids)
+        if not datasets:
+            logging.warning("No datasets provided for synchronization")
+            return {
+                "status": "error",
+                "message": "No datasets provided for synchronization",
+                "datasets_processed": 0
+            }
         
-        return {
+        logging.info(f"Starting synchronization of {len(datasets)} datasets...")
+        
+        # Step 1: Update mappings before upload
+        logging.info("Step 1: Updating mappings before upload...")
+        try:
+            self.update_mappings_before_upload()
+        except Exception as e:
+            logging.warning(f"Failed to update mappings before upload: {str(e)}")
+            
+        # Step 2: Extract ODS IDs for later mapping updates
+        ods_ids = []
+        for dataset in datasets:
+            dataset_json = dataset.to_json()
+            ods_id = dataset_json.get('customProperties', {}).get('ODS_ID')
+            if ods_id:
+                ods_ids.append(ods_id)
+        
+        # Step 3: Upload datasets using bulk_create_or_update_datasets
+        logging.info(f"Step 3: Uploading {len(datasets)} datasets...")
+        upload_result = self.bulk_create_or_update_datasets(
+            datasets=datasets,
+            operation="ADD",
+            dry_run=False
+        )
+        
+        # Step 4: Update mappings after upload
+        logging.info("Step 4: Updating mappings after upload...")
+        if ods_ids:
+            try:
+                self.update_mappings_after_upload(ods_ids)
+            except Exception as e:
+                logging.error(f"Error updating mappings after upload: {str(e)}")
+        
+        # Step 5: Save mappings to CSV
+        logging.info("Step 5: Saving mappings to CSV...")
+        self.mapping.save_to_csv()
+        
+        # Generate result summary
+        result = {
             "status": "success",
-            "message": f"Successfully synchronized {updated_count} datasets",
-            "updated_count": updated_count
+            "message": f"Successfully synchronized {len(datasets)} datasets",
+            "datasets_processed": len(datasets),
+            "upload_result": upload_result
         }
+        
+        logging.info(f"Dataset synchronization completed successfully")
+        return result
 
     def update_mappings_after_upload(self, ods_ids: List[str]) -> None:
         """
