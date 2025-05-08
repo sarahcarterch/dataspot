@@ -477,10 +477,7 @@ def main_8_test_bulk_ods_datasets_upload_and_delete(max_datasets: int = None):
     # Get all public dataset IDs
     logging.info(f"Step 1: Retrieving {max_datasets or 'all'} public dataset IDs from ODS...")
     ods_ids = ods_utils.get_all_dataset_ids(include_restricted=False, max_datasets=max_datasets)
-    
-    if max_datasets:
-        ods_ids = ods_ids[:max_datasets]
-        
+
     logging.info(f"Found {len(ods_ids)} datasets to process")
     
     # Process all datasets
@@ -595,8 +592,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     logging.info(f'Executing {__file__}...')
 
-    # main_9_build_organization_structure_in_dnk()
-    main_10_sync_organization_structure()
+    #main_10_sync_organization_structure()
     main_8_test_bulk_ods_datasets_upload_and_delete(max_datasets=3)
 
     logging.info('Job successful!')
