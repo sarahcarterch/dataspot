@@ -583,6 +583,13 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     logging.info(f'Executing {__file__}...')
 
+    import config
+    logging.info(f"Running script on database: {config.database_name}")
+    if config.database_name == "metadatenmanagement":
+        answer = input("Are you sure you want to run this script in the prod environment (y/[n])? ")
+        if answer != 'y':
+            exit("Aborting run...")
+
     #main_10_sync_organization_structure()
     main_8_test_bulk_ods_datasets_upload_and_delete(max_datasets=3)
 
