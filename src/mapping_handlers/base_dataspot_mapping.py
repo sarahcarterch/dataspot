@@ -36,6 +36,16 @@ class BaseDataspotMapping:
 
         # Derive csv_file_path from the mandatory database_name and scheme
         self.csv_file_path = self._get_mapping_file_path(database_name, scheme)
+        
+        # Ensure the mappings directory exists
+        mappings_dir = os.path.dirname(self.csv_file_path)
+        if not os.path.exists(mappings_dir):
+            try:
+                os.makedirs(mappings_dir)
+                logging.info(f"Created mappings directory: {mappings_dir}")
+            except (IOError, PermissionError) as e:
+                logging.warning(f"Could not create mappings directory: {str(e)}")
+        
         logging.info(f"Using mapping file: {self.csv_file_path}")
 
         # Mapping: Dict[str, Tuple[str, str, Optional[str]]] -> Dict[external_id, (_type, uuid, inCollection)]
@@ -53,8 +63,20 @@ class BaseDataspotMapping:
         return [self.id_field_name, '_type', 'uuid', 'inCollection']
 
     def _get_mapping_file_path(self, database_name: str, scheme: str) -> str:
-        """Get the file path for the mapping file based on database name and scheme. Format: {database_name}_{scheme}_{file_prefix}-mapping.csv"""
-        return f"{database_name}_{scheme}_{self._file_prefix}-mapping.csv"
+        """Get the file path for the mapping file based on database name and scheme. Format: mappings/{database_name}_{scheme}_{file_prefix}-mapping.csv"""
+        # Get project root directory (2 levels up from this module)
+        current_file_path = os.path.abspath(__file__)
+        src_dir = os.path.dirname(os.path.dirname(current_file_path))
+        project_root = os.path.dirname(src_dir)
+        
+        # Define mappings directory
+        mappings_dir = os.path.join(project_root, "mappings")
+        
+        # Construct the filename
+        filename = f"{database_name}_{scheme}_{self._file_prefix}-mapping.csv"
+        
+        # Return the full path
+        return os.path.join(mappings_dir, filename)
 
     def _load_mapping(self) -> None:
         """Load the mapping from the CSV file if it exists."""
