@@ -65,39 +65,6 @@ class OrgStructureHandler(BaseDataspotHandler):
             asset.get(self.asset_id_field) is not None
         )
     
-    def get_validated_staatskalender_url(self, title: str, url_website: str, validate_url: bool = False) -> str:
-        """
-        Validate a Staatskalender URL for an organization or use the provided URL.
-        
-        Args:
-            title (str): The organization title
-            url_website (str): The URL provided in the data
-            validate_url (bool): Whether to validate the URL by making an HTTP request
-            
-        Returns:
-            str: The validated URL for the organization, or empty string if invalid or validation fails
-            
-        Note:
-            If validation fails or no URL is provided, an empty string is returned.
-            No exceptions are raised from this method, validation errors are logged.
-        """
-        # If URL is already provided, optionally validate it
-        if url_website:
-            if not validate_url:
-                return url_website
-                
-            # Validate the provided URL
-            try:
-                response = requests_get(url_website)
-                if response.status_code == 200:
-                    return url_website
-                logging.warning(f"Invalid provided URL for organization '{title}': {url_website}")
-            except Exception as e:
-                logging.warning(f"Error validating URL for organization '{title}': {url_website}")
-                
-        # If no URL or validation failed, return empty string
-        return ""
-
     def bulk_create_or_update_organizational_units(self, organizational_units: List[Dict[str, Any]], 
                                         operation: str = "ADD", dry_run: bool = False) -> dict:
         """
@@ -121,13 +88,12 @@ class OrgStructureHandler(BaseDataspotHandler):
         # Call the base class method with our specific asset type
         return self.bulk_create_or_update_assets(organizational_units, operation, dry_run)
     
-    def transform_organization_for_bulk_upload(self, org_data: Dict[str, Any], validate_urls: bool = False) -> List[Dict[str, Any]]:
+    def transform_organization_for_bulk_upload(self, org_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Build organization hierarchy from flat data using parent_id and children_id fields.
         
         Args:
             org_data (Dict[str, Any]): Organization data from ODS API
-            validate_urls (bool): Whether to validate Staatskalender URLs
             
         Returns:
             List[Dict[str, Any]]: List of organizational units with hierarchy info
@@ -348,12 +314,8 @@ class OrgStructureHandler(BaseDataspotHandler):
                     logging.warning(f"Organization {org_id} missing title, skipping")
                     continue
                 
-                # Get or validate URL
-                url_website = self.get_validated_staatskalender_url(
-                    title, 
-                    org.get('url_website', ''), 
-                    validate_url=validate_urls
-                )
+                # Get URL
+                url_website = org.get('url_website', '')
                 
                 # Create unit data
                 unit_data = {
@@ -422,7 +384,7 @@ class OrgStructureHandler(BaseDataspotHandler):
             
         return all_units
     
-    def build_organization_hierarchy_from_ods_bulk(self, org_data: Dict[str, Any], validate_urls: bool = False) -> dict:
+    def build_organization_hierarchy_from_ods_bulk(self, org_data: Dict[str, Any]) -> dict:
         """
         Build organization hierarchy in the DNK based on data from ODS API using bulk upload.
         
@@ -431,7 +393,6 @@ class OrgStructureHandler(BaseDataspotHandler):
         
         Args:
             org_data (Dict[str, Any]): Dictionary containing organization data from ODS API
-            validate_urls (bool): Whether to validate Staatskalender URLs (can be slow)
             
         Returns:
             dict: The response from the final bulk upload API call with status information
@@ -450,7 +411,7 @@ class OrgStructureHandler(BaseDataspotHandler):
             logging.warning(f"Failed to preload organizational unit mappings, continuing with existing mappings: {str(e)}")
             
         # Transform organization data for bulk upload
-        org_units = self.transform_organization_for_bulk_upload(org_data, validate_urls=validate_urls)
+        org_units = self.transform_organization_for_bulk_upload(org_data)
         
         if not org_units:
             logging.warning("No organizational units to upload")
@@ -549,7 +510,7 @@ class OrgStructureHandler(BaseDataspotHandler):
             
         return result
 
-    def sync_org_units(self, org_data: Dict[str, Any], validate_urls: bool = False) -> Dict[str, Any]:
+    def sync_org_units(self, org_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Synchronize organizational units in Dataspot with data from the Staatskalender ODS API.
         
@@ -572,7 +533,6 @@ class OrgStructureHandler(BaseDataspotHandler):
         
         Args:
             org_data (Dict[str, Any]): Dictionary containing organization data from ODS API
-            validate_urls (bool, optional): Whether to validate Staatskalender URLs (can be slow). Defaults to False.
             
         Returns:
             Dict[str, Any]: Summary of the synchronization process including statistics and sample changes
@@ -591,7 +551,7 @@ class OrgStructureHandler(BaseDataspotHandler):
         # If this is an initial run, perform bulk upload
         if is_initial_run:
             logging.info("No organizational units found in Dataspot. Performing initial bulk upload...")
-            result = self.build_organization_hierarchy_from_ods_bulk(org_data, validate_urls=validate_urls)
+            result = self.build_organization_hierarchy_from_ods_bulk(org_data)
 
             staatskalender_ids = [org_unit['id'] for org_unit in org_data.get('results')]
 
@@ -622,7 +582,7 @@ class OrgStructureHandler(BaseDataspotHandler):
         changes = self._compare_org_structures(source_units_by_layer, dataspot_units_by_id)
         
         # Step 6: Apply changes
-        self._apply_org_unit_changes(changes, validate_urls, is_initial_run=False)
+        self._apply_org_unit_changes(changes, is_initial_run=False)
         
         # Step 7: Update mappings after changes
         if changes:
@@ -652,7 +612,7 @@ class OrgStructureHandler(BaseDataspotHandler):
         logging.info("Transforming organization data to layer structure...")
         
         # Use transform_organization_for_bulk_upload as it already builds the hierarchy
-        org_units = self.transform_organization_for_bulk_upload(org_data, validate_urls=False)
+        org_units = self.transform_organization_for_bulk_upload(org_data)
         
         # Group units by depth
         units_by_depth = {}
@@ -842,13 +802,12 @@ class OrgStructureHandler(BaseDataspotHandler):
         
         return changes
     
-    def _apply_org_unit_changes(self, changes: List[OrgUnitChange], validate_urls: bool = False, is_initial_run: bool = False) -> Dict[str, int]:
+    def _apply_org_unit_changes(self, changes: List[OrgUnitChange], is_initial_run: bool = False) -> Dict[str, int]:
         """
         Apply the identified changes to Dataspot.
         
         Args:
             changes: List of changes to apply
-            validate_urls: Whether to validate URLs when creating or updating org units
             is_initial_run: Whether this is an initial run with no existing org units
             
         Returns:
@@ -965,12 +924,6 @@ class OrgStructureHandler(BaseDataspotHandler):
                         update_data["customProperties"] = {}
                     update_data["customProperties"]["id_im_staatskalender"] = change.staatskalender_id
                 
-                # If we're updating the URL, validate it if requested
-                if validate_urls and "customProperties" in update_data and "link_zum_staatskalender" in update_data["customProperties"]:
-                    url = update_data["customProperties"]["link_zum_staatskalender"]
-                    validated_url = self.get_validated_staatskalender_url(change.title, url, validate_url=True)
-                    update_data["customProperties"]["link_zum_staatskalender"] = validated_url
-                
                 # Update the asset
                 self.client._update_asset(endpoint, update_data, replace=False)
                 
@@ -1046,22 +999,9 @@ class OrgStructureHandler(BaseDataspotHandler):
             try:
                 logging.info(f"Creating {len(units)} org units under parent path '{parent_path}'")
                 
-                # Prepare units for bulk upload
-                prepared_units = []
-                
-                for unit in units:
-                    # If we're validating URLs, do that now
-                    if validate_urls and "customProperties" in unit and "link_zum_staatskalender" in unit["customProperties"]:
-                        url = unit["customProperties"]["link_zum_staatskalender"]
-                        title = unit.get("label", "")
-                        validated_url = self.get_validated_staatskalender_url(title, url, validate_url=True)
-                        unit["customProperties"]["link_zum_staatskalender"] = validated_url
-                    
-                    prepared_units.append(unit)
-                
                 # Bulk upload these units
                 response = self.bulk_create_or_update_organizational_units(
-                    organizational_units=prepared_units,
+                    organizational_units=units,
                     operation="ADD",
                     dry_run=False
                 )
@@ -1083,11 +1023,11 @@ class OrgStructureHandler(BaseDataspotHandler):
                 if errors:
                     logging.warning(f"Bulk creation completed with {len(errors)} errors:")
                     stats["errors"] += len(errors)
-                    stats["created"] += len(prepared_units) - len(errors)
+                    stats["created"] += len(units) - len(errors)
                     for error in errors:
                         logging.error(f"  - {error['message']}")
                 else:
-                    stats["created"] += len(prepared_units)
+                    stats["created"] += len(units)
                 
             except Exception as e:
                 logging.error(f"Error creating org units under parent '{parent_path}': {str(e)}")

@@ -132,18 +132,17 @@ class DNKClient(BaseDataspotClient):
         )
     
     # Synchronization methods delegated to handlers
-    def sync_org_units(self, org_data: Dict[str, Any], validate_urls: bool = False) -> Dict[str, Any]:
+    def sync_org_units(self, org_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Synchronize organizational units in Dataspot with data from the Staatskalender ODS API.
         
         Args:
             org_data: Dictionary containing organization data from ODS API
-            validate_urls: Whether to validate Staatskalender URLs
             
         Returns:
             Dict: Summary of the synchronization process
         """
-        return self.org_handler.sync_org_units(org_data, validate_urls)
+        return self.org_handler.sync_org_units(org_data)
     
     def sync_datasets(self, datasets: List[Dataset]) -> Dict[str, Any]:
         """

@@ -547,9 +547,6 @@ def main_10_sync_organization_structure():
     ods_client = ODSClient()
     dataspot_client = DNKClient()
 
-    # Configuration
-    validate_urls = False  # Set to False to skip URL validation (much faster)
-
     # Fetch organization data
     logging.info("Fetching organization data from ODS API...")
     all_organizations = ods_client.get_all_organization_data(batch_size=100)
@@ -560,8 +557,7 @@ def main_10_sync_organization_structure():
     try:
         # Use the sync method with URL validation feature flag
         sync_result = dataspot_client.sync_org_units(
-            all_organizations,
-            validate_urls=validate_urls
+            all_organizations
         )
         
         # Display sync results
