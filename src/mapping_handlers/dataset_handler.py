@@ -185,13 +185,6 @@ class DatasetHandler(BaseDataspotHandler):
             logging.warning("No datasets provided for bulk upload")
             return {"status": "error", "message": "No datasets provided"}
 
-        # Preload mapping from DNK to ensure we have the latest mapping data
-        try:
-            logging.info("Preloading ODS ID to Dataspot mappings from DNK system")
-            self._download_and_update_mappings()
-        except Exception as e:
-            logging.warning(f"Failed to preload mappings, continuing with existing mappings: {str(e)}")
-        
         # Ensure ODS-Imports collection exists and get its UUID
         try:
             logging.debug("Ensuring ODS-Imports collection exists")
@@ -317,13 +310,6 @@ class DatasetHandler(BaseDataspotHandler):
             HTTPError: If API requests fail
             json.JSONDecodeError: If response parsing fails
         """
-        # Preload mapping from DNK to ensure we have the latest mapping data
-        try:
-            logging.info("Preloading ODS ID to Dataspot mappings from DNK system")
-            self._download_and_update_mappings()
-        except Exception as e:
-            logging.warning(f"Failed to preload mappings, continuing with existing mappings: {str(e)}")
-        
         # Get ODS ID from dataset
         ods_id = dataset.to_json().get('customProperties', {}).get('ODS_ID')
         if not ods_id:
@@ -492,13 +478,6 @@ class DatasetHandler(BaseDataspotHandler):
             HTTPError: If API requests fail
             json.JSONDecodeError: If response parsing fails
         """
-        # Preload mapping from DNK to ensure we have the latest mapping data
-        try:
-            logging.info("Preloading ODS ID to Dataspot mappings from DNK system")
-            self._download_and_update_mappings()
-        except Exception as e:
-            logging.warning(f"Failed to preload mappings, continuing with existing mappings: {str(e)}")
-        
         # Validate update strategy
         valid_strategies = ['create_only', 'update_only', 'create_or_update']
         if update_strategy not in valid_strategies:

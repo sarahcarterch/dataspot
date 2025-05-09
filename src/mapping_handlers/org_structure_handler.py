@@ -403,13 +403,6 @@ class OrgStructureHandler(BaseDataspotHandler):
         """
         logging.info("Building organization hierarchy using level-by-level bulk upload...")
         
-        # Preload mappings from DNK to ensure we have the latest mapping data
-        try:
-            logging.info("Preloading Staatskalender ID to Dataspot mappings from DNK system")
-            self._download_and_update_mappings()
-        except Exception as e:
-            logging.warning(f"Failed to preload organizational unit mappings, continuing with existing mappings: {str(e)}")
-            
         # Transform organization data for bulk upload
         org_units = self.transform_organization_for_bulk_upload(org_data)
         
