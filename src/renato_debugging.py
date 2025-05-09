@@ -580,7 +580,10 @@ def main_10_sync_organization_structure():
     logging.info("=============================================")
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(levelname)s:%(name)s:[%(filename)s:%(funcName)s:%(lineno)d] %(message)s'
+    )
     logging.info(f'Executing {__file__}...')
 
     import config
@@ -594,4 +597,3 @@ if __name__ == "__main__":
     main_8_test_bulk_ods_datasets_upload_and_delete(max_datasets=3)
 
     logging.info('Job successful!')
-    
