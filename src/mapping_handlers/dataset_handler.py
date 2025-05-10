@@ -99,10 +99,7 @@ class DatasetHandler(BaseDataspotHandler):
 
         # Step 1: Update mappings before upload
         logging.info("Step 1: Updating mappings before upload...")
-        try:
-            self.update_mappings_before_upload()
-        except Exception as e:
-            logging.warning(f"Failed to update mappings before upload: {str(e)}")
+        self.update_mappings_before_upload()
 
         # Step 2: Extract ODS IDs for later mapping updates
         ods_ids = []
@@ -123,10 +120,7 @@ class DatasetHandler(BaseDataspotHandler):
         # Step 4: Update mappings after upload
         logging.info("Step 4: Updating mappings after upload...")
         if ods_ids:
-            try:
-                self.update_mappings_after_upload(ods_ids)
-            except Exception as e:
-                logging.error(f"Error updating mappings after upload: {str(e)}")
+            self.update_mappings_after_upload(ods_ids)
 
         # Step 5: Save mappings to CSV
         logging.info("Step 5: Saving mappings to CSV...")
@@ -186,25 +180,18 @@ class DatasetHandler(BaseDataspotHandler):
             return {"status": "error", "message": "No datasets provided"}
 
         # Ensure ODS-Imports collection exists and get its UUID
-        try:
-            logging.debug("Ensuring ODS-Imports collection exists")
-            collection_data = self.client.ensure_ods_imports_collection_exists()
-            
-            # Get the collection UUID
-            collection_uuid = get_uuid_from_response(collection_data)
+        logging.debug("Ensuring ODS-Imports collection exists")
+        collection_data = self.client.ensure_ods_imports_collection_exists()
+        
+        # Get the collection UUID
+        collection_uuid = get_uuid_from_response(collection_data)
 
-            if not collection_uuid:
-                error_msg = "Failed to get collection UUID"
-                logging.error(error_msg)
-                raise ValueError(error_msg)
+        if not collection_uuid:
+            error_msg = "Failed to get collection UUID"
+            logging.error(error_msg)
+            raise ValueError(error_msg)
 
-            logging.debug(f"Using collection UUID: {collection_uuid}")
-        except HTTPError as e:
-            logging.error(f"HTTP error ensuring ODS-Imports collection exists: {str(e)}")
-            raise
-        except Exception as e:
-            logging.error(f"Unexpected error ensuring ODS-Imports collection exists: {str(e)}")
-            raise ValueError(f"Could not access collection information: {str(e)}")
+        logging.debug(f"Using collection UUID: {collection_uuid}")
         
         # Validate and transform datasets
         dataset_jsons = []
@@ -212,36 +199,33 @@ class DatasetHandler(BaseDataspotHandler):
         validation_errors = []
         
         for i, dataset in enumerate(datasets):
-            try:
-                # Get ODS ID from dataset
-                dataset_json = dataset.to_json()
-                ods_id = dataset_json.get('customProperties', {}).get('ODS_ID')
-                
-                if not ods_id:
-                    validation_errors.append(f"Dataset at index {i} missing 'ODS_ID' property")
-                    continue
-                
-                ods_ids.append(ods_id)
-                
-                # Read the dataset title for logging
-                title = dataset_json.get('label', f"<Unnamed Dataset {ods_id}>")
-                logging.debug(f"Processing dataset '{title}' with ODS ID: {ods_id}")
-                
-                # Check if this dataset has a stored inCollection (business key)
-                inCollection = self.mapping.get_inCollection(ods_id)
-                
-                if inCollection:
-                    # Use the stored inCollection business key
-                    logging.debug(f"Using stored inCollection '{inCollection}' for dataset with ODS ID: {ods_id}")
-                    dataset_json['inCollection'] = inCollection
-                else:
-                    # Use the centralized default dataset path
-                    logging.debug(f"Using default dataset path: '{self.default_dataset_path_full}' for dataset with ODS ID: {ods_id}")
-                    dataset_json['inCollection'] = self.default_dataset_path_full
-                
-                dataset_jsons.append(dataset_json)
-            except Exception as e:
-                validation_errors.append(f"Error processing dataset at index {i}: {str(e)}")
+            # Get ODS ID from dataset
+            dataset_json = dataset.to_json()
+            ods_id = dataset_json.get('customProperties', {}).get('ODS_ID')
+            
+            if not ods_id:
+                validation_errors.append(f"Dataset at index {i} missing 'ODS_ID' property")
+                continue
+            
+            ods_ids.append(ods_id)
+            
+            # Read the dataset title for logging
+            title = dataset_json.get('label', f"<Unnamed Dataset {ods_id}>")
+            logging.debug(f"Processing dataset '{title}' with ODS ID: {ods_id}")
+            
+            # Check if this dataset has a stored inCollection (business key)
+            inCollection = self.mapping.get_inCollection(ods_id)
+            
+            if inCollection:
+                # Use the stored inCollection business key
+                logging.debug(f"Using stored inCollection '{inCollection}' for dataset with ODS ID: {ods_id}")
+                dataset_json['inCollection'] = inCollection
+            else:
+                # Use the centralized default dataset path
+                logging.debug(f"Using default dataset path: '{self.default_dataset_path_full}' for dataset with ODS ID: {ods_id}")
+                dataset_json['inCollection'] = self.default_dataset_path_full
+            
+            dataset_jsons.append(dataset_json)
         
         # If we encountered validation errors, raise an exception
         if validation_errors:
@@ -260,41 +244,23 @@ class DatasetHandler(BaseDataspotHandler):
         logging.info(f"Bulk creating {num_datasets} datasets (operation: {operation}, dry_run: {dry_run})...")
         
         # Bulk create datasets using the scheme name
-        try:
-            response = self.client.bulk_create_or_update_assets(
-                scheme_name=self.scheme_name,
-                data=dataset_jsons,
-                operation=operation,
-                dry_run=dry_run
-            )
+        response = self.client.bulk_create_or_update_assets(
+            scheme_name=self.scheme_name,
+            data=dataset_jsons,
+            operation=operation,
+            dry_run=dry_run
+        )
 
-            logging.info(f"Bulk creation complete")
+        logging.info(f"Bulk creation complete")
 
-            # Update mapping for each dataset (only for non-dry runs)
-            if not dry_run:
-                try:
-                    # After bulk upload, retrieve the datasets and update mapping
-                    self.update_mappings_after_upload(ods_ids)
-                except Exception as e:
-                    logging.warning(f"Failed to update mapping after bulk upload: {str(e)}")
-                    # Continue despite mapping update failure - the upload was successful
-            
-            logging.info(f"Bulk dataset creation completed successfully")
-            return response
-            
-        except HTTPError as e:
-            logging.error(f"HTTP error during bulk upload: {str(e)}")
-            if hasattr(e, 'response') and e.response is not None:
-                try:
-                    error_details = e.response.json()
-                    logging.error(f"Error response details: {error_details}")
-                except:
-                    logging.error(f"Error response status: {e.response.status_code}, text: {e.response.text[:500]}")
-            raise
-        except Exception as e:
-            logging.error(f"Unexpected error during bulk upload: {str(e)}")
-            raise
-    
+        # Update mapping for each dataset (only for non-dry runs)
+        if not dry_run:
+            # After bulk upload, retrieve the datasets and update mapping
+            self.update_mappings_after_upload(ods_ids)
+        
+        logging.info(f"Bulk dataset creation completed successfully")
+        return response
+
     def create_dataset(self, dataset: Dataset) -> dict:
         """
         Create a new dataset in the 'Datennutzungskatalog/ODS-Imports' in Dataspot.

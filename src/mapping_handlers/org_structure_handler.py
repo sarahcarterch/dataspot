@@ -471,7 +471,6 @@ class OrgStructureHandler(BaseDataspotHandler):
                     
                     if error_count > 10:
                         logging.warning(f"... and {error_count - 10} more errors")
-                
             except Exception as e:
                 error_msg = f"Error uploading level {depth}: {str(e)}"
                 logging.error(error_msg)
@@ -580,11 +579,8 @@ class OrgStructureHandler(BaseDataspotHandler):
         if changes:
             staatskalender_ids = [change.staatskalender_id for change in changes]
             logging.info(f"Updating mappings for {len(staatskalender_ids)} changed organizational units")
-            try:
-                self.update_mappings_after_upload(staatskalender_ids)
-                self.mapping.save_to_csv()
-            except Exception as e:
-                logging.error(f"Error updating mappings: {str(e)}")
+            self.update_mappings_after_upload(staatskalender_ids)
+            self.mapping.save_to_csv()
         
         # Generate summary
         summary = self._generate_sync_summary(changes)
@@ -801,27 +797,22 @@ class OrgStructureHandler(BaseDataspotHandler):
         
         # First, handle deletions
         for change in changes_by_type["delete"]:
-            try:
-                uuid = change.details.get("uuid")
-                if not uuid:
-                    logging.warning(f"Cannot delete org unit '{change.title}' (ID: {change.staatskalender_id}) - missing UUID")
-                    stats["errors"] += 1
-                    continue
-                
-                # Construct endpoint for deletion
-                endpoint = url_join('rest', self.database_name, 'collections', uuid, leading_slash=True)
-                logging.info(f"Deleting org unit '{change.title}' (ID: {change.staatskalender_id}) at {endpoint}")
-                
-                # Delete the asset
-                self.client._delete_asset(endpoint)
-                stats["deleted"] += 1
-                
-                # Remove from mapping
-                self.mapping.remove_entry(change.staatskalender_id)
-                
-            except Exception as e:
-                logging.error(f"Error deleting org unit '{change.title}' (ID: {change.staatskalender_id}): {str(e)}")
+            uuid = change.details.get("uuid")
+            if not uuid:
+                logging.warning(f"Cannot delete org unit '{change.title}' (ID: {change.staatskalender_id}) - missing UUID")
                 stats["errors"] += 1
+                continue
+            
+            # Construct endpoint for deletion
+            endpoint = url_join('rest', self.database_name, 'collections', uuid, leading_slash=True)
+            logging.info(f"Deleting org unit '{change.title}' (ID: {change.staatskalender_id}) at {endpoint}")
+            
+            # Delete the asset
+            self.client._delete_asset(endpoint)
+            stats["deleted"] += 1
+            
+            # Remove from mapping
+            self.mapping.remove_entry(change.staatskalender_id)
         
         # Process updates one at a time and re-evaluate after each update
         remaining_updates = changes_by_type["update"].copy()
@@ -841,116 +832,107 @@ class OrgStructureHandler(BaseDataspotHandler):
             # Process one update at a time
             change = remaining_updates.pop(0)
             
-            try:
-                uuid = change.details.get("uuid")
-                if not uuid:
-                    logging.warning(f"Cannot update org unit '{change.title}' (ID: {change.staatskalender_id}) - missing UUID")
-                    stats["errors"] += 1
-                    continue
-                
-                # Construct endpoint for update
-                endpoint = url_join('rest', self.database_name, 'collections', uuid, leading_slash=True)
-                
-                logging.info(f"Updating org unit '{change.title}' (ID: {change.staatskalender_id})")
-                
-                # Create minimal update data with only necessary fields
-                update_data = {
-                    "_type": "Collection",
-                    "stereotype": "Organisationseinheit"
-                }
-                
-                # Check if there are any changes to apply
-                if not change.details.get("changes"):
-                    logging.debug(f"No changes needed for org unit '{change.title}' (ID: {change.staatskalender_id}), skipping update")
-                    continue
-                
-                # Apply changes
-                for field, change_info in change.details.get("changes", {}).items():
-                    if field == "customProperties":
-                        # For customProperties, only include what's changed
-                        if "customProperties" not in update_data:
-                            update_data["customProperties"] = {}
-                        
-                        for prop, prop_change in change_info.items():
-                            update_data["customProperties"][prop] = prop_change["new"]
-                    else:
-                        # For simple fields, only include what's changed
-                        update_data[field] = change_info["new"]
-                
-                # If we have an empty customProperties after filtering, remove it
-                if "customProperties" in update_data and not update_data["customProperties"]:
-                    del update_data["customProperties"]
-                    
-                # If nothing changed (only _type and stereotype is in update_data), skip the update
-                # FIXME: This could have an 'inCollection' field, which is not included in the update_data but unchanged. But we also can't just ignore this field, as the inCollection might've actually changed.
-                if len(update_data) == 2:
-                    logging.debug(f"No changes needed for org unit '{change.title}' (ID: {change.staatskalender_id}), skipping update")
-                    continue
-                
-                # For PATCH requests, id_im_staatskalender needs to be in customProperties
-                # This ensures correct placement for the update operation
-                if "id_im_staatskalender" not in update_data.get("customProperties", {}):
+            uuid = change.details.get("uuid")
+            if not uuid:
+                logging.warning(f"Cannot update org unit '{change.title}' (ID: {change.staatskalender_id}) - missing UUID")
+                stats["errors"] += 1
+                continue
+            
+            # Construct endpoint for update
+            endpoint = url_join('rest', self.database_name, 'collections', uuid, leading_slash=True)
+            
+            logging.info(f"Updating org unit '{change.title}' (ID: {change.staatskalender_id})")
+            
+            # Create minimal update data with only necessary fields
+            update_data = {
+                "_type": "Collection",
+                "stereotype": "Organisationseinheit"
+            }
+            
+            # Check if there are any changes to apply
+            if not change.details.get("changes"):
+                logging.debug(f"No changes needed for org unit '{change.title}' (ID: {change.staatskalender_id}), skipping update")
+                continue
+            
+            # Apply changes
+            for field, change_info in change.details.get("changes", {}).items():
+                if field == "customProperties":
+                    # For customProperties, only include what's changed
                     if "customProperties" not in update_data:
                         update_data["customProperties"] = {}
-                    update_data["customProperties"]["id_im_staatskalender"] = change.staatskalender_id
-                
-                # Update the asset
-                self.client._update_asset(endpoint, update_data, replace=False)
-                
-                # Re-fetch data after update to ensure we have the latest state, but only if not an initial run
-                # This is crucial to handle cases where Dataspot automatically updates inCollection paths
-                if not is_initial_run and remaining_updates:
-                    logging.debug(f"Re-fetching data after updating org unit '{change.title}' to ensure latest state")
-                    dataspot_units = self._fetch_current_org_units()
-                    dataspot_units_by_id = {
-                        str(unit.get("id_im_staatskalender")): unit 
-                        for unit in dataspot_units
-                    }
-
-                # TODO (large language model): We currently update a number that is too big when updating a collection label (inCollection of all children). Probably related to the FIXME above.
-                stats["updated"] += 1
-                processed_updates += 1
-                
-                # Re-evaluate all remaining updates with the latest data
-                if not is_initial_run and remaining_updates:
-                    new_remaining_updates = []
-                    for remaining_change in remaining_updates:
-                        # Get current data for this unit
-                        current_unit = dataspot_units_by_id.get(remaining_change.staatskalender_id)
-                        if not current_unit:
-                            logging.warning(f"Org unit '{remaining_change.title}' (ID: {remaining_change.staatskalender_id}) no longer exists, skipping update")
-                            continue
-                            
-                        # Re-evaluate changes needed based on current data
-                        source_unit = remaining_change.details.get("source_unit", {})
-                        changes_needed = self._check_for_unit_changes(source_unit, current_unit)
-                        
-                        if changes_needed:
-                            # Create an updated change object with fresh comparison data
-                            new_change = OrgUnitChange(
-                                staatskalender_id=remaining_change.staatskalender_id,
-                                title=remaining_change.title,
-                                change_type="update",
-                                details={
-                                    "uuid": current_unit.get("id"),
-                                    "changes": changes_needed,
-                                    "source_unit": source_unit,
-                                    "current_unit": current_unit
-                                }
-                            )
-                            new_remaining_updates.append(new_change)
                     
-                    # Update remaining changes list with re-evaluated changes
-                    remaining_updates = new_remaining_updates
-                    logging.debug(f"Re-evaluated remaining changes: {len(remaining_updates)} updates still needed")
+                    for prop, prop_change in change_info.items():
+                        update_data["customProperties"][prop] = prop_change["new"]
+                else:
+                    # For simple fields, only include what's changed
+                    update_data[field] = change_info["new"]
+            
+            # If we have an empty customProperties after filtering, remove it
+            if "customProperties" in update_data and not update_data["customProperties"]:
+                del update_data["customProperties"]
                 
-            except Exception as e:
-                logging.error(f"Error updating org unit '{change.title}' (ID: {change.staatskalender_id}): {str(e)}")
-                stats["errors"] += 1
-        
-        # Finally, handle bulk creation of new units
-        # This is more complex because we need to create them in the right order (by layer)
-        # and we need to use the bulk upload API
+            # If nothing changed (only _type and stereotype is in update_data), skip the update
+            # FIXME: This could have an 'inCollection' field, which is not included in the update_data but unchanged. But we also can't just ignore this field, as the inCollection might've actually changed.
+            if len(update_data) == 2:
+                logging.debug(f"No changes needed for org unit '{change.title}' (ID: {change.staatskalender_id}), skipping update")
+                continue
+            
+            # For PATCH requests, id_im_staatskalender needs to be in customProperties
+            # This ensures correct placement for the update operation
+            if "id_im_staatskalender" not in update_data.get("customProperties", {}):
+                if "customProperties" not in update_data:
+                    update_data["customProperties"] = {}
+                update_data["customProperties"]["id_im_staatskalender"] = change.staatskalender_id
+            
+            # Update the asset
+            self.client._update_asset(endpoint, update_data, replace=False)
+            
+            # Re-fetch data after update to ensure we have the latest state, but only if not an initial run
+            # This is crucial to handle cases where Dataspot automatically updates inCollection paths
+            if not is_initial_run and remaining_updates:
+                logging.debug(f"Re-fetching data after updating org unit '{change.title}' to ensure latest state")
+                dataspot_units = self._fetch_current_org_units()
+                dataspot_units_by_id = {
+                    str(unit.get("id_im_staatskalender")): unit 
+                    for unit in dataspot_units
+                }
+
+            # TODO (large language model): We currently update a number that is too big when updating a collection label (inCollection of all children). Probably related to the FIXME above.
+            stats["updated"] += 1
+            processed_updates += 1
+            
+            # Re-evaluate all remaining updates with the latest data
+            if not is_initial_run and remaining_updates:
+                new_remaining_updates = []
+                for remaining_change in remaining_updates:
+                    # Get current data for this unit
+                    current_unit = dataspot_units_by_id.get(remaining_change.staatskalender_id)
+                    if not current_unit:
+                        logging.warning(f"Org unit '{remaining_change.title}' (ID: {remaining_change.staatskalender_id}) no longer exists, skipping update")
+                        continue
+                        
+                    # Re-evaluate changes needed based on current data
+                    source_unit = remaining_change.details.get("source_unit", {})
+                    changes_needed = self._check_for_unit_changes(source_unit, current_unit)
+                    
+                    if changes_needed:
+                        # Create an updated change object with fresh comparison data
+                        new_change = OrgUnitChange(
+                            staatskalender_id=remaining_change.staatskalender_id,
+                            title=remaining_change.title,
+                            change_type="update",
+                            details={
+                                "uuid": current_unit.get("id"),
+                                "changes": changes_needed,
+                                "source_unit": source_unit,
+                                "current_unit": current_unit
+                            }
+                        )
+                        new_remaining_updates.append(new_change)
+                
+                # Update remaining changes list with re-evaluated changes
+                remaining_updates = new_remaining_updates
+                logging.debug(f"Re-evaluated remaining changes: {len(remaining_updates)} updates still needed")
         
         # Group create changes by their inCollection value (parent path)
         create_by_parent = {}
@@ -966,42 +948,37 @@ class OrgStructureHandler(BaseDataspotHandler):
         
         # Process each parent group
         for parent_path, units in create_by_parent.items():
-            try:
-                logging.info(f"Creating {len(units)} org units under parent path '{parent_path}'")
-                
-                # Bulk upload these units
-                response = self.bulk_create_or_update_organizational_units(
-                    organizational_units=units,
-                    operation="ADD",
-                    dry_run=False
-                )
-                
-                # Check for errors
-                infos = [message for message in response if message['level'] == 'INFO']
-                if infos:
-                    logging.info(f"Returned {len(infos)} infos:")
-                    for info in infos:
-                        logging.info(f"  - {info['message']}")
+            logging.info(f"Creating {len(units)} org units under parent path '{parent_path}'")
+            
+            # Bulk upload these units
+            response = self.bulk_create_or_update_organizational_units(
+                organizational_units=units,
+                operation="ADD",
+                dry_run=False
+            )
+            
+            # Check for errors
+            infos = [message for message in response if message['level'] == 'INFO']
+            if infos:
+                logging.info(f"Returned {len(infos)} infos:")
+                for info in infos:
+                    logging.info(f"  - {info['message']}")
 
-                debugs = [message for message in response if message['level'] == 'DEBUG']
-                if debugs:
-                    logging.debug(f"Returned {len(infos)} debug infos:")
-                    for deb in debugs:
-                        logging.debug(f"  - {deb['message']}")
+            debugs = [message for message in response if message['level'] == 'DEBUG']
+            if debugs:
+                logging.debug(f"Returned {len(infos)} debug infos:")
+                for deb in debugs:
+                    logging.debug(f"  - {deb['message']}")
 
-                errors = [message for message in response if message['level'] == 'ERROR']
-                if errors:
-                    logging.warning(f"Bulk creation completed with {len(errors)} errors:")
-                    stats["errors"] += len(errors)
-                    stats["created"] += len(units) - len(errors)
-                    for error in errors:
-                        logging.error(f"  - {error['message']}")
-                else:
-                    stats["created"] += len(units)
-                
-            except Exception as e:
-                logging.error(f"Error creating org units under parent '{parent_path}': {str(e)}")
-                stats["errors"] += len(units)
+            errors = [message for message in response if message['level'] == 'ERROR']
+            if errors:
+                logging.warning(f"Bulk creation completed with {len(errors)} errors:")
+                stats["errors"] += len(errors)
+                stats["created"] += len(units) - len(errors)
+                for error in errors:
+                    logging.error(f"  - {error['message']}")
+            else:
+                stats["created"] += len(units)
         
         logging.info(f"Change application complete: {stats['created']} created, {stats['updated']} updated, "
                      f"{stats['deleted']} deleted, {stats['errors']} errors")

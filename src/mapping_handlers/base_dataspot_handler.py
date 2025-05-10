@@ -245,13 +245,9 @@ class BaseDataspotHandler:
         """
         logging.info("Updating mappings from Dataspot before upload")
         
-        try:
-            updated_count = self._download_and_update_mappings()
-            logging.info(f"Updated {updated_count} mappings before upload")
-            return updated_count
-        except Exception as e:
-            logging.warning(f"Failed to update mappings before upload: {str(e)}")
-            raise
+        updated_count = self._download_and_update_mappings()
+        logging.info(f"Updated {updated_count} mappings before upload")
+        return updated_count
     
     def update_mappings_after_upload(self, ids: List[str]) -> None:
         """
@@ -266,19 +262,15 @@ class BaseDataspotHandler:
         """
         logging.info(f"Updating mappings for {len(ids)} assets using download API")
         
-        try:
-            updated_count = self._download_and_update_mappings(ids)
-            logging.info(f"Updated mappings for {updated_count} out of {len(ids)} assets")
+        updated_count = self._download_and_update_mappings(ids)
+        logging.info(f"Updated mappings for {updated_count} out of {len(ids)} assets")
 
-            # FIXME: I think this is buggy (we should not compare the number, but the actual ids, right??)
-            if updated_count < len(ids):
-                missing_ids = [id_value for id_value in ids if not self.mapping.get_entry(id_value)]
-                if missing_ids:
-                    logging.warning(f"Could not find mappings for {len(missing_ids)} IDs: {missing_ids[:5]}" + 
-                                      (f"... and {len(missing_ids)-5} more" if len(missing_ids) > 5 else ""))
-        except Exception as e:
-            logging.error(f"Error updating mappings: {str(e)}")
-            raise
+        # FIXME: I think this is buggy (we should not compare the number, but the actual ids, right??)
+        if updated_count < len(ids):
+            missing_ids = [id_value for id_value in ids if not self.mapping.get_entry(id_value)]
+            if missing_ids:
+                logging.warning(f"Could not find mappings for {len(missing_ids)} IDs: {missing_ids[:5]}" + 
+                                  (f"... and {len(missing_ids)-5} more" if len(missing_ids) > 5 else ""))
     
     def bulk_create_or_update_assets(self, assets: List[Dict[str, Any]], 
                                      operation: str = "ADD", dry_run: bool = False) -> dict:

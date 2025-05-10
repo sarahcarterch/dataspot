@@ -101,38 +101,33 @@ class ODSClient:
         batch_count = 0
         total_retrieved = 0
         
-        try:
-            while True:
-                # Get the next batch of organization data
-                offset = batch_count * batch_size
-                batch_data = self.get_organization_data(limit=batch_size, offset=offset)
-                
-                # Check if we received any results
-                batch_results = batch_data.get('results', [])
-                num_results = len(batch_results)
-                
-                if num_results == 0:
-                    # No more results, break out of the loop
-                    break
-                
-                # Add the batch results to our collected data
-                all_organizations['results'].extend(batch_results)
-                total_retrieved += num_results
-                
-                logging.info(f"Retrieved batch {batch_count + 1} with {num_results} organizations (total: {total_retrieved})")
-                
-                # Check if we've reached our batch limit
-                batch_count += 1
-                if max_batches is not None and batch_count >= max_batches:
-                    logging.info(f"Reached the maximum number of batches ({max_batches})")
-                    break
+        while True:
+            # Get the next batch of organization data
+            offset = batch_count * batch_size
+            batch_data = self.get_organization_data(limit=batch_size, offset=offset)
             
-            # Set the total count in the combined data
-            all_organizations['total_count'] = batch_data.get('total_count', total_retrieved)
-            logging.info(f"Total organizations retrieved: {total_retrieved} (out of {all_organizations['total_count']})")
+            # Check if we received any results
+            batch_results = batch_data.get('results', [])
+            num_results = len(batch_results)
             
-            return all_organizations
+            if num_results == 0:
+                # No more results, break out of the loop
+                break
             
-        except Exception as e:
-            logging.error(f"Error fetching organization data: {str(e)}")
-            raise
+            # Add the batch results to our collected data
+            all_organizations['results'].extend(batch_results)
+            total_retrieved += num_results
+            
+            logging.info(f"Retrieved batch {batch_count + 1} with {num_results} organizations (total: {total_retrieved})")
+            
+            # Check if we've reached our batch limit
+            batch_count += 1
+            if max_batches is not None and batch_count >= max_batches:
+                logging.info(f"Reached the maximum number of batches ({max_batches})")
+                break
+        
+        # Set the total count in the combined data
+        all_organizations['total_count'] = batch_data.get('total_count', total_retrieved)
+        logging.info(f"Total organizations retrieved: {total_retrieved} (out of {all_organizations['total_count']})")
+        
+        return all_organizations
