@@ -1,0 +1,237 @@
+import logging
+from typing import Dict, Any, List, Set, NamedTuple
+
+
+class OrgUnitChange(NamedTuple):
+    """Class to track changes to organizational units"""
+    staatskalender_id: str
+    title: str
+    change_type: str  # "create", "update", "delete"
+    details: Dict[str, Any]  # Details about the change
+
+
+class OrgStructureComparer:
+    """
+    Compares organizational structures and identifies changes needed.
+    Handles the comparison between source data (e.g., from ODS) and
+    target data (e.g., from Dataspot).
+    """
+    
+    @staticmethod
+    def compare_structures(
+        source_units_by_layer: Dict[int, List[Dict[str, Any]]], 
+        dataspot_units_by_id: Dict[str, Dict[str, Any]]
+    ) -> List[OrgUnitChange]:
+        """
+        Compare the source organizational structure with the current structure.
+        
+        Args:
+            source_units_by_layer: Organization units from source (ODS) organized by depth layer
+            dataspot_units_by_id: Organization units from current system indexed by ID
+            
+        Returns:
+            List[OrgUnitChange]: List of changes to be applied
+        """
+        logging.info("Comparing source and current organizational structures...")
+        
+        changes = []
+        
+        # Track all source IDs to later identify deletions
+        source_ids = set()
+        
+        # Process each layer in the source structure
+        for layer, units in source_units_by_layer.items():
+            logging.info(f"Comparing layer {layer} with {len(units)} units")
+            
+            for unit in units:
+                staatskalender_id = str(unit.get("id_im_staatskalender", ""))
+                if not staatskalender_id:
+                    logging.warning("Found unit without Staatskalender ID, skipping")
+                    continue
+                
+                # Add to set of source IDs for later deletion check
+                source_ids.add(staatskalender_id)
+                
+                title = unit.get("label", "")
+                
+                # Check if this unit exists in Dataspot
+                if staatskalender_id in dataspot_units_by_id:
+                    # Unit exists, check for changes
+                    dataspot_unit = dataspot_units_by_id[staatskalender_id]
+                    changes_needed = OrgStructureComparer.check_for_unit_changes(unit, dataspot_unit)
+                    
+                    if changes_needed:
+                        changes.append(OrgUnitChange(
+                            staatskalender_id=staatskalender_id,
+                            title=title,
+                            change_type="update",
+                            details={
+                                "uuid": dataspot_unit.get("id"),
+                                "changes": changes_needed,
+                                "source_unit": unit,
+                                "current_unit": dataspot_unit
+                            }
+                        ))
+                else:
+                    # Unit doesn't exist, mark for creation
+                    changes.append(OrgUnitChange(
+                        staatskalender_id=staatskalender_id,
+                        title=title,
+                        change_type="create",
+                        details={
+                            "source_unit": unit
+                        }
+                    ))
+        
+        # Check for units that need to be deleted (in Dataspot but not in source)
+        for staatskalender_id, unit in dataspot_units_by_id.items():
+            if staatskalender_id not in source_ids:
+                title = unit.get("label", f"Unknown ({staatskalender_id})")
+                changes.append(OrgUnitChange(
+                    staatskalender_id=staatskalender_id,
+                    title=title,
+                    change_type="delete",
+                    details={
+                        "uuid": unit.get("id"),
+                        "current_unit": unit
+                    }
+                ))
+        
+        logging.info(f"Identified {len(changes)} changes needed: "
+                    f"{sum(1 for c in changes if c.change_type == 'create')} creations, "
+                    f"{sum(1 for c in changes if c.change_type == 'update')} updates, "
+                    f"{sum(1 for c in changes if c.change_type == 'delete')} deletions")
+        
+        return changes
+    
+    @staticmethod
+    def check_for_unit_changes(source_unit: Dict[str, Any], dataspot_unit: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Check if there are differences between source and target versions of an org unit.
+        
+        Args:
+            source_unit: Organization unit data from source
+            dataspot_unit: Organization unit data from target
+            
+        Returns:
+            Dict[str, Any]: Dictionary of changes needed (empty if no changes)
+        """
+        changes = {}
+        
+        # Check label (title)
+        if source_unit.get("label") != dataspot_unit.get("label"):
+            changes["label"] = {
+                "old": dataspot_unit.get("label"),
+                "new": source_unit.get("label")
+            }
+        
+        # Check inCollection path (parent relationship)
+        if source_unit.get("inCollection") != dataspot_unit.get("inCollection"):
+            changes["inCollection"] = {
+                "old": dataspot_unit.get("inCollection"),
+                "new": source_unit.get("inCollection")
+            }
+        
+        # Check custom properties - specifically link_zum_staatskalender
+        # Source units have properties in customProperties, but download API returns properties flat
+        source_url = source_unit.get("customProperties", {}).get("link_zum_staatskalender", "")
+        dataspot_url = dataspot_unit.get("link_zum_staatskalender", "")
+        
+        if source_url != dataspot_url:
+            if "customProperties" not in changes:
+                changes["customProperties"] = {}
+            
+            changes["customProperties"]["link_zum_staatskalender"] = {
+                "old": dataspot_url,
+                "new": source_url
+            }
+        
+        return changes
+    
+    @staticmethod
+    def generate_sync_summary(changes: List[OrgUnitChange]) -> Dict[str, Any]:
+        """
+        Generate a human-readable summary of the synchronization.
+        
+        Args:
+            changes: List of changes that were identified
+            
+        Returns:
+            Dict[str, Any]: Summary dictionary with statistics and details
+        """
+        # Count changes by type
+        counts = {
+            "total": len(changes),
+            "created": sum(1 for c in changes if c.change_type == "create"),
+            "updated": sum(1 for c in changes if c.change_type == "update"),
+            "deleted": sum(1 for c in changes if c.change_type == "delete")
+        }
+        
+        # Generate summary text
+        summary_text = f"Organizational structure synchronization completed with {counts['total']} changes: " \
+                      f"{counts['created']} creations, {counts['updated']} updates, {counts['deleted']} deletions."
+        
+        # Prepare detailed statistics for each change type
+        details = {}
+        
+        # Add sample creations
+        if counts["created"] > 0:
+            creations = [c for c in changes if c.change_type == "create"]
+            details["creations"] = {
+                "count": counts["created"],
+                "samples": [f"'{c.title}' (ID: {c.staatskalender_id})" for c in creations[:5]]
+            }
+        
+        # Add sample updates with change details
+        if counts["updated"] > 0:
+            updates = [c for c in changes if c.change_type == "update"]
+            
+            # Group updates by change field
+            update_fields = {}
+            for c in updates:
+                for field in c.details.get("changes", {}).keys():
+                    if field not in update_fields:
+                        update_fields[field] = 0
+                    update_fields[field] += 1
+            
+            details["updates"] = {
+                "count": counts["updated"],
+                "by_field": update_fields,
+                "samples": []
+            }
+            
+            # Add sample updates
+            for c in updates[:5]:
+                change_fields = list(c.details.get("changes", {}).keys())
+                details["updates"]["samples"].append({
+                    "title": c.title,
+                    "id": c.staatskalender_id,
+                    "changed_fields": change_fields
+                })
+        
+        # Add sample deletions
+        if counts["deleted"] > 0:
+            deletions = [c for c in changes if c.change_type == "delete"]
+            details["deletions"] = {
+                "count": counts["deleted"],
+                "samples": [f"'{c.title}' (ID: {c.staatskalender_id})" for c in deletions[:5]]
+            }
+        
+        # Create the full summary
+        summary = {
+            "status": "success" if len(changes) > 0 else "no_changes",
+            "message": summary_text,
+            "counts": counts,
+            "details": details
+        }
+        
+        # Log the summary
+        logging.info(summary_text)
+        if "creations" in details:
+            logging.info(f"Sample creations: {', '.join(details['creations']['samples'][:3])}")
+        if "updates" in details:
+            logging.info(f"Sample updates: {', '.join([s['title'] for s in details['updates']['samples'][:3]])}")
+        if "deletions" in details:
+            logging.info(f"Sample deletions: {', '.join(details['deletions']['samples'][:3])}")
+        
+        return summary

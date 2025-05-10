@@ -110,28 +110,7 @@ class DNKClient(BaseDataspotClient):
             dry_run=dry_run
         )
     
-    # Direct API operations for org units
-    def bulk_create_or_update_organizational_units(self, organizational_units: List[Dict[str, Any]], 
-                                                operation: str = "ADD", dry_run: bool = False) -> dict:
-        """
-        Create multiple organizational units in bulk in Dataspot.
-        
-        Args:
-            organizational_units: List of organizational unit data to upload
-            operation: Upload operation mode (ADD, REPLACE, FULL_LOAD)
-            dry_run: Whether to perform a test run without changing data
-            
-        Returns:
-            dict: The JSON response containing the upload results
-        """
-        return self.bulk_create_or_update_assets(
-            scheme_name=self.scheme_name,
-            data=organizational_units,
-            operation=operation,
-            dry_run=dry_run
-        )
-    
-    # Synchronization methods delegated to handlers
+    # Synchronization methods
     def sync_org_units(self, org_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Synchronize organizational units in Dataspot with data from the Staatskalender ODS API.
