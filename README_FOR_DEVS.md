@@ -43,7 +43,6 @@ classDiagram
         +update_dataset()
         +delete_dataset()
         +bulk_create_or_update_datasets()
-        +bulk_create_or_update_organizational_units()
         +sync_org_units()
         +sync_datasets()
     }
@@ -96,19 +95,38 @@ classDiagram
         -mapping: OrgStructureMapping
         -asset_id_field: str
         -asset_type_filter: function
+        -updater: OrgStructureUpdater
         +sync_org_units()
-        +get_validated_staatskalender_url()
-        +update_staatskalender_mappings_from_upload()
-        +transform_organization_for_bulk_upload()
         +build_organization_hierarchy_from_ods_bulk()
         +bulk_create_or_update_organizational_units()
-        -_sync_staatskalender_org_units()
-        -_transform_org_data_to_layers()
+        +update_mappings_after_upload()
+        +update_mappings_before_upload()
         -_fetch_current_org_units()
-        -_compare_org_structures()
-        -_check_for_unit_changes()
-        -_apply_org_unit_changes()
-        -_generate_sync_summary()
+    }
+
+    %% Org Structure Helper Classes
+    class OrgStructureTransformer {
+        +transform_to_layered_structure()
+        +transform_for_bulk_upload()
+        +build_organization_lookup()
+        +find_root_nodes()
+        +build_path_components()
+    }
+
+    class OrgStructureComparer {
+        +compare_structures()
+        +check_for_unit_changes()
+        +generate_sync_summary()
+    }
+
+    class OrgStructureUpdater {
+        -client: BaseDataspotClient
+        -database_name: str
+        +apply_changes()
+        -_process_deletions()
+        -_process_updates()
+        -_create_update_data()
+        -_process_creations()
     }
 
     %% Mapping Classes    
@@ -229,6 +247,15 @@ classDiagram
     DatasetHandler --|> BaseDataspotHandler : extends
     OrgStructureHandler --|> BaseDataspotHandler : extends
     OrgStructureHandler ..> OrgUnitChange : uses
+    OrgStructureHandler o-- OrgStructureUpdater : contains
+    OrgStructureHandler ..> OrgStructureTransformer : uses
+    OrgStructureHandler ..> OrgStructureComparer : uses
+    
+    %% OrgStructure Helper relationships
+    OrgStructureUpdater o-- BaseDataspotClient : uses
+    OrgStructureUpdater ..> OrgUnitChange : uses
+    OrgStructureComparer ..> OrgUnitChange : creates
+    OrgStructureTransformer ..> helpers : uses
     
     %% Mapping relationships
     BaseDataspotMapping <|-- DatasetMapping : extends
@@ -255,24 +282,29 @@ classDiagram
 3. **Handlers**:
    - **BaseDataspotHandler**: Base class for handlers that manage different types of assets in Dataspot.
    - **DatasetHandler**: Extends `BaseDataspotHandler` to handle dataset synchronization operations. Contains the `DatasetMapping` class for managing ODS ID to Dataspot UUID mappings.
-   - **OrgStructureHandler**: Extends `BaseDataspotHandler` to handle organizational unit synchronization operations. Contains the `OrgStructureMapping` class for managing Staatskalender ID to Dataspot UUID mappings.
-   - **OrgUnitChange**: Data class used by OrgStructureHandler to track changes to organizational units.
+   - **OrgStructureHandler**: Extends `BaseDataspotHandler` to handle organizational unit synchronization operations. Contains the `OrgStructureMapping` class for managing Staatskalender ID to Dataspot UUID mappings. Uses specialized helper classes for different aspects of organizational structure management.
 
-4. **Data Models**:
+4. **Org Structure Helpers**:
+   - **OrgStructureTransformer**: Handles transformation of organizational structure data between different formats, particularly from ODS to Dataspot format.
+   - **OrgStructureComparer**: Compares organizational structures and identifies changes needed, generating OrgUnitChange objects.
+   - **OrgStructureUpdater**: Handles applying changes to organizational units in Dataspot, processing creations, updates, and deletions.
+   - **OrgUnitChange**: Data class used to track changes to organizational units during synchronization.
+
+5. **Data Models**:
    - **Dataset**: Abstract base class for all dataset types.
    - **BasicDataset**: Extends Dataset with basic metadata fields.
    - **OGDDataset**: Extends BasicDataset with Open Government Data specific fields.
 
-5. **Mapping**:
+6. **Mapping**:
    - **BaseDataspotMapping**: Base class providing mapping functionality for external IDs to Dataspot UUIDs.
-   - **DatasetMapping**: Extends BaseDataspotMapping to specifically map ODS dataset IDs to Dataspot UUIDs. Contained within the `DatasetHandler` file.
-   - **OrgStructureMapping**: Extends BaseDataspotMapping to map Staatskalender organization IDs to Dataspot UUIDs. Contained within the `OrgStructureHandler` file.
+   - **DatasetMapping**: Extends BaseDataspotMapping to specifically map ODS dataset IDs to Dataspot UUIDs.
+   - **OrgStructureMapping**: Extends BaseDataspotMapping to map Staatskalender organization IDs to Dataspot UUIDs.
 
-6. **HTTP Utilities**:
+7. **HTTP Utilities**:
    - **common**: Module providing standardized HTTP request functions with consistent error handling.
    - **retry**: Decorator function implementing retry logic for HTTP requests that may experience transient failures.
 
-7. **Utility Modules**:
+8. **Utility Modules**:
    - **helpers**: Module containing utility functions for URL manipulation, response parsing, and special character handling.
    - **dataset_transformer**: Module containing functions to convert ODS metadata format to Dataspot DNK format.
 
@@ -287,13 +319,25 @@ classDiagram
 
 2. **Organizational Unit Synchronization**:
    - Organization data is retrieved from OpenDataSoft via ODSClient.
-   - DNKClient delegates operations to OrgStructureHandler, which transforms the flat organization data into a hierarchical structure.
-   - The hierarchical data is uploaded to Dataspot level by level to preserve parent-child relationships.
-   - OrgStructureHandler uses its internal OrgStructureMapping to track the mapping between Staatskalender IDs and Dataspot UUIDs.
+   - DNKClient delegates operations to OrgStructureHandler, which orchestrates the synchronization process.
+   - OrgStructureTransformer converts flat organization data into a hierarchical structure.
+   - OrgStructureComparer identifies differences between source and current organizational structures.
+   - OrgStructureUpdater applies identified changes to Dataspot.
+   - OrgStructureHandler uses its internal OrgStructureMapping to maintain mappings between Staatskalender IDs and Dataspot UUIDs.
    - OrgUnitChange instances track creations, updates, and deletions of organizational units during synchronization.
 
 This architecture enables synchronization of both datasets and organizational units between OpenDataSoft and Dataspot while maintaining mappings between the systems.
 
-### Note on Debugging Code
+### Directory Structure
 
-The repository contains a `renato_debugging.py` file which is not part of the core system architecture. This file contains temporary debugging code and should not be considered part of the production system.
+The source code follows this organization:
+- `src/`
+  - `clients/`: Contains client implementations for different services
+  - `common/`: Contains shared utility functions
+  - `mapping_handlers/`: Contains handlers for various types of data mapping
+    - `org_structure_helpers/`: Contains specialized components for organizational structure handling
+  - Core modules like dataset models and transformers
+
+### Note on Debugging Files
+
+The repository contains debugging and temporary files such as `renato_debugging.py` and various `todos_*.txt` files which are not part of the core system architecture. These files contain temporary debugging code and should not be considered part of the production system.
