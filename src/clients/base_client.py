@@ -24,13 +24,16 @@ class BaseDataspotClient():
         self.ods_imports_collection_name = ods_imports_collection_name
         self.ods_imports_collection_path = ods_imports_collection_path
 
-    def get_all_assets_from_scheme(self) -> List[Dict[str, Any]]:
+    def get_all_assets_from_scheme(self, filter_function=None) -> List[Dict[str, Any]]:
         """
-        Download all assets from a scheme using the Download API.
+        Download all assets from a scheme using the Download API with optional filtering.
                                         
-        Returns:
-            List[Dict[str, Any]]: List of assets from the scheme
+        Args:
+            filter_function: Optional function that takes an asset and returns True if it should be included
             
+        Returns:
+            List[Dict[str, Any]]: List of assets from the scheme (filtered if filter_function provided)
+                
         Raises:
             HTTPError: If API requests fail
             ValueError: If the response format is unexpected or invalid
@@ -50,8 +53,13 @@ class BaseDataspotClient():
         
         # If we got a list directly, use it
         if isinstance(assets, list):
-            logging.info(f"Downloaded {len(assets)} assets from scheme '{self.scheme_name}'")
-            return assets
+            if filter_function:
+                filtered_assets = [asset for asset in assets if filter_function(asset)]
+                logging.info(f"Downloaded {len(assets)} assets from scheme '{self.scheme_name}', filtered to {len(filtered_assets)}")
+                return filtered_assets
+            else:
+                logging.info(f"Downloaded {len(assets)} assets from scheme '{self.scheme_name}'")
+                return assets
         else:
             # We might have received a job ID instead
             logging.error(f"Received unexpected response format from {full_url}. Expected a list of assets.")

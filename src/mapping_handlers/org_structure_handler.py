@@ -88,7 +88,8 @@ class OrgStructureHandler(BaseDataspotHandler):
         # Call the base class method with our specific asset type
         return self.bulk_create_or_update_assets(organizational_units, operation, dry_run)
     
-    def transform_organization_for_bulk_upload(self, org_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    @staticmethod
+    def transform_organization_for_bulk_upload(org_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Build organization hierarchy from flat data using parent_id and children_id fields.
         
@@ -634,35 +635,13 @@ class OrgStructureHandler(BaseDataspotHandler):
         
         Returns:
             List[Dict[str, Any]]: List of organizational units currently in Dataspot
+            
+        Raises:
+            HTTPError: If API requests fail
+            ValueError: If the response format is unexpected or invalid
         """
         logging.info("Fetching current organizational units from Dataspot...")
-        
-        # Use the download API to retrieve collections from the scheme
-        download_path = f"/api/{self.database_name}/schemes/{self.scheme_name}/download?format=JSON"
-        full_url = url_join(self.client.base_url, download_path)
-        
-        logging.debug(f"Downloading collections from: {full_url}")
-        try:
-            response = requests_get(full_url, headers=self.client.auth.get_headers())
-            response.raise_for_status()
-            
-            # Parse the JSON response
-            all_items = response.json()
-            
-            # If we got a list directly, use it
-            if isinstance(all_items, list):
-                # Filter using the asset_type_filter defined in the class
-                org_units = [item for item in all_items if self.asset_type_filter(item)]
-                
-                logging.info(f"Found {len(org_units)} organizational units in Dataspot")
-                return org_units
-            else:
-                logging.error(f"Received unexpected response format from {full_url}. Expected a list of items.")
-                logging.debug(f"Response content: {all_items}")
-                raise ValueError(f"Unexpected response format from download API. Expected a list but got: {type(all_items)}")
-        except Exception as e:
-            logging.error(f"Error fetching organizational units: {str(e)}")
-            return []
+        return self.client.get_all_assets_from_scheme(self.asset_type_filter)
     
     def _compare_org_structures(
         self, 
