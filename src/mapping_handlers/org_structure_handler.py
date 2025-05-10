@@ -2,12 +2,10 @@ import logging
 from typing import Dict, Any, List
 from dataclasses import dataclass
 
-from src import config
 from src.clients.base_client import BaseDataspotClient
 from src.clients.helpers import url_join, escape_special_chars
 from src.mapping_handlers.base_dataspot_handler import BaseDataspotHandler
 from src.mapping_handlers.base_dataspot_mapping import BaseDataspotMapping
-from src.common import requests_get
 
 
 class OrgStructureMapping(BaseDataspotMapping):
