@@ -1,12 +1,11 @@
 import logging
 from typing import Dict, Any, List, Optional
-from dataclasses import dataclass
 
 from src.clients.base_client import BaseDataspotClient
 from src.mapping_handlers.base_dataspot_handler import BaseDataspotHandler
 from src.mapping_handlers.base_dataspot_mapping import BaseDataspotMapping
 from src.mapping_handlers.org_structure_helpers.org_structure_transformer import OrgStructureTransformer
-from src.mapping_handlers.org_structure_helpers.org_structure_comparer import OrgStructureComparer
+from src.mapping_handlers.org_structure_helpers.org_structure_comparer import OrgStructureComparer, OrgUnitChange
 from src.mapping_handlers.org_structure_helpers.org_structure_updater import OrgStructureUpdater
 
 
@@ -28,15 +27,6 @@ class OrgStructureMapping(BaseDataspotMapping):
             scheme (str): Name of the scheme (e.g., 'DNK', 'TDM')
         """
         super().__init__(database_name, "staatskalender_id", "staatskalender-dataspot", scheme)
-
-
-@dataclass
-class OrgUnitChange:
-    """Class to track changes to organizational units"""
-    staatskalender_id: str
-    title: str
-    change_type: str  # "create", "update", "delete"
-    details: Dict[str, Any]  # Details about the change
 
 
 class OrgStructureHandler(BaseDataspotHandler):
@@ -107,31 +97,20 @@ class OrgStructureHandler(BaseDataspotHandler):
         """
         logging.info("Building organization hierarchy using bulk upload...")
         
-        # Transform organization data for bulk upload
-        org_units = OrgStructureTransformer.transform_for_bulk_upload(org_data)
+        # Transform organization data to layered structure
+        units_by_depth = OrgStructureTransformer.transform_to_layered_structure(org_data)
         
-        if not org_units:
+        if not units_by_depth:
             logging.warning("No organizational units to upload")
             return {"status": "error", "message": "No organizational units to upload"}
         
         # Extract Staatskalender IDs for mapping updates
         staatskalender_ids = []
-        for unit in org_units:
-            staatskalender_id = unit.get("id_im_staatskalender")
-            if staatskalender_id:
-                staatskalender_ids.append(staatskalender_id)
-        
-        # Group units by their depth in the hierarchy
-        units_by_depth = {}
-        for unit in org_units:
-            # Get the hierarchy depth directly from the unit
-            depth = unit.pop("_hierarchy_depth", 0)  # Remove the depth field and use its value
-            
-            # Add to the appropriate depth group
-            if depth not in units_by_depth:
-                units_by_depth[depth] = []
-            
-            units_by_depth[depth].append(unit)
+        for depth, units in units_by_depth.items():
+            for unit in units:
+                staatskalender_id = unit.get("id_im_staatskalender")
+                if staatskalender_id:
+                    staatskalender_ids.append(staatskalender_id)
         
         # Track uploaded units to handle failures
         level_results = {}

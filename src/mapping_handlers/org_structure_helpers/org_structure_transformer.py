@@ -23,23 +23,127 @@ class OrgStructureTransformer:
         """
         logging.info("Transforming organization data to layer structure...")
         
-        # Use transform_for_bulk_upload as it already builds the hierarchy with depth info
-        org_units = OrgStructureTransformer.transform_for_bulk_upload(org_data)
+        # Build lookup and identify invalid organizations
+        org_lookup, invalid_orgs = OrgStructureTransformer.build_organization_lookup(org_data)
         
-        # Group units by depth
+        # Find root nodes
+        root_nodes = OrgStructureTransformer.find_root_nodes(org_lookup, invalid_orgs)
+        
+        # Dictionary to track organization titles by ID for lookup
+        org_title_by_id = {org_id: org.get('title', '').strip() for org_id, org in org_lookup.items()}
+        
+        # Dictionary to track the path components for each organization
+        path_components_by_id = {}
+        for root_id in root_nodes:
+            path_components_by_id[root_id] = [org_title_by_id.get(root_id, '')]
+        
+        # Build a parent-child map for organization traversal
+        parent_child_map = {}
+        for org_id, org in org_lookup.items():
+            parent_id = str(org.get('parent_id', '')).strip()
+            if parent_id and parent_id.lower() != 'nan' and parent_id in org_lookup:
+                if parent_id not in parent_child_map:
+                    parent_child_map[parent_id] = []
+                parent_child_map[parent_id].append(org_id)
+        
+        # Now construct hierarchical data with units organized by depth
         units_by_depth = {}
+        processed_ids = set()
         
-        for unit in org_units:
-            # Get the hierarchy depth 
-            depth = unit.pop("_hierarchy_depth", 0)
+        # BFS traversal to build hierarchy level by level
+        for depth in range(100):  # Safety limit to prevent infinite loops
+            logging.info(f"Processing depth level {depth}")
+            current_level_ids = []
             
-            # Add to the appropriate depth group
+            # For depth 0, start with root nodes
+            if depth == 0:
+                current_level_ids = root_nodes
+            else:
+                # Find all children of the previous level's nodes
+                for parent_id in processed_ids:
+                    if parent_id in parent_child_map:
+                        for child_id in parent_child_map[parent_id]:
+                            if child_id not in processed_ids and child_id not in invalid_orgs:
+                                current_level_ids.append(child_id)
+            
+            # If no more nodes at this level, we're done
+            if not current_level_ids:
+                break
+            
+            # Initialize list for this depth if not already
             if depth not in units_by_depth:
                 units_by_depth[depth] = []
+            
+            # Process each node at this level
+            for org_id in current_level_ids:
+                # Skip if already processed or invalid
+                if org_id in processed_ids or org_id in invalid_orgs:
+                    continue
                 
-            units_by_depth[depth].append(unit)
+                # Mark as processed
+                processed_ids.add(org_id)
+                
+                # Get organization data
+                if org_id not in org_lookup:
+                    logging.warning(f"Organization ID {org_id} referenced but not found in data")
+                    continue
+                
+                org = org_lookup[org_id]
+                title = org.get('title', '')
+                if not title:
+                    logging.warning(f"Organization {org_id} missing title, skipping")
+                    continue
+                
+                # Get URL
+                url_website = org.get('url_website', '')
+                
+                # Create unit data
+                unit_data = {
+                    "_type": "Collection",
+                    "label": title.strip(),
+                    "stereotype": "Organisationseinheit",
+                    "id_im_staatskalender": org_id
+                }
+                
+                # Add custom properties
+                custom_properties = {}
+                if url_website:
+                    custom_properties["link_zum_staatskalender"] = url_website
+                if org_id:
+                    custom_properties["id_im_staatskalender"] = org_id
+                if custom_properties:
+                    unit_data["customProperties"] = custom_properties
+                
+                # Set parent relationship using hierarchical business key
+                parent_id = str(org.get('parent_id', '')).strip()
+                if parent_id and parent_id.lower() != 'nan' and parent_id in org_lookup:
+                    # Get the parent's path components
+                    parent_path_components = OrgStructureTransformer.build_path_components(
+                        parent_id, org_lookup, path_components_by_id)
+                    
+                    if parent_path_components:
+                        # Escape each path component individually
+                        escaped_components = []
+                        
+                        for comp in parent_path_components:
+                            # Escape special characters in this component
+                            escaped_comp = escape_special_chars(comp)
+                            escaped_components.append(escaped_comp)
+                        
+                        # Join the escaped components with slashes
+                        escaped_parent_path = '/'.join(escaped_components)
+                        
+                        unit_data["inCollection"] = escaped_parent_path
+                
+                # Add to the units list for this depth
+                units_by_depth[depth].append(unit_data)
         
-        logging.info(f"Organized {len(org_units)} units into {len(units_by_depth)} depth layers")
+        # Check for any organizations not included in the hierarchy
+        not_processed = set(org_lookup.keys()) - processed_ids - invalid_orgs
+        if not_processed:
+            logging.warning(f"{len(not_processed)} organizations not included in the hierarchy due to circular references or other issues")
+            
+        logging.info(f"Organized units into {len(units_by_depth)} depth layers with {sum(len(units) for units in units_by_depth.values())} total units")
         return units_by_depth
 
     @staticmethod
@@ -206,139 +310,3 @@ class OrgStructureTransformer:
         # Store the components in the mapping
         path_components_by_id[org_id] = path_components
         return path_components
-
-    @staticmethod
-    def transform_for_bulk_upload(org_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """
-        Build organization hierarchy for bulk upload to Dataspot.
-        
-        Args:
-            org_data: Organization data from ODS API
-            
-        Returns:
-            List of organizational units with hierarchy info
-        """
-        # Build lookup and identify invalid organizations
-        org_lookup, invalid_orgs = OrgStructureTransformer.build_organization_lookup(org_data)
-        
-        # Find root nodes
-        root_nodes = OrgStructureTransformer.find_root_nodes(org_lookup, invalid_orgs)
-        
-        logging.info(f"Start construction of organizational structure...")
-
-        # Dictionary to store organization titles by ID for lookup
-        org_title_by_id = {org_id: org.get('title', '').strip() for org_id, org in org_lookup.items()}
-        
-        # Dictionary to track the path components for each organization
-        path_components_by_id = {}
-        for root_id in root_nodes:
-            path_components_by_id[root_id] = [org_title_by_id.get(root_id, '')]
-        
-        # Build a parent-child map for organization traversal
-        parent_child_map = {}
-        for org_id, org in org_lookup.items():
-            parent_id = str(org.get('parent_id', '')).strip()
-            if parent_id and parent_id.lower() != 'nan' and parent_id in org_lookup:
-                if parent_id not in parent_child_map:
-                    parent_child_map[parent_id] = []
-                parent_child_map[parent_id].append(org_id)
-        
-        # Now construct hierarchical data for each organization using BFS
-        all_units = []
-        processed_ids = set()
-        
-        # BFS traversal to build hierarchy level by level
-        for depth in range(100):  # Safety limit to prevent infinite loops
-            logging.info(f"Processing depth level {depth}")
-            current_level = []
-            
-            # For depth 0, start with root nodes
-            if depth == 0:
-                current_level = root_nodes
-            else:
-                # Find all children of the previous level's nodes
-                for parent_id in processed_ids:
-                    if parent_id in parent_child_map:
-                        for child_id in parent_child_map[parent_id]:
-                            if child_id not in processed_ids and child_id not in invalid_orgs:
-                                current_level.append(child_id)
-            
-            # If no more nodes at this level, we're done
-            if not current_level:
-                logging.info(f"No more nodes to process at depth {depth}. Hierarchy build complete.")
-                break
-            
-            logging.info(f"Processing {len(current_level)} organizations at depth {depth}")
-            
-            # Process each node at this level
-            for org_id in current_level:
-                # Skip if already processed or invalid
-                if org_id in processed_ids or org_id in invalid_orgs:
-                    continue
-                
-                # Mark as processed
-                processed_ids.add(org_id)
-                
-                # Get organization data
-                if org_id not in org_lookup:
-                    logging.warning(f"Organization ID {org_id} referenced but not found in data")
-                    continue
-                
-                org = org_lookup[org_id]
-                title = org.get('title', '')
-                if not title:
-                    logging.warning(f"Organization {org_id} missing title, skipping")
-                    continue
-                
-                # Get URL
-                url_website = org.get('url_website', '')
-                
-                # Create unit data
-                unit_data = {
-                    "_type": "Collection",
-                    "label": title.strip(),
-                    "stereotype": "Organisationseinheit",
-                    "_hierarchy_depth": depth,
-                    "id_im_staatskalender": org_id
-                }
-                
-                # Add custom properties
-                custom_properties = {}
-                if url_website:
-                    custom_properties["link_zum_staatskalender"] = url_website
-                if org_id:
-                    custom_properties["id_im_staatskalender"] = org_id
-                if custom_properties:
-                    unit_data["customProperties"] = custom_properties
-                
-                # Set parent relationship using hierarchical business key
-                parent_id = str(org.get('parent_id', '')).strip()
-                if parent_id and parent_id.lower() != 'nan' and parent_id in org_lookup:
-                    # Get the parent's path components
-                    parent_path_components = OrgStructureTransformer.build_path_components(
-                        parent_id, org_lookup, path_components_by_id)
-                    
-                    if parent_path_components:
-                        # Escape each path component individually
-                        escaped_components = []
-                        
-                        for comp in parent_path_components:
-                            # Escape special characters in this component
-                            escaped_comp = escape_special_chars(comp)
-                            escaped_components.append(escaped_comp)
-                        
-                        # Join the escaped components with slashes
-                        escaped_parent_path = '/'.join(escaped_components)
-                        
-                        unit_data["inCollection"] = escaped_parent_path
-                
-                # Add to the units list
-                all_units.append(unit_data)
-        
-        # Check for any organizations not included in the hierarchy
-        not_processed = set(org_lookup.keys()) - processed_ids - invalid_orgs
-        if not_processed:
-            logging.warning(f"{len(not_processed)} organizations not included in the hierarchy due to circular references or other issues")
-            
-        logging.info(f"Built hierarchy with {len(all_units)} organizational units (excluded {len(invalid_orgs)} due to issues)")
-        return all_units
