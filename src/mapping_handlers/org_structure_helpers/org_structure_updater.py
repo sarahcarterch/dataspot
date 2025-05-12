@@ -162,7 +162,43 @@ class OrgStructureUpdater:
                 
                 for prop, prop_change in change_info.items():
                     update_data["customProperties"][prop] = prop_change["new"]
-            else:
+            elif field == "inCollection" and change_info.get("parent_moved", False):
+                # Special handling for moved collections - we need to set inCollection to parent UUID
+                # When a collection is moved, we need the UUID of the parent collection, not the path
+                try:
+                    # Extract the parent path from the inCollection value
+                    parent_path = change_info["new"]
+                    
+                    # Get the parent collection from Dataspot using the path
+                    if parent_path:
+                        # Build the endpoint using scheme name, path components, and asset type
+                        # We need to convert path to endpoint format: /rest/{db}/schemes/{scheme}/collections/{path}
+                        components = ["rest", self.database_name, "schemes", self.client.scheme_name]
+                        
+                        # Add each path component as a collection
+                        path_parts = parent_path.split('/')
+                        for part in path_parts:
+                            components.append("collections")
+                            components.append(part)
+                        
+                        # Get the parent collection details
+                        parent_endpoint = '/'.join(components)
+                        logging.info(f"Looking up parent collection at: {parent_endpoint}")
+                        
+                        # Get the parent's UUID
+                        parent_collection = self.client._get_asset(parent_endpoint)
+                        if parent_collection and "id" in parent_collection:
+                            parent_uuid = parent_collection["id"]
+                            logging.info(f"Found parent UUID: {parent_uuid} for path: {parent_path}")
+                            
+                            # Set the inCollection to the parent's UUID
+                            update_data["inCollection"] = parent_uuid
+                            logging.info(f"Collection '{change.title}' will be moved using inCollection UUID: {parent_uuid}")
+                        else:
+                            logging.error(f"Failed to find parent collection at path: {parent_path}")
+                except Exception as e:
+                    logging.error(f"Error finding parent collection for path {change_info.get('new', '')}: {str(e)}")
+            elif field != "inCollection":  # Skip inCollection except for parent moved case
                 # For simple fields, use the new value
                 update_data[field] = change_info["new"]
         
@@ -177,11 +213,12 @@ class OrgStructureUpdater:
                 update_data["customProperties"] = {}
             update_data["customProperties"]["id_im_staatskalender"] = change.staatskalender_id
         
-        # If inCollection is being changed, make sure it's included explicitly in the update
-        # This fixes the FIXME in the original code
-        if "inCollection" in change.details.get("changes", {}):
-            # Ensure inCollection is included even if it might be set further down the pipeline
-            update_data["inCollection"] = change.details["changes"]["inCollection"]["new"]
+        # Log the update data we're creating
+        if "inCollection" in update_data:
+            if isinstance(update_data["inCollection"], str) and not update_data["inCollection"].startswith("/"):
+                logging.info(f"Collection '{change.title}' will be moved using inCollection UUID: {update_data['inCollection']}")
+        elif "label" in update_data:
+            logging.info(f"Collection '{change.title}' will be renamed to: {update_data['label']}")
         
         return update_data
     

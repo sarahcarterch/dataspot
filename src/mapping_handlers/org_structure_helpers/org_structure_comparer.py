@@ -125,13 +125,6 @@ class OrgStructureComparer:
                 "new": source_unit.get("label")
             }
         
-        # Check inCollection path (parent relationship)
-        if source_unit.get("inCollection") != dataspot_unit.get("inCollection"):
-            changes["inCollection"] = {
-                "old": dataspot_unit.get("inCollection"),
-                "new": source_unit.get("inCollection")
-            }
-        
         # Check custom properties - specifically link_zum_staatskalender
         # Source units have properties in customProperties, but download API returns properties flat
         source_url = source_unit.get("customProperties", {}).get("link_zum_staatskalender", "")
@@ -144,6 +137,19 @@ class OrgStructureComparer:
             changes["customProperties"]["link_zum_staatskalender"] = {
                 "old": dataspot_url,
                 "new": source_url
+            }
+            
+        # Check inCollection to detect if a collection has been moved
+        # Source has the correct path based on ODS data, Dataspot has current path
+        source_path = source_unit.get("inCollection", "")
+        dataspot_path = dataspot_unit.get("inCollection", "")
+        
+        if source_path and dataspot_path and source_path != dataspot_path:
+            logging.info(f"Detected moved collection: '{dataspot_unit.get('label', '')}' moved from '{dataspot_path}' to '{source_path}'")
+            changes["inCollection"] = {
+                "old": dataspot_path,
+                "new": source_path,
+                "parent_moved": True  # Flag to indicate this is a parent change
             }
         
         return changes

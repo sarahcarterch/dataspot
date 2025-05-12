@@ -244,8 +244,8 @@ class OrgStructureHandler(BaseDataspotHandler):
         
         # Update mappings after changes
         if changes:
-            staatskalender_ids = [change.staatskalender_id for change in changes]
-            self.update_mappings_after_upload(staatskalender_ids)
+            # Update all mappings to ensure hierarchy changes are captured properly
+            self.update_mappings_after_upload()
             self.mapping.save_to_csv()
         
         # Generate summary
