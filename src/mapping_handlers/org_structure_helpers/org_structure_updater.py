@@ -312,14 +312,19 @@ class OrgStructureUpdater:
         # TODO (Renato): Clean this up; I think this is too complicated!
         # Log the update data we're creating
         if "inCollection" in update_data:
+            # Access the current unit name for move operations, as title may already contain the updated name
+            current_name = change.details.get("current_unit", {}).get("label", change.title)
+            
             if update_data["inCollection"] is None:
-                logging.info(f"Collection '{change.title}' will have inCollection removed")
+                logging.info(f"Collection '{current_name}' will have inCollection removed")
             elif isinstance(update_data["inCollection"], str) and not update_data["inCollection"].startswith("/"):
-                logging.info(f"Collection '{change.title}' will be moved using inCollection UUID: {update_data['inCollection']}")
+                logging.info(f"Collection '{current_name}' will be moved using inCollection UUID: {update_data['inCollection']}")
             else:
-                logging.info(f"Collection '{change.title}' will be moved to path: {update_data['inCollection']}")
+                logging.info(f"Collection '{current_name}' will be moved to path: {update_data['inCollection']}")
         elif "label" in update_data:
-            logging.info(f"Collection '{change.title}' will be renamed to: {update_data['label']}")
+            # For renames, get the old name from the changes object
+            old_name = change.details.get("changes", {}).get("label", {}).get("old", change.title)
+            logging.info(f"Collection '{old_name}' will be renamed to: {update_data['label']}")
         
         return update_data
     
