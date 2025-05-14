@@ -287,6 +287,7 @@ class OrgStructureUpdater:
                 parent_uuid = parent_collection["id"]
                 logging.info(f"Found parent UUID: {parent_uuid} for path: {parent_path}")
                 update_data["inCollection"] = parent_uuid
+                update_data["inScheme"] = None
             else:
                 # For simple fields, use the new value
                 update_data[field] = change_info["new"]
@@ -303,6 +304,8 @@ class OrgStructureUpdater:
             update_data["customProperties"]["id_im_staatskalender"] = change.staatskalender_id
         
         # TODO (Renato): Clean this up; I think this is too complicated!
+        #  Note: the inCollection field should always be a uuid when it is present.
+        #  So, we will always come into the second of the 3 ifs.
         # Log the update data we're creating
         if "inCollection" in update_data:
             # Access the current unit name for move operations, as title may already contain the updated name

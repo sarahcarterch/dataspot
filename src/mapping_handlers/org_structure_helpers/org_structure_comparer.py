@@ -144,7 +144,7 @@ class OrgStructureComparer:
         source_path = source_unit.get("inCollection", "")
         dataspot_path = dataspot_unit.get("inCollection", "")
         
-        if source_path and dataspot_path and source_path != dataspot_path:
+        if source_path != dataspot_path:
             logging.info(f"Detected path difference for '{dataspot_unit.get('label', '')}': '{dataspot_path}' → '{source_path}'")
             changes["inCollection"] = {
                 "old": dataspot_path,
