@@ -145,11 +145,10 @@ class OrgStructureComparer:
         dataspot_path = dataspot_unit.get("inCollection", "")
         
         if source_path and dataspot_path and source_path != dataspot_path:
-            logging.info(f"Detected moved collection: '{dataspot_unit.get('label', '')}' moved from '{dataspot_path}' to '{source_path}'")
+            logging.info(f"Detected path difference for '{dataspot_unit.get('label', '')}': '{dataspot_path}' → '{source_path}'")
             changes["inCollection"] = {
                 "old": dataspot_path,
-                "new": source_path,
-                "parent_moved": True  # Flag to indicate this is a parent change
+                "new": source_path
             }
         
         return changes
@@ -188,32 +187,13 @@ class OrgStructureComparer:
                 "samples": [f"'{c.title}' (ID: {c.staatskalender_id})" for c in creations[:5]]
             }
         
-        # Add sample updates with change details
+        # Add sample updates
         if counts["updated"] > 0:
             updates = [c for c in changes if c.change_type == "update"]
-            
-            # Group updates by change field
-            update_fields = {}
-            for c in updates:
-                for field in c.details.get("changes", {}).keys():
-                    if field not in update_fields:
-                        update_fields[field] = 0
-                    update_fields[field] += 1
-            
             details["updates"] = {
                 "count": counts["updated"],
-                "by_field": update_fields,
-                "samples": []
+                "samples": [f"'{c.title}' (ID: {c.staatskalender_id})" for c in updates[:5]]
             }
-            
-            # Add sample updates
-            for c in updates[:5]:
-                change_fields = list(c.details.get("changes", {}).keys())
-                details["updates"]["samples"].append({
-                    "title": c.title,
-                    "id": c.staatskalender_id,
-                    "changed_fields": change_fields
-                })
         
         # Add sample deletions
         if counts["deleted"] > 0:
@@ -223,20 +203,24 @@ class OrgStructureComparer:
                 "samples": [f"'{c.title}' (ID: {c.staatskalender_id})" for c in deletions[:5]]
             }
         
-        # Create the full summary
+        # Create the complete summary
         summary = {
-            "status": "success" if len(changes) > 0 else "no_changes",
+            "status": "success",
             "message": summary_text,
             "counts": counts,
             "details": details
         }
         
-        # Log the summary
-        logging.info(summary_text)
+        # Log some details
+        logging.info(f"Organizational structure synchronization completed with {counts['total']} changes: "
+                    f"{counts['created']} creations, {counts['updated']} updates, {counts['deleted']} deletions.")
+        
+        if "updates" in details:
+            logging.info(f"Sample updates: {', '.join(details['updates']['samples'][:3])}")
+        
         if "creations" in details:
             logging.info(f"Sample creations: {', '.join(details['creations']['samples'][:3])}")
-        if "updates" in details:
-            logging.info(f"Sample updates: {', '.join([s['title'] for s in details['updates']['samples'][:3]])}")
+        
         if "deletions" in details:
             logging.info(f"Sample deletions: {', '.join(details['deletions']['samples'][:3])}")
         

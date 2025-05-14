@@ -2,8 +2,60 @@ import logging
 from typing import Dict, Any, List
 
 from src.clients.base_client import BaseDataspotClient
-from src.clients.helpers import url_join
+from src.clients.helpers import url_join, escape_special_chars
 from src.mapping_handlers.org_structure_helpers.org_structure_comparer import OrgUnitChange
+
+
+def unescape_path_components(path: str) -> List[str]:
+    """
+    Unescape a path with special characters, doing the opposite of escape_special_chars.
+    
+    Takes a path where components may contain quoted parts and converts it into 
+    a list of properly unescaped components.
+    
+    Args:
+        path: The path with potentially quoted components
+        
+    Returns:
+        List of unescaped path components
+    """
+    # Split by slashes but respect quoted parts
+    components = []
+    current_part = ""
+    in_quotes = False
+    i = 0
+    
+    while i < len(path):
+        char = path[i]
+        
+        if char == '"':
+            # Toggle quote state
+            in_quotes = not in_quotes
+            
+            # Skip this character in output but include it in parsing
+            i += 1
+            
+            # Handle doubled quotes inside quotes (escaped quotes)
+            if in_quotes is False and i < len(path) and path[i] == '"':
+                current_part += '"'  # Add a single quote
+                in_quotes = True  # Still in quotes
+                i += 1  # Skip the second quote
+                
+        elif char == '/' and not in_quotes:
+            # End of a path component
+            components.append(current_part)
+            current_part = ""
+            i += 1
+        else:
+            # Normal character
+            current_part += char
+            i += 1
+    
+    # Add the last part if there is one
+    if current_part:
+        components.append(current_part)
+    
+    return components
 
 
 class OrgStructureUpdater:
@@ -103,23 +155,55 @@ class OrgStructureUpdater:
             is_initial_run: Whether this is an initial run with no existing org units
             stats: Statistics dictionary to update
         """
-        # For updates, we need to process them one at a time to handle interdependencies
-        for change in update_changes:
+        # First, process label/name changes to ensure parent references are correct
+        label_changes = [c for c in update_changes if "label" in c.details.get("changes", {})]
+        other_changes = [c for c in update_changes if c not in label_changes]
+        
+        # Process label changes first (important for correct parent references)
+        if label_changes:
+            logging.info(f"Processing {len(label_changes)} label/name changes first")
+            self._process_specific_changes(label_changes, stats)
+            
+        # Then process collection moves and other changes
+        if other_changes:
+            logging.info(f"Processing {len(other_changes)} other changes")
+            self._process_specific_changes(other_changes, stats)
+    
+    def _process_specific_changes(self, changes: List[OrgUnitChange], stats: Dict[str, int]) -> None:
+        """
+        Process specific change updates.
+        """
+        # Sort changes based on the source hierarchy layer (golden source)
+        # Process root/parent collections first
+        sorted_changes = sorted(changes, 
+                               key=lambda c: len(c.details.get("source_unit", {}).get("inCollection", "").split('/')))
+        
+        # Process each change
+        for change in sorted_changes:
             uuid = change.details.get("uuid")
             if not uuid:
                 logging.warning(f"Cannot update org unit '{change.title}' (ID: {change.staatskalender_id}) - missing UUID")
                 stats["errors"] += 1
                 continue
             
+            # Get fresh asset data to ensure we have current state (especially for moves)
+            try:
+                endpoint = url_join('rest', self.database_name, 'assets', uuid, leading_slash=True)
+                current_asset = self.client._get_asset(endpoint)
+                if not current_asset:
+                    logging.warning(f"Failed to get current state of asset {change.title} (ID: {uuid})")
+                    continue
+                
+                # Update the change object with fresh data
+                change.details["current_unit"] = current_asset
+            except Exception as e:
+                logging.error(f"Error fetching current asset state for '{change.title}' (ID: {uuid}): {str(e)}")
+                stats["errors"] += 1
+                continue
+            
             # Construct endpoint for update
             endpoint = url_join('rest', self.database_name, 'collections', uuid, leading_slash=True)
-            
             logging.info(f"Updating org unit '{change.title}' (ID: {change.staatskalender_id})")
-            
-            # Check if there are any changes to apply
-            if not change.details.get("changes"):
-                logging.debug(f"No changes needed for org unit '{change.title}' (ID: {change.staatskalender_id}), skipping update")
-                continue
             
             # Create update data with only necessary fields
             update_data = self._create_update_data(change)
@@ -162,43 +246,55 @@ class OrgStructureUpdater:
                 
                 for prop, prop_change in change_info.items():
                     update_data["customProperties"][prop] = prop_change["new"]
-            elif field == "inCollection" and change_info.get("parent_moved", False):
-                # Special handling for moved collections - we need to set inCollection to parent UUID
-                # When a collection is moved, we need the UUID of the parent collection, not the path
+            elif field == "inCollection":
+                # For inCollection, handle parent changes with care
                 try:
                     # Extract the parent path from the inCollection value
                     parent_path = change_info["new"]
                     
-                    # Get the parent collection from Dataspot using the path
+                    # Special handling for root collections
+                    if not parent_path:
+                        # Detect move to root level and throw error
+                        error_msg = f"Moving collections to root level is currently not supported: '{change.title}' (ID: {change.staatskalender_id})"
+                        logging.error(error_msg)
+                        raise NotImplementedError(error_msg)
+                        
+                    # For non-root collections, handle normally with inCollection
                     if parent_path:
-                        # Build the endpoint using scheme name, path components, and asset type
-                        # We need to convert path to endpoint format: /rest/{db}/schemes/{scheme}/collections/{path}
+                        # First, check if we can get the parent asset directly
+                        # Build the endpoint to fetch the parent asset
                         components = ["rest", self.database_name, "schemes", self.client.scheme_name]
                         
+                        if '"' in parent_path:
+                            # Extract components correctly; doing the opposite of what "helpers.escape_special_chars" does
+                            path_parts = unescape_path_components(parent_path)
+                        else:
+                            # Simple case - just split by slashes
+                            path_parts = parent_path.split('/')
+                        
                         # Add each path component as a collection
-                        path_parts = parent_path.split('/')
                         for part in path_parts:
                             components.append("collections")
-                            components.append(part)
+                            components.append(escape_special_chars(part))
                         
-                        # Get the parent collection details
                         parent_endpoint = '/'.join(components)
                         logging.info(f"Looking up parent collection at: {parent_endpoint}")
                         
-                        # Get the parent's UUID
+                        # When the parent collection is not found, we HAVE TO throw an error and not catch it!
                         parent_collection = self.client._get_asset(parent_endpoint)
-                        if parent_collection and "id" in parent_collection:
-                            parent_uuid = parent_collection["id"]
-                            logging.info(f"Found parent UUID: {parent_uuid} for path: {parent_path}")
-                            
-                            # Set the inCollection to the parent's UUID
-                            update_data["inCollection"] = parent_uuid
-                            logging.info(f"Collection '{change.title}' will be moved using inCollection UUID: {parent_uuid}")
-                        else:
-                            logging.error(f"Failed to find parent collection at path: {parent_path}")
+                        if not parent_collection or "id" not in parent_collection:
+                            error_msg = f"Failed to find parent collection at path: {parent_path}"
+                            logging.error(error_msg)
+                            raise ValueError(error_msg)
+                        
+                        # Use UUID for inCollection reference
+                        parent_uuid = parent_collection["id"]
+                        logging.info(f"Found parent UUID: {parent_uuid} for path: {parent_path}")
+                        update_data["inCollection"] = parent_uuid
                 except Exception as e:
-                    logging.error(f"Error finding parent collection for path {change_info.get('new', '')}: {str(e)}")
-            elif field != "inCollection":  # Skip inCollection except for parent moved case
+                    logging.error(f"Error handling inCollection for {change.title}: {str(e)}")
+                    raise  # Re-raise the exception to ensure the update fails
+            else:
                 # For simple fields, use the new value
                 update_data[field] = change_info["new"]
         
@@ -213,10 +309,15 @@ class OrgStructureUpdater:
                 update_data["customProperties"] = {}
             update_data["customProperties"]["id_im_staatskalender"] = change.staatskalender_id
         
+        # TODO (Renato): Clean this up; I think this is too complicated!
         # Log the update data we're creating
         if "inCollection" in update_data:
-            if isinstance(update_data["inCollection"], str) and not update_data["inCollection"].startswith("/"):
+            if update_data["inCollection"] is None:
+                logging.info(f"Collection '{change.title}' will have inCollection removed")
+            elif isinstance(update_data["inCollection"], str) and not update_data["inCollection"].startswith("/"):
                 logging.info(f"Collection '{change.title}' will be moved using inCollection UUID: {update_data['inCollection']}")
+            else:
+                logging.info(f"Collection '{change.title}' will be moved to path: {update_data['inCollection']}")
         elif "label" in update_data:
             logging.info(f"Collection '{change.title}' will be renamed to: {update_data['label']}")
         
