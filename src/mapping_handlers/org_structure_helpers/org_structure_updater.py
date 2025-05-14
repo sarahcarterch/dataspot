@@ -253,41 +253,55 @@ class OrgStructureUpdater:
                 
                 # Special handling for root collections
                 if not parent_path:
-                    # Detect move to root level and throw error
-                    error_msg = f"Moving collections to root level is currently not supported: '{change.title}' (ID: {change.staatskalender_id})"
-                    logging.error(error_msg)
-                    raise NotImplementedError(error_msg)
+                    # We need to move this collection to the scheme root level
+                    logging.info(f"Moving collection '{change.title}' to scheme root level")
                     
-                # Build the endpoint to fetch the parent asset
-                components = ["rest", self.database_name, "schemes", self.client.scheme_name]
-                
-                if '"' in parent_path:
-                    # Extract components correctly; doing the opposite of what "helpers.escape_special_chars" does
-                    path_parts = unescape_path_components(parent_path)
+                    # Remove from current collection and set back to scheme
+                    update_data["inCollection"] = None
+                    
+                    # Get the scheme UUID
+                    scheme_endpoint = url_join('rest', self.database_name, 'schemes', self.client.scheme_name, leading_slash=True)
+
+                    scheme_data = self.client._get_asset(scheme_endpoint)
+                    if scheme_data and "id" in scheme_data:
+                        scheme_uuid = scheme_data["id"]
+                        update_data["inScheme"] = scheme_uuid
+                        logging.info(f"Setting inScheme to scheme UUID: {scheme_uuid}")
+                    else:
+                        error_msg = f"Could not retrieve scheme UUID for '{self.client.scheme_name}'"
+                        logging.error(error_msg)
+                        raise ValueError(error_msg)
                 else:
-                    # Simple case - just split by slashes
-                    path_parts = parent_path.split('/')
-                
-                # Add each path component as a collection
-                for part in path_parts:
-                    components.append("collections")
-                    components.append(escape_special_chars(part))
-                
-                parent_endpoint = '/'.join(components)
-                logging.info(f"Looking up parent collection at: {parent_endpoint}")
-                
-                # When the parent collection is not found, we HAVE TO throw an error and not catch it!
-                parent_collection = self.client._get_asset(parent_endpoint)
-                if not parent_collection or "id" not in parent_collection:
-                    error_msg = f"Failed to find parent collection at path: {parent_path}"
-                    logging.error(error_msg)
-                    raise ValueError(error_msg)
-                
-                # Use UUID for inCollection reference
-                parent_uuid = parent_collection["id"]
-                logging.info(f"Found parent UUID: {parent_uuid} for path: {parent_path}")
-                update_data["inCollection"] = parent_uuid
-                update_data["inScheme"] = None
+                    # Build the endpoint to fetch the parent asset
+                    components = ["rest", self.database_name, "schemes", self.client.scheme_name]
+                    
+                    if '"' in parent_path:
+                        # Extract components correctly; doing the opposite of what "helpers.escape_special_chars" does
+                        path_parts = unescape_path_components(parent_path)
+                    else:
+                        # Simple case - just split by slashes
+                        path_parts = parent_path.split('/')
+                    
+                    # Add each path component as a collection
+                    for part in path_parts:
+                        components.append("collections")
+                        components.append(escape_special_chars(part))
+                    
+                    parent_endpoint = '/'.join(components)
+                    logging.info(f"Looking up parent collection at: {parent_endpoint}")
+                    
+                    # When the parent collection is not found, we HAVE TO throw an error and not catch it!
+                    parent_collection = self.client._get_asset(parent_endpoint)
+                    if not parent_collection or "id" not in parent_collection:
+                        error_msg = f"Failed to find parent collection at path: {parent_path}"
+                        logging.error(error_msg)
+                        raise ValueError(error_msg)
+                    
+                    # Use UUID for inCollection reference
+                    parent_uuid = parent_collection["id"]
+                    logging.info(f"Found parent UUID: {parent_uuid} for path: {parent_path}")
+                    update_data["inCollection"] = parent_uuid
+                    update_data["inScheme"] = None
             else:
                 # For simple fields, use the new value
                 update_data[field] = change_info["new"]
@@ -312,7 +326,11 @@ class OrgStructureUpdater:
             current_name = change.details.get("current_unit", {}).get("label", change.title)
             
             if update_data["inCollection"] is None:
-                logging.info(f"Collection '{current_name}' will have inCollection removed")
+                if "inScheme" in update_data:
+                    # Moving to root level
+                    logging.info(f"Collection '{current_name}' will be moved to scheme root level")
+                else:
+                    logging.info(f"Collection '{current_name}' will have inCollection removed")
             elif isinstance(update_data["inCollection"], str) and not update_data["inCollection"].startswith("/"):
                 logging.info(f"Collection '{current_name}' will be moved using inCollection UUID: {update_data['inCollection']}")
             else:
