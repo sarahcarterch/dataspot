@@ -248,52 +248,45 @@ class OrgStructureUpdater:
                     update_data["customProperties"][prop] = prop_change["new"]
             elif field == "inCollection":
                 # For inCollection, handle parent changes with care
-                try:
-                    # Extract the parent path from the inCollection value
-                    parent_path = change_info["new"]
+                # Extract the parent path from the inCollection value
+                parent_path = change_info["new"]
+                
+                # Special handling for root collections
+                if not parent_path:
+                    # Detect move to root level and throw error
+                    error_msg = f"Moving collections to root level is currently not supported: '{change.title}' (ID: {change.staatskalender_id})"
+                    logging.error(error_msg)
+                    raise NotImplementedError(error_msg)
                     
-                    # Special handling for root collections
-                    if not parent_path:
-                        # Detect move to root level and throw error
-                        error_msg = f"Moving collections to root level is currently not supported: '{change.title}' (ID: {change.staatskalender_id})"
-                        logging.error(error_msg)
-                        raise NotImplementedError(error_msg)
-                        
-                    # For non-root collections, handle normally with inCollection
-                    if parent_path:
-                        # First, check if we can get the parent asset directly
-                        # Build the endpoint to fetch the parent asset
-                        components = ["rest", self.database_name, "schemes", self.client.scheme_name]
-                        
-                        if '"' in parent_path:
-                            # Extract components correctly; doing the opposite of what "helpers.escape_special_chars" does
-                            path_parts = unescape_path_components(parent_path)
-                        else:
-                            # Simple case - just split by slashes
-                            path_parts = parent_path.split('/')
-                        
-                        # Add each path component as a collection
-                        for part in path_parts:
-                            components.append("collections")
-                            components.append(escape_special_chars(part))
-                        
-                        parent_endpoint = '/'.join(components)
-                        logging.info(f"Looking up parent collection at: {parent_endpoint}")
-                        
-                        # When the parent collection is not found, we HAVE TO throw an error and not catch it!
-                        parent_collection = self.client._get_asset(parent_endpoint)
-                        if not parent_collection or "id" not in parent_collection:
-                            error_msg = f"Failed to find parent collection at path: {parent_path}"
-                            logging.error(error_msg)
-                            raise ValueError(error_msg)
-                        
-                        # Use UUID for inCollection reference
-                        parent_uuid = parent_collection["id"]
-                        logging.info(f"Found parent UUID: {parent_uuid} for path: {parent_path}")
-                        update_data["inCollection"] = parent_uuid
-                except Exception as e:
-                    logging.error(f"Error handling inCollection for {change.title}: {str(e)}")
-                    raise  # Re-raise the exception to ensure the update fails
+                # Build the endpoint to fetch the parent asset
+                components = ["rest", self.database_name, "schemes", self.client.scheme_name]
+                
+                if '"' in parent_path:
+                    # Extract components correctly; doing the opposite of what "helpers.escape_special_chars" does
+                    path_parts = unescape_path_components(parent_path)
+                else:
+                    # Simple case - just split by slashes
+                    path_parts = parent_path.split('/')
+                
+                # Add each path component as a collection
+                for part in path_parts:
+                    components.append("collections")
+                    components.append(escape_special_chars(part))
+                
+                parent_endpoint = '/'.join(components)
+                logging.info(f"Looking up parent collection at: {parent_endpoint}")
+                
+                # When the parent collection is not found, we HAVE TO throw an error and not catch it!
+                parent_collection = self.client._get_asset(parent_endpoint)
+                if not parent_collection or "id" not in parent_collection:
+                    error_msg = f"Failed to find parent collection at path: {parent_path}"
+                    logging.error(error_msg)
+                    raise ValueError(error_msg)
+                
+                # Use UUID for inCollection reference
+                parent_uuid = parent_collection["id"]
+                logging.info(f"Found parent UUID: {parent_uuid} for path: {parent_path}")
+                update_data["inCollection"] = parent_uuid
             else:
                 # For simple fields, use the new value
                 update_data[field] = change_info["new"]
