@@ -1463,6 +1463,22 @@ Asset:
           icon: solid-trash
           order: 17
           group: NOT_PUBLIC
+        REVIEW3DS:
+          label: Freigabe Data Steward
+          icon: arrows-rotate
+          group: DRAFT
+          order: 325
+        REVIEW4:
+          label: Freigabe Data Owner
+          icon: arrows-rotate
+          group: DRAFT
+          order: 345
+        PUBLISHEDDCC2:
+          label: OGD-Freigabe genehmigt
+          labelEn: Published
+          icon: globe
+          order: 390
+          group: PUBLIC
 
 ##### Status aus Standard Workflow d. #####
         WORKING:
