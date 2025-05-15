@@ -136,14 +136,14 @@ class OrgStructureUpdater:
             
             # Construct endpoint for deletion
             endpoint = url_join('rest', self.database_name, 'collections', uuid, leading_slash=True)
-            logging.info(f"Deleting org unit '{change.title}' (ID: {change.staatskalender_id}) at {endpoint}")
+            logging.info(f"Marking org unit '{change.title}' (ID: {change.staatskalender_id}) for review at {endpoint}")
             
             try:
-                # Delete the asset
-                self.client._delete_asset(endpoint)
+                # Mark the asset for review instead of deleting it
+                self.client._delete_asset(endpoint, force_delete=False)
                 stats["deleted"] += 1
             except Exception as e:
-                logging.error(f"Error deleting org unit '{change.title}' (ID: {change.staatskalender_id}): {str(e)}")
+                logging.error(f"Error marking org unit '{change.title}' (ID: {change.staatskalender_id}) for review: {str(e)}")
                 stats["errors"] += 1
     
     def _process_updates(self, update_changes: List[OrgUnitChange], is_initial_run: bool, stats: Dict[str, int]) -> None:

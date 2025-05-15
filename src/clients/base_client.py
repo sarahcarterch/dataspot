@@ -178,19 +178,48 @@ class BaseDataspotClient():
 
         return response.json()
 
-    def _delete_asset(self, endpoint: str) -> None:
+    def _delete_asset(self, endpoint: str, force_delete: bool = False) -> None:
         """
-        Delete a asset via DELETE request.
+        Marks an asset for deletion or permanently deletes it, depending on the force_delete parameter.
+        
+        When force_delete is True, the asset is completely removed via DELETE request.
+        When force_delete is False (default), the asset's status is changed to "REVIEWDCC2" via PATCH request.
+        This allows for a review process before actual deletion.
 
         Args:
             endpoint (str): API endpoint path (will be joined with base_url)
+            force_delete (bool, optional): Whether to force delete the asset (True) or
+                                          mark it for review (False). Defaults to False.
 
         Raises:
             HTTPError: If the request fails
+            ValueError: If the asset does not exist or cannot be accessed
         """
         headers = self.auth.get_headers()
         full_url = url_join(self.base_url, endpoint)
-        requests_delete(full_url, headers=headers)
+        
+        if force_delete:
+            # Completely delete the asset using DELETE request
+            logging.info(f"Permanently deleting asset at {endpoint}")
+            requests_delete(full_url, headers=headers)
+        else:
+            # Mark the asset for review by changing its status
+            logging.info(f"Marking asset at {endpoint} for review (REVIEWDCC2)")
+            
+            # First, check if the asset exists
+            current_asset = self._get_asset(endpoint)
+            if current_asset is None:
+                raise ValueError(f"Cannot mark asset for review at {endpoint}: asset does not exist")
+            
+            # Prepare update data with only the status field to change
+            update_data = {
+                "_type": current_asset.get("_type", "Unknown"),  # Required for PATCH
+                "status": "REVIEWDCC2"
+            }
+            
+            # Use PATCH to update only the status property
+            response = requests_patch(full_url, headers=headers, json=update_data)
+            response.raise_for_status()
 
     def require_scheme_exists(self) -> str:
         """

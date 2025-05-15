@@ -540,4 +540,4 @@ class DatasetHandler(BaseDataspotHandler):
         # Remove entry from mapping
         self.mapping.remove_entry(ods_id)
         
-        return True 
+        return True
