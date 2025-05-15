@@ -705,7 +705,7 @@ if __name__ == "__main__":
 
     import config
     logging.info(f"Running script on database: {config.database_name}")
-    if config.database_name == "metadatenmanagement":
+    if config.database_name == config.database_name_prod:
         answer = input("Are you sure you want to run this script in the prod environment (y/[n])? ")
         if answer != 'y':
             exit("Aborting run...")
