@@ -261,7 +261,7 @@ class OrgStructureComparer:
             
             for c in creations:
                 source_unit = c.details.get("source_unit", {})
-                creation_details.append({
+                creation_detail = {
                     "title": c.title,
                     "staatskalender_id": c.staatskalender_id,
                     "properties": {
@@ -269,7 +269,13 @@ class OrgStructureComparer:
                         "inCollection": source_unit.get("inCollection", ""),
                         "link_zum_staatskalender": source_unit.get("customProperties", {}).get("link_zum_staatskalender", "")
                     }
-                })
+                }
+                
+                # Add UUID if available (might be populated after creation)
+                if "uuid" in c.details:
+                    creation_detail["uuid"] = c.details["uuid"]
+                
+                creation_details.append(creation_detail)
             
             details["creations"] = {
                 "count": counts["created"],

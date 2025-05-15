@@ -562,6 +562,10 @@ def main_10_sync_organization_structure():
             all_organizations
         )
         
+        # Get the base URL and database name for asset links
+        base_url = dataspot_client.base_url
+        database_name = dataspot_client.database_name
+        
         # Display sync results
         logging.info(f"Synchronization {sync_result['status']}!")
         logging.info(f"Message: {sync_result['message']}")
@@ -584,7 +588,11 @@ def main_10_sync_organization_structure():
                 staatskalender_id = update.get('staatskalender_id', '(Unknown)')
                 uuid = update.get('uuid', '(Unknown)')
                 
+                # Create asset link
+                asset_link = f"{base_url}/web/{database_name}/collections/{uuid}"
+                
                 logging.info(f"{i}. '{title}' (ID: {staatskalender_id}, UUID: {uuid})")
+                logging.info(f"   - Link: {asset_link}")
                 
                 # Show each changed field
                 for field_name, changes in update.get('changed_fields', {}).items():
@@ -599,8 +607,14 @@ def main_10_sync_organization_structure():
             for i, creation in enumerate(creations, 1):
                 title = creation.get('title', '(Unknown)')
                 staatskalender_id = creation.get('staatskalender_id', '(Unknown)')
+                uuid = creation.get('uuid', '')  # UUID might be missing for newly created items
                 
                 logging.info(f"{i}. '{title}' (ID: {staatskalender_id})")
+                
+                # Show asset link if UUID is available
+                if uuid:
+                    asset_link = f"{base_url}/web/{database_name}/collections/{uuid}"
+                    logging.info(f"   - Link: {asset_link}")
                 
                 # Show properties
                 props = creation.get('properties', {})
@@ -618,7 +632,11 @@ def main_10_sync_organization_structure():
                 staatskalender_id = deletion.get('staatskalender_id', '(Unknown)')
                 uuid = deletion.get('uuid', '(Unknown)')
                 
+                # Create asset link
+                asset_link = f"{base_url}/web/{database_name}/collections/{uuid}"
+                
                 logging.info(f"{i}. '{title}' (ID: {staatskalender_id}, UUID: {uuid})")
+                logging.info(f"   - Link: {asset_link}")
                 logging.info(f"   - Path: '{deletion.get('inCollection', '')}'")
         
         # Write detailed report to file for email/reference purposes
