@@ -500,6 +500,7 @@ Dataset:
               baseType: STRING
               group: OGD
               order: 100
+              readOnly: true
             TAG:
               label: Tags
               title:
@@ -799,6 +800,7 @@ Dataset:
               baseType: STRING
               group: OGD
               order: 100
+              readOnly: true
             TAG:
               label: Tags
               title:
@@ -1312,12 +1314,14 @@ Collection:
               title: Link zur Quelle im Staatskalender
               width: 1
               order: 1
+              readOnly: true
             id_im_staatskalender:
               label: ID im Staatskalender
               baseType: INTEGER
               title: Die interne ID im Staatskalender
               width: 1
               order: 2
+              readOnly: true
 
 #020 - HERKUNFT
 Derivation:
