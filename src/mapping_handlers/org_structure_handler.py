@@ -248,10 +248,10 @@ class OrgStructureHandler(BaseDataspotHandler):
             self.update_mappings_after_upload()
             self.mapping.save_to_csv()
         
-        # Generate summary
-        summary = OrgStructureComparer.generate_sync_summary(changes)
+        # Generate detailed report with all changes
+        detailed_report = OrgStructureComparer.generate_detailed_sync_report(changes)
         
-        return summary
+        return detailed_report
     
     def _fetch_current_org_units(self) -> List[Dict[str, Any]]:
         """

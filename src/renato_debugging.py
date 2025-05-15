@@ -1,6 +1,8 @@
 import logging
 from time import sleep
 import json
+import os
+import datetime
 
 from src.ods_client import ODSClient
 from src.clients.dnk_client import DNKClient
@@ -570,14 +572,85 @@ def main_10_sync_organization_structure():
             logging.info(f"Changes: {counts['total']} total - {counts['created']} created, "
                          f"{counts['updated']} updated, {counts['deleted']} deleted")
         
-        # Show full details for debug purposes
-        logging.debug(f"Full sync result: {sync_result}")
+        # Show detailed information for each change type
+        details = sync_result.get('details', {})
+        
+        # Process updates - show field changes with old and new values
+        if 'updates' in details:
+            updates = details['updates'].get('items', [])
+            logging.info(f"\n=== UPDATED UNITS ({len(updates)}) ===")
+            for i, update in enumerate(updates, 1):
+                title = update.get('title', '(Unknown)')
+                staatskalender_id = update.get('staatskalender_id', '(Unknown)')
+                uuid = update.get('uuid', '(Unknown)')
+                
+                logging.info(f"{i}. '{title}' (ID: {staatskalender_id}, UUID: {uuid})")
+                
+                # Show each changed field
+                for field_name, changes in update.get('changed_fields', {}).items():
+                    old_value = changes.get('old_value', '')
+                    new_value = changes.get('new_value', '')
+                    logging.info(f"   - {field_name}: '{old_value}' → '{new_value}'")
+        
+        # Process creations
+        if 'creations' in details:
+            creations = details['creations'].get('items', [])
+            logging.info(f"\n=== CREATED UNITS ({len(creations)}) ===")
+            for i, creation in enumerate(creations, 1):
+                title = creation.get('title', '(Unknown)')
+                staatskalender_id = creation.get('staatskalender_id', '(Unknown)')
+                
+                logging.info(f"{i}. '{title}' (ID: {staatskalender_id})")
+                
+                # Show properties
+                props = creation.get('properties', {})
+                if props:
+                    for key, value in props.items():
+                        if value:  # Only show non-empty values
+                            logging.info(f"   - {key}: '{value}'")
+        
+        # Process deletions
+        if 'deletions' in details:
+            deletions = details['deletions'].get('items', [])
+            logging.info(f"\n=== DELETED UNITS ({len(deletions)}) ===")
+            for i, deletion in enumerate(deletions, 1):
+                title = deletion.get('title', '(Unknown)')
+                staatskalender_id = deletion.get('staatskalender_id', '(Unknown)')
+                uuid = deletion.get('uuid', '(Unknown)')
+                
+                logging.info(f"{i}. '{title}' (ID: {staatskalender_id}, UUID: {uuid})")
+                logging.info(f"   - Path: '{deletion.get('inCollection', '')}'")
+        
+        # Write detailed report to file for email/reference purposes
+        try:
+            # Get project root directory (one level up from src)
+            current_file_path = os.path.abspath(__file__)
+            project_root = os.path.dirname(os.path.dirname(current_file_path))
+            
+            # Define reports directory in project root
+            reports_dir = os.path.join(project_root, "reports")
+            
+            # Create reports directory if it doesn't exist
+            os.makedirs(reports_dir, exist_ok=True)
+            
+            # Generate filename with timestamp
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = os.path.join(reports_dir, f"org_sync_report_{timestamp}.json")
+            
+            # Write report to file
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(sync_result, f, indent=2, ensure_ascii=False)
+                
+            logging.info(f"\nDetailed report saved to {filename}")
+        except Exception as e:
+            logging.error(f"Failed to save detailed report to file: {str(e)}")
         
     except Exception as e:
         logging.error(f"Error synchronizing organization structure: {str(e)}")
         
     logging.info("Organization structure synchronization process finished")
     logging.info("=============================================")
+
 
 if __name__ == "__main__":
     logging.basicConfig(
@@ -593,7 +666,7 @@ if __name__ == "__main__":
         if answer != 'y':
             exit("Aborting run...")
 
-    #main_10_sync_organization_structure()
-    main_8_test_bulk_ods_datasets_upload_and_delete(max_datasets=3)
+    main_10_sync_organization_structure()
+    #main_8_test_bulk_ods_datasets_upload_and_delete(max_datasets=3)
 
     logging.info('Job successful!')

@@ -152,7 +152,8 @@ class OrgStructureComparer:
             }
         
         return changes
-    
+
+    # TODO (Renato): Delete this method? Was replaced by generate_detailed_sync_report
     @staticmethod
     def generate_sync_summary(changes: List[OrgUnitChange]) -> Dict[str, Any]:
         """
@@ -225,3 +226,121 @@ class OrgStructureComparer:
             logging.info(f"Sample deletions: {', '.join(details['deletions']['samples'][:3])}")
         
         return summary
+    
+    @staticmethod
+    def generate_detailed_sync_report(changes: List[OrgUnitChange]) -> Dict[str, Any]:
+        """
+        Generate a detailed report of all synchronization changes.
+        Includes complete information about every change with old and new values.
+        
+        Args:
+            changes: List of changes that were identified
+            
+        Returns:
+            Dict[str, Any]: Detailed report dictionary with complete information
+        """
+        # Count changes by type
+        counts = {
+            "total": len(changes),
+            "created": sum(1 for c in changes if c.change_type == "create"),
+            "updated": sum(1 for c in changes if c.change_type == "update"),
+            "deleted": sum(1 for c in changes if c.change_type == "delete")
+        }
+        
+        # Generate report text
+        report_text = f"Organizational structure synchronization completed with {counts['total']} changes: " \
+                      f"{counts['created']} creations, {counts['updated']} updates, {counts['deleted']} deletions."
+        
+        # Prepare detailed information for each change type
+        details = {}
+        
+        # Process creations - show all created units with their properties
+        if counts["created"] > 0:
+            creations = [c for c in changes if c.change_type == "create"]
+            creation_details = []
+            
+            for c in creations:
+                source_unit = c.details.get("source_unit", {})
+                creation_details.append({
+                    "title": c.title,
+                    "staatskalender_id": c.staatskalender_id,
+                    "properties": {
+                        "label": source_unit.get("label", ""),
+                        "inCollection": source_unit.get("inCollection", ""),
+                        "link_zum_staatskalender": source_unit.get("customProperties", {}).get("link_zum_staatskalender", "")
+                    }
+                })
+            
+            details["creations"] = {
+                "count": counts["created"],
+                "items": creation_details
+            }
+        
+        # Process updates - show all updated units with old and new values for changed fields
+        if counts["updated"] > 0:
+            updates = [c for c in changes if c.change_type == "update"]
+            update_details = []
+            
+            for c in updates:
+                update_info = {
+                    "title": c.title,
+                    "staatskalender_id": c.staatskalender_id,
+                    "uuid": c.details.get("uuid", ""),
+                    "changed_fields": {}
+                }
+                
+                # Extract all changed fields with old and new values
+                changes_dict = c.details.get("changes", {})
+                for field, change_info in changes_dict.items():
+                    if field == "customProperties":
+                        # Handle nested custom properties
+                        for prop, prop_change in change_info.items():
+                            update_info["changed_fields"][f"customProperties.{prop}"] = {
+                                "old_value": prop_change.get("old", ""),
+                                "new_value": prop_change.get("new", "")
+                            }
+                    else:
+                        # Handle regular fields
+                        update_info["changed_fields"][field] = {
+                            "old_value": change_info.get("old", ""),
+                            "new_value": change_info.get("new", "")
+                        }
+                
+                update_details.append(update_info)
+            
+            details["updates"] = {
+                "count": counts["updated"],
+                "items": update_details
+            }
+        
+        # Process deletions - show all deleted units
+        if counts["deleted"] > 0:
+            deletions = [c for c in changes if c.change_type == "delete"]
+            deletion_details = []
+            
+            for c in deletions:
+                current_unit = c.details.get("current_unit", {})
+                deletion_details.append({
+                    "title": c.title,
+                    "staatskalender_id": c.staatskalender_id,
+                    "uuid": c.details.get("uuid", ""),
+                    "inCollection": current_unit.get("inCollection", "")
+                })
+            
+            details["deletions"] = {
+                "count": counts["deleted"],
+                "items": deletion_details
+            }
+        
+        # Create the complete detailed report
+        report = {
+            "status": "success",
+            "message": report_text,
+            "counts": counts,
+            "details": details
+        }
+        
+        # Log that a detailed report was generated
+        logging.info("Generated detailed synchronization report with complete change information")
+        
+        return report
