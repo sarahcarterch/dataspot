@@ -539,9 +539,12 @@ def main_10_sync_organization_structure():
     Synchronize organizational structure in Dataspot with the latest data from ODS API.
     This method:
     1. Retrieves organization data from the ODS API
-    2. Compares with existing organization data in Dataspot
-    3. Updates only the changed organizations
-    4. Provides a summary of changes
+    2. Validates that no duplicate id_im_staatskalender values exist in ODS data (throws an error if duplicates are found)
+    3. Fetches existing organizational units from Dataspot 
+    4. Validates that no duplicate id_im_staatskalender values exist in Dataspot (throws an error if duplicates are found)
+    5. Compares with existing organization data in Dataspot
+    6. Updates only the changed organizations
+    7. Provides a summary of changes
     """
     logging.info("Starting organization structure synchronization...")
 
@@ -663,11 +666,34 @@ def main_10_sync_organization_structure():
         except Exception as e:
             logging.error(f"Failed to save detailed report to file: {str(e)}")
         
+    except ValueError as e:
+        if "Duplicate id_im_staatskalender values detected in Dataspot" in str(e):
+            logging.error("============================================================")
+            logging.error("ERROR: SYNCHRONIZATION ABORTED - DUPLICATE IDs IN DATASPOT")
+            logging.error("------------------------------------------------------------")
+            logging.error(str(e))
+            logging.error("------------------------------------------------------------")
+            logging.error("Please fix the duplicate IDs in Dataspot before continuing.")
+            logging.error("You may need to manually delete one of the duplicate collections.")
+            logging.error("============================================================")
+            return  # Exit the function
+        elif "Duplicate id_im_staatskalender values detected" in str(e):
+            logging.error("============================================================")
+            logging.error("ERROR: SYNCHRONIZATION ABORTED - DUPLICATE IDs IN ODS DATA")
+            logging.error("------------------------------------------------------------")
+            logging.error(str(e))
+            logging.error("------------------------------------------------------------")
+            logging.error("Please fix the duplicate IDs in the ODS source data before continuing.")
+            logging.error("============================================================")
+            return  # Exit the function
+        else:
+            # Re-raise other ValueError exceptions
+            raise
     except Exception as e:
         logging.error(f"Error synchronizing organization structure: {str(e)}")
         
     logging.info("Organization structure synchronization process finished")
-    logging.info("=============================================")
+    logging.info("===============================================")
 
 
 if __name__ == "__main__":

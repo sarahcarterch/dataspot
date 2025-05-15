@@ -5,7 +5,7 @@ from src.clients.base_client import BaseDataspotClient
 from src.mapping_handlers.base_dataspot_handler import BaseDataspotHandler
 from src.mapping_handlers.base_dataspot_mapping import BaseDataspotMapping
 from src.mapping_handlers.org_structure_helpers.org_structure_transformer import OrgStructureTransformer
-from src.mapping_handlers.org_structure_helpers.org_structure_comparer import OrgStructureComparer, OrgUnitChange
+from src.mapping_handlers.org_structure_helpers.org_structure_comparer import OrgStructureComparer
 from src.mapping_handlers.org_structure_helpers.org_structure_updater import OrgStructureUpdater
 
 
@@ -84,7 +84,41 @@ class OrgStructureHandler(BaseDataspotHandler):
             
         # Call the base class method with our specific asset type
         return self.bulk_create_or_update_assets(organizational_units, operation, dry_run)
-    
+
+    @staticmethod
+    def _check_for_duplicate_ids_in_ods_staatskalender_data(org_data: Dict[str, Any]) -> None:
+        """
+        Check for duplicate id_im_staatskalender values in organization data.
+        Raises ValueError if duplicates are found.
+
+        Args:
+            org_data: Dictionary containing organization data from ODS API
+
+        Raises:
+            ValueError: If duplicate ID values are detected
+        """
+        org_results = org_data.get('results', [])
+        ids = [str(org.get('id')) for org in org_results if 'id' in org]
+        duplicate_ids = set([org_id for org_id in ids if ids.count(org_id) > 1])
+
+        if duplicate_ids:
+            # Get the details of the duplicates for better logging
+            duplicates_info = []
+            for dup_id in duplicate_ids:
+                dup_orgs = [org for org in org_results if str(org.get('id')) == dup_id]
+                for org in dup_orgs:
+                    duplicates_info.append(f"ID: {dup_id}, Title: '{org.get('title', 'Unknown')}'")
+
+            # Log detailed warning
+            logging.warning(f"Duplicate id_im_staatskalender values detected: {len(duplicate_ids)} IDs appear multiple times")
+            for info in duplicates_info:
+                logging.warning(f"Duplicate organization: {info}")
+
+            # Raise an error
+            duplicate_details = '\n'.join(duplicates_info)
+            error_msg = f"Duplicate id_im_staatskalender values detected. The following {len(duplicate_ids)} IDs appear multiple times:\n{duplicate_details}"
+            raise ValueError(error_msg)
+
     def build_organization_hierarchy_from_ods_bulk(self, org_data: Dict[str, Any]) -> dict:
         """
         Build organization hierarchy in the DNK based on data from ODS API using bulk upload.
@@ -96,6 +130,9 @@ class OrgStructureHandler(BaseDataspotHandler):
             dict: The response with status information
         """
         logging.info("Building organization hierarchy using bulk upload...")
+        
+        # Check for duplicate id_im_staatskalender values
+        self._check_for_duplicate_ids_in_ods_staatskalender_data(org_data)
         
         # Transform organization data to layered structure
         units_by_depth = OrgStructureTransformer.transform_to_layered_structure(org_data)
@@ -180,6 +217,49 @@ class OrgStructureHandler(BaseDataspotHandler):
             
         return result
     
+    def _check_for_duplicate_ids_in_dataspot(self, dataspot_units: List[Dict[str, Any]]) -> None:
+        """
+        Check for duplicate id_im_staatskalender values in existing Dataspot collections.
+        Raises ValueError if duplicates are found.
+        
+        Args:
+            dataspot_units: List of organizational units from Dataspot
+        
+        Raises:
+            ValueError: If duplicate ID values are detected
+        """
+        # Count occurrences of each id_im_staatskalender
+        id_counts = {}
+        for unit in dataspot_units:
+            unit_id = str(unit.get(self.asset_id_field))
+            if unit_id:
+                if unit_id not in id_counts:
+                    id_counts[unit_id] = []
+                id_counts[unit_id].append(unit)
+        
+        # Find all IDs that appear more than once
+        duplicate_ids = {id: units for id, units in id_counts.items() if len(units) > 1}
+        
+        if duplicate_ids:
+            # Get the details of the duplicates for better logging
+            duplicates_info = []
+            for dup_id, units in duplicate_ids.items():
+                for unit in units:
+                    title = unit.get('label', 'Unknown')
+                    uuid = unit.get('id', 'Unknown')
+                    path = unit.get('inCollection', '')
+                    duplicates_info.append(f"ID: {dup_id}, Title: '{title}', UUID: {uuid}, Path: '{path}'")
+            
+            # Log detailed warning
+            logging.warning(f"Duplicate id_im_staatskalender values detected in Dataspot: {len(duplicate_ids)} IDs appear multiple times")
+            for info in duplicates_info:
+                logging.warning(f"Duplicate organization in Dataspot: {info}")
+            
+            # Raise an error
+            duplicate_details = '\n'.join(duplicates_info)
+            error_msg = f"Duplicate id_im_staatskalender values detected in Dataspot. The following {len(duplicate_ids)} IDs appear multiple times:\n{duplicate_details}"
+            raise ValueError(error_msg)
+
     def sync_org_units(self, org_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Synchronize organizational units in Dataspot with data from the Staatskalender ODS API.
@@ -192,8 +272,14 @@ class OrgStructureHandler(BaseDataspotHandler):
         """
         logging.info("Starting synchronization of organizational units...")
         
+        # Check for duplicate id_im_staatskalender values in ODS data
+        self._check_for_duplicate_ids_in_ods_staatskalender_data(org_data)
+        
         # Fetch current org data from Dataspot
         dataspot_units = self._fetch_current_org_units()
+
+        # Check for duplicate id_im_staatskalender values in Dataspot
+        self._check_for_duplicate_ids_in_dataspot(dataspot_units)
 
         # Update mappings before making changes
         self.update_mappings_before_upload()
