@@ -10,16 +10,19 @@ The columns should be (so far): uuid,lastactl,lastpub
 
 This is put on hold for the moment, as lastactl does not really need to be in dataspot. (?)
 
+
+
 ## How to integrate code from a `dev` (or `feature`) environment into `prod` [Work-In-Progress]
-When integrating a `dev` into `prod`, first we need to clone the `dev` into an `int`. 
+When integrating a `dev` into `prod`, first we need to clone the `dev` into an `int` database. Please follow the 
+
 Then:
-1. Export DNK as xlsx and import it again (dry run is enough).
+1. Export DNK from `dev` as xlsx and import it again (dry run is enough).
 1. If we don't fix warnings or errors that occur, then they will appear later again.
 1. Integrate yaml from `dev` into `int`
 1. Run job "Regelverletzungen prüfen"
 1. Export DNK as xlsx and import it again (dry run is enough)
 1. Export and reimport other models that might be affected aswell
-1. Merge `feat` into `main` and delete feature branch
+1. Merge `dev` into `main` and delete `dev` branch
 
 If everything worked without errors, we can apply the `int` yaml into the `prod` yaml and reapply the changes made to the `int` to the `prod`.
 
