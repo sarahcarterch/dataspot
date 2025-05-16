@@ -45,7 +45,7 @@ class DNKClient(BaseDataspotClient):
             
         # Prepare dataset for upload with proper inCollection value
         dataset_json = dataset.to_json()
-        # TODO: Inspect this, it should potentially be: dataset_json['inCollection'] = collection_data.get('label')
+        # Use the collection_name from our configuration as the inCollection value
         dataset_json['inCollection'] = self.ods_imports_collection_name
         
         # Create the dataset directly
