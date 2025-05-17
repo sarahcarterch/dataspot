@@ -1382,86 +1382,86 @@ Asset:
           label: Entwurfs-Prüfung Data Steward Datenraum
           icon: arrows-rotate
           group: DRAFT
-          order: 1
+          order: 100
         REVIEWDCC:
           label: Entwurfs-Prüfung DCC
           icon: arrows-rotate
           group: DRAFT
-          order: 2
+          order: 120
         FADO:
           label: Finale Abnahme Data Owner
           icon: user-check
           group: DRAFT
-          order: 3
+          order: 140
         PREPUBLISHED:
           label: Kantonsintern sichtbar
           icon: square-check
           group: PUBLIC
-          order: 4
+          order: 160
         TB:
           label: Technische Datenbereitstellung
           icon: screwdriver-wrench
           group: PUBLIC
-          order: 5
+          order: 180
         OGDCHECK:
           label: OGD Prüfung
           icon: user-group
           group: PUBLIC
-          order: 6
+          order: 200
         KORREKTUR:
           label: Korrektur
           icon: circle-exclamation
-          order: 7
+          order: 220
           group: DRAFT
         MUTATION:
           label: Mutation unter Beachtung der Abhängigkeiten
           icon: circle-exclamation
-          order: 8
+          order: 240
           group: DRAFT
         MUTATION_NV:
           label: Mutation
           icon: circle-exclamation
-          order: 9
+          order: 260
           group: DRAFT
         INTERMINATION:
           label: Antrag auf Löschung
           icon: trash
-          order: 10
+          order: 280
           group: PUBLIC
         REVIEW2:
           label: Lösch-Prüfung Data Steward Datenraum
           icon: arrows-rotate
           group: PUBLIC
-          order: 11
+          order: 300
         REVIEWDCC2:
           label: Lösch-Prüfung DCC
           icon: arrows-rotate
           group: PUBLIC
-          order: 13
+          order: 320
         REVIEW3:
           label: Finale Abnahme DCC
           icon: arrows-rotate
           group: PUBLIC
-          order: 202
+          order: 340
         FADO2:
           label: Finale Abnahme DO
           icon: user-check
           group: DRAFT
-          order: 14
+          order: 360
         INTERMINATION2:
           label: Metadaten archiviert
           icon: trash
-          order: 15
+          order: 380
           group: NOT_PUBLIC
         DELETE:
           label: Metadaten löschen
           icon: solid-trash
-          order: 16
+          order: 400
           group: NOT_PUBLIC
         DELETE2:
           label: Metadaten gelöscht
           icon: solid-trash
-          order: 17
+          order: 420
           group: NOT_PUBLIC
         REVIEW3DS:
           label: Freigabe Data Steward
