@@ -581,28 +581,7 @@ def main_10_sync_organization_structure():
         
         # Show detailed information for each change type
         details = sync_result.get('details', {})
-        
-        # Process updates - show field changes with old and new values
-        if 'updates' in details:
-            updates = details['updates'].get('items', [])
-            logging.info(f"\n=== UPDATED UNITS ({len(updates)}) ===")
-            for i, update in enumerate(updates, 1):
-                title = update.get('title', '(Unknown)')
-                staatskalender_id = update.get('staatskalender_id', '(Unknown)')
-                uuid = update.get('uuid', '(Unknown)')
-                
-                # Create asset link
-                asset_link = f"{base_url}/web/{database_name}/collections/{uuid}"
-                
-                logging.info(f"{i}. '{title}' (ID: {staatskalender_id}, UUID: {uuid})")
-                logging.info(f"   - Link: {asset_link}")
-                
-                # Show each changed field
-                for field_name, changes in update.get('changed_fields', {}).items():
-                    old_value = changes.get('old_value', '')
-                    new_value = changes.get('new_value', '')
-                    logging.info(f"   - {field_name}: '{old_value}' → '{new_value}'")
-        
+
         # Process creations
         if 'creations' in details:
             creations = details['creations'].get('items', [])
@@ -625,7 +604,28 @@ def main_10_sync_organization_structure():
                     for key, value in props.items():
                         if value:  # Only show non-empty values
                             logging.info(f"   - {key}: '{value}'")
-        
+
+        # Process updates - show field changes with old and new values
+        if 'updates' in details:
+            updates = details['updates'].get('items', [])
+            logging.info(f"\n=== UPDATED UNITS ({len(updates)}) ===")
+            for i, update in enumerate(updates, 1):
+                title = update.get('title', '(Unknown)')
+                staatskalender_id = update.get('staatskalender_id', '(Unknown)')
+                uuid = update.get('uuid', '(Unknown)')
+
+                # Create asset link
+                asset_link = f"{base_url}/web/{database_name}/collections/{uuid}"
+
+                logging.info(f"{i}. '{title}' (ID: {staatskalender_id}, UUID: {uuid})")
+                logging.info(f"   - Link: {asset_link}")
+
+                # Show each changed field
+                for field_name, changes in update.get('changed_fields', {}).items():
+                    old_value = changes.get('old_value', '')
+                    new_value = changes.get('new_value', '')
+                    logging.info(f"   - {field_name}: '{old_value}' → '{new_value}'")
+
         # Process deletions
         if 'deletions' in details:
             deletions = details['deletions'].get('items', [])
@@ -705,6 +705,7 @@ if __name__ == "__main__":
 
     import config
     logging.info(f"Running script on database: {config.database_name}")
+
     if config.database_name == config.database_name_prod:
         answer = input("Are you sure you want to run this script in the prod environment (y/[n])? ")
         if answer != 'y':
