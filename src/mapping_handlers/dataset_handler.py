@@ -507,14 +507,15 @@ class DatasetHandler(BaseDataspotHandler):
 
     def delete_dataset(self, ods_id: str, fail_if_not_exists: bool = False) -> bool:
         """
-        Delete a dataset from the DNK.
+        Delete a dataset from the DNK or mark it for deletion review.
         
         Args:
             ods_id (str): The ODS ID of the dataset to delete
             fail_if_not_exists (bool): Whether to raise an error if the dataset doesn't exist
             
         Returns:
-            bool: True if the dataset was deleted, False if it didn't exist
+            bool: True if the dataset was deleted or marked for deletion, or if it didn't exist but tracking was updated.
+                 False if it didn't exist in the mapping and fail_if_not_exists is False.
             
         Raises:
             ValueError: If the dataset doesn't exist and fail_if_not_exists is True
@@ -533,11 +534,18 @@ class DatasetHandler(BaseDataspotHandler):
         _type, uuid, _inCollection = entry
         href = url_join('rest', self.database_name, 'datasets', uuid, leading_slash=True)
         
-        # Delete the dataset
-        logging.info(f"Deleting dataset with ODS ID '{ods_id}' (UUID: {uuid}) at {href}")
-        self.client._delete_asset(href)
+        # Check if the dataset still exists in Dataspot
+        asset_exists = self.client._get_asset(href) is not None
         
-        # Remove entry from mapping
+        if asset_exists:
+            # Dataset exists, mark it for deletion
+            logging.info(f"Marking dataset with ODS ID '{ods_id}' (UUID: {uuid}) for deletion review at {href}")
+            self.client._mark_asset_for_deletion(href)
+        else:
+            # Dataset already deleted in Dataspot, just log it
+            logging.info(f"Dataset with ODS ID '{ods_id}' (UUID: {uuid}) already deleted in Dataspot, updating local mapping only")
+        
+        # Remove entry from mapping in both cases
         self.mapping.remove_entry(ods_id)
         
         return True

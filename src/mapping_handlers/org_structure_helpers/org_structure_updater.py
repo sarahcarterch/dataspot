@@ -136,14 +136,27 @@ class OrgStructureUpdater:
             
             # Construct endpoint for deletion
             endpoint = url_join('rest', self.database_name, 'collections', uuid, leading_slash=True)
-            logging.info(f"Marking org unit '{change.title}' (ID: {change.staatskalender_id}) for review at {endpoint}")
             
+            # First check if the asset still exists
             try:
-                # Mark the asset for review instead of deleting it
-                self.client._delete_asset(endpoint, force_delete=False)
-                stats["deleted"] += 1
+                asset_exists = self.client._get_asset(endpoint) is not None
+                
+                if asset_exists:
+                    # Asset exists, mark it for deletion review
+                    logging.info(f"Marking org unit '{change.title}' (ID: {change.staatskalender_id}) for review at {endpoint}")
+                    try:
+                        # Use the new method specifically for marking assets for deletion
+                        self.client._mark_asset_for_deletion(endpoint)
+                        stats["deleted"] += 1
+                    except Exception as e:
+                        logging.error(f"Error marking org unit '{change.title}' (ID: {change.staatskalender_id}) for review: {str(e)}")
+                        stats["errors"] += 1
+                else:
+                    # Asset doesn't exist anymore, just log and count it
+                    logging.info(f"Org unit '{change.title}' (ID: {change.staatskalender_id}) already deleted in Dataspot, updating local mapping only")
+                    stats["deleted"] += 1
             except Exception as e:
-                logging.error(f"Error marking org unit '{change.title}' (ID: {change.staatskalender_id}) for review: {str(e)}")
+                logging.error(f"Error checking existence of org unit '{change.title}' (ID: {change.staatskalender_id}): {str(e)}")
                 stats["errors"] += 1
     
     def _process_updates(self, update_changes: List[OrgUnitChange], is_initial_run: bool, stats: Dict[str, int]) -> None:

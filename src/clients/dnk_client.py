@@ -1,4 +1,5 @@
 from typing import Dict, Any, List
+import logging
 
 from src import config
 from src.clients.base_client import BaseDataspotClient
@@ -67,20 +68,48 @@ class DNKClient(BaseDataspotClient):
         endpoint = f"/rest/{self.database_name}/datasets/{uuid}"
         return self._update_asset(endpoint=endpoint, data=dataset.to_json(), replace=force_replace)
     
-    def delete_dataset(self, uuid: str) -> bool:
+    def delete_dataset(self, ods_id: str, fail_if_not_exists: bool = False) -> bool:
         """
-        Delete a dataset from the DNK.
+        Delete a dataset from the DNK by marking it for deletion review,
+        or update local tracking if already deleted from Dataspot.
+        
+        This is a higher-level method that handles checking for existence,
+        marking for deletion, and updating the mapping.
         
         Args:
-            uuid: The UUID of the dataset to delete
+            ods_id (str): The ODS ID of the dataset to delete
+            fail_if_not_exists (bool): Whether to raise an error if the dataset doesn't exist
             
         Returns:
-            bool: True if the dataset was deleted
+            bool: True if the dataset was deleted or marked for deletion, or if it didn't exist but tracking was updated.
+                 False if it didn't exist in mapping and fail_if_not_exists is False.
+        """
+        return self.dataset_handler.delete_dataset(ods_id, fail_if_not_exists)
+    
+    def mark_dataset_for_deletion(self, uuid: str) -> bool:
+        """
+        Mark a dataset for deletion review in Dataspot.
+        This sets the dataset's status to "REVIEWDCC2" for later review.
+        
+        Args:
+            uuid (str): The UUID of the dataset to mark for deletion
+            
+        Returns:
+            bool: True if the dataset was marked successfully, False if it doesn't exist
         """
         endpoint = f"/rest/{self.database_name}/datasets/{uuid}"
-        self._delete_asset(endpoint)
-        return True
-    
+        try:
+            # Check if asset exists first
+            if self._get_asset(endpoint) is None:
+                logging.warning(f"Dataset with UUID {uuid} not found in Dataspot, cannot mark for deletion")
+                return False
+                
+            self._mark_asset_for_deletion(endpoint)
+            return True
+        except Exception as e:
+            logging.error(f"Error marking dataset with UUID {uuid} for deletion: {str(e)}")
+            return False
+
     def bulk_create_or_update_datasets(self, datasets: List[Dataset],
                                       operation: str = "ADD", dry_run: bool = False) -> dict:
         """
