@@ -25,11 +25,14 @@ classDiagram
         -scheme_name: str
         -scheme_name_short: str
         -ods_imports_collection_name: str
+        -ods_imports_collection_path: str
+        +auth: DataspotAuth
         +get_all_assets_from_scheme()
         +_get_asset()
         +_create_asset()
         +_update_asset()
         +_delete_asset()
+        +_mark_asset_for_deletion()
         +require_scheme_exists()
         +ensure_ods_imports_collection_exists()
         +bulk_create_or_update_assets()
@@ -42,6 +45,7 @@ classDiagram
         +create_dataset()
         +update_dataset()
         +delete_dataset()
+        +mark_dataset_for_deletion()
         +bulk_create_or_update_datasets()
         +sync_org_units()
         +sync_datasets()
@@ -62,21 +66,21 @@ classDiagram
         -database_name: str
         -scheme_name: str
         -scheme_name_short: str
-        -logger: Logger
         -asset_id_field: str
         -asset_type_filter: function
         +_download_and_update_mappings()
-        +update_mappings_from_upload()
+        +update_mappings_before_upload()
+        +update_mappings_after_upload()
         +bulk_create_or_update_assets()
     }
     
     class DatasetHandler {
         -mapping: DatasetMapping
-        -ods_imports_collection_name: str
         -asset_id_field: str
         -asset_type_filter: function
+        -default_dataset_path_full: str
         +sync_datasets()
-        +update_mappings_from_upload()
+        +update_mappings_after_upload()
         +bulk_create_or_update_datasets()
         +create_dataset()
         +update_dataset()
@@ -97,6 +101,8 @@ classDiagram
         -asset_type_filter: function
         -updater: OrgStructureUpdater
         +sync_org_units()
+        +_check_for_duplicate_ids_in_ods_staatskalender_data()
+        +_check_for_duplicate_ids_in_dataspot()
         +build_organization_hierarchy_from_ods_bulk()
         +bulk_create_or_update_organizational_units()
         +update_mappings_after_upload()
@@ -107,7 +113,6 @@ classDiagram
     %% Org Structure Helper Classes
     class OrgStructureTransformer {
         +transform_to_layered_structure()
-        +transform_for_bulk_upload()
         +build_organization_lookup()
         +find_root_nodes()
         +build_path_components()
@@ -117,6 +122,7 @@ classDiagram
         +compare_structures()
         +check_for_unit_changes()
         +generate_sync_summary()
+        +generate_detailed_sync_report()
     }
 
     class OrgStructureUpdater {
@@ -125,6 +131,7 @@ classDiagram
         +apply_changes()
         -_process_deletions()
         -_process_updates()
+        -_process_specific_changes()
         -_create_update_data()
         -_process_creations()
     }
@@ -139,6 +146,7 @@ classDiagram
         -_scheme: str
         +id_field_name: property
         +csv_headers: property
+        +save_to_csv()
         +get_entry()
         +add_entry()
         +remove_entry()
@@ -149,19 +157,18 @@ classDiagram
         +get_all_ids()
         -_get_mapping_file_path()
         -_load_mapping()
-        -_save_mapping()
         -_is_valid_uuid()
     }
 
     class DatasetMapping {
-        -_id_field_name: str
-        -_file_prefix: str
+        -_id_field_name: str = "ods_id"
+        -_file_prefix: str = "ods-dataspot"
         -_scheme: str
     }
 
     class OrgStructureMapping {
-        -_id_field_name: str
-        -_file_prefix: str
+        -_id_field_name: str = "staatskalender_id"
+        -_file_prefix: str = "staatskalender-dataspot"
         -_scheme: str
     }
     
@@ -177,9 +184,17 @@ classDiagram
         +kurzbeschreibung: str
         +beschreibung: str
         +schluesselwoerter: List[str]
+        +synonyme: List[str]
         +aktualisierungszyklus: str
+        +identifikation: str
         +geographische_dimension: str
         +publikationsdatum: int
+        +archivierung_details: str
+        +archivierung_begruendung: str
+        +nutzungseinschraenkung: str
+        +art_der_historisierung: str
+        +aufbewahrungsfrist_jahre: int
+        +begruendung_aufbewahrungsfrist: str
         +to_json()
         +from_json()
     }
@@ -189,7 +204,7 @@ classDiagram
         +nutzungsrechte: str
         +datenportal_identifikation: str
         +tags: List[str]
-        +stereotype: str
+        +stereotype: str = "OGD"
     }
 
     %% Helper Functions
@@ -198,7 +213,7 @@ classDiagram
         +url_join()
         +get_uuid_from_response()
         +escape_special_chars()
-        +generate_potential_staatskalender_url()
+        +unescape_path_components()
     }
 
     %% HTTP Utilities
@@ -209,6 +224,7 @@ classDiagram
         +requests_put()
         +requests_patch()
         +requests_delete()
+        -_print_potential_error_messages()
     }
 
     %% Retry Utilities
@@ -256,6 +272,7 @@ classDiagram
     OrgStructureUpdater ..> OrgUnitChange : uses
     OrgStructureComparer ..> OrgUnitChange : creates
     OrgStructureTransformer ..> helpers : uses
+    OrgStructureUpdater ..> helpers : uses
     
     %% Mapping relationships
     BaseDataspotMapping <|-- DatasetMapping : extends
@@ -288,7 +305,7 @@ classDiagram
    - **OrgStructureTransformer**: Handles transformation of organizational structure data between different formats, particularly from ODS to Dataspot format.
    - **OrgStructureComparer**: Compares organizational structures and identifies changes needed, generating OrgUnitChange objects.
    - **OrgStructureUpdater**: Handles applying changes to organizational units in Dataspot, processing creations, updates, and deletions.
-   - **OrgUnitChange**: Data class used to track changes to organizational units during synchronization.
+   - **OrgUnitChange**: Named tuple class used to track changes to organizational units during synchronization.
 
 5. **Data Models**:
    - **Dataset**: Abstract base class for all dataset types.
