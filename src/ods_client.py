@@ -1,4 +1,5 @@
 import ods_utils_py as ods_utils
+import logging
 
 class ODSClient:
     """Client for interacting with the ODS API."""
@@ -79,3 +80,54 @@ class ODSClient:
         
         # Return the JSON response
         return response.json()
+
+    def get_all_organization_data(self, batch_size: int = 100, max_batches: int = None) -> dict:
+        """
+        Get all organization data from the Staatskalender dataset by retrieving multiple batches.
+        
+        Args:
+            batch_size (int): Number of records to retrieve in each batch. Defaults to 100.
+            max_batches (int, optional): Maximum number of batches to retrieve. 
+                                        If None, retrieves all available data.
+            
+        Returns:
+            dict: Combined JSON response containing all organization data with a 'results' list
+            
+        Raises:
+            HTTPError: If any API request fails
+        """
+        logging.info("Fetching all organization data from ODS API...")
+        all_organizations = {"results": []}
+        batch_count = 0
+        total_retrieved = 0
+        
+        while True:
+            # Get the next batch of organization data
+            offset = batch_count * batch_size
+            batch_data = self.get_organization_data(limit=batch_size, offset=offset)
+            
+            # Check if we received any results
+            batch_results = batch_data.get('results', [])
+            num_results = len(batch_results)
+            
+            if num_results == 0:
+                # No more results, break out of the loop
+                break
+            
+            # Add the batch results to our collected data
+            all_organizations['results'].extend(batch_results)
+            total_retrieved += num_results
+            
+            logging.info(f"Retrieved batch {batch_count + 1} with {num_results} organizations (total: {total_retrieved})")
+            
+            # Check if we've reached our batch limit
+            batch_count += 1
+            if max_batches is not None and batch_count >= max_batches:
+                logging.info(f"Reached the maximum number of batches ({max_batches})")
+                break
+        
+        # Set the total count in the combined data
+        all_organizations['total_count'] = batch_data.get('total_count', total_retrieved)
+        logging.info(f"Total organizations retrieved: {total_retrieved} (out of {all_organizations['total_count']})")
+        
+        return all_organizations

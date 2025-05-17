@@ -1,9 +1,9 @@
 import logging
 from time import sleep
 
-from ods_client import ODSClient
-from dataspot_client import DataspotClient
-from dataspot_dataset import OGDDataset
+from src.ods_client import ODSClient
+from deprecated_dataspot_client import DataspotClient
+from src.dataspot_dataset import OGDDataset
 import json
 
 import ods_utils_py as ods_utils
@@ -182,7 +182,7 @@ def main_3_tdm():
 def main_4_dnk_tdm_linked():
     client = DataspotClient(uuid_cache_path=None)
     ods_client = ODSClient()
-    start_at = 100046
+    start_at = 0
 
     # Teardown and then create 10 datasets in the DNK and the corresponding TDM
     if True:

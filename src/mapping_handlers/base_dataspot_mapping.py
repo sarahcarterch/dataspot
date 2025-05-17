@@ -1,81 +1,15 @@
-import abc
-import csv
 import os
+import csv
 import uuid
 import logging
 from typing import Tuple, Optional, Dict, List
 
 
-class DataspotMappingInterface(abc.ABC):
+class BaseDataspotMapping:
     """
-    Abstract base class for mapping external IDs to Dataspot asset type, UUID, and collection.
-    Implementers need to specify the mapping field name and file path pattern.
-    """
-
-    @abc.abstractmethod
-    def __init__(self, database_name: str, scheme: str):
-        """Initialize the mapping with the database name and scheme"""
-        pass
-
-    @abc.abstractproperty
-    def id_field_name(self) -> str:
-        """Get the field name for the ID in this mapping (e.g., 'ods_id')"""
-        pass
-
-    @abc.abstractmethod
-    def _get_mapping_file_path(self, database_name: str, scheme: str) -> str:
-        """Get the file path for the mapping file based on database name and scheme"""
-        pass
-
-    @property
-    def csv_headers(self) -> List[str]:
-        """Get the CSV headers for this mapping"""
-        return [self.id_field_name, '_type', 'uuid', 'inCollection']
-
-    @abc.abstractmethod
-    def get_entry(self, external_id: str) -> Optional[Tuple[str, str, Optional[str]]]:
-        """Get the mapping entry for an external ID"""
-        pass
-
-    @abc.abstractmethod
-    def add_entry(self, external_id: str, _type: str, uuid_str: str, in_collection: Optional[str] = None) -> bool:
-        """Add a new mapping entry"""
-        pass
-
-    @abc.abstractmethod
-    def remove_entry(self, external_id: str) -> bool:
-        """Remove a mapping entry"""
-        pass
-
-    @abc.abstractmethod
-    def get_type(self, external_id: str) -> Optional[str]:
-        """Get the type for an external ID"""
-        pass
-
-    @abc.abstractmethod
-    def get_uuid(self, external_id: str) -> Optional[str]:
-        """Get the UUID for an external ID"""
-        pass
-
-    @abc.abstractmethod
-    def get_inCollection(self, external_id: str) -> Optional[str]:
-        """Get the inCollection for an external ID"""
-        pass
-
-    @abc.abstractmethod
-    def get_all_entries(self) -> Dict[str, Tuple[str, str, Optional[str]]]:
-        """Get all mapping entries"""
-        pass
-
-    @abc.abstractmethod
-    def get_all_ids(self) -> List[str]:
-        """Get all external IDs in the mapping"""
-        pass
-
-
-class BaseDataspotMapping(DataspotMappingInterface):
-    """
-    Implementation of the BaseDataspotMapping that can be configured for different mapping types.
+    Base class for mapping external IDs to Dataspot asset type, UUID, and collection.
+    This class provides functionality to store and retrieve mappings between external IDs
+    and Dataspot assets (type, UUID, and collection).
     """
 
     def __init__(self, database_name: str, id_field_name: str, file_prefix: str, scheme: str):
@@ -88,7 +22,6 @@ class BaseDataspotMapping(DataspotMappingInterface):
             file_prefix (str): Prefix for the mapping file (e.g., 'ods-dataspot', 'staatskalender-dataspot')
             scheme (str): Name of the scheme (e.g., 'DNK', 'TDM')
         """
-        self.logger = logging.getLogger(__name__)
         self._id_field_name = id_field_name
         self._file_prefix = file_prefix
         self._scheme = scheme
@@ -103,7 +36,17 @@ class BaseDataspotMapping(DataspotMappingInterface):
 
         # Derive csv_file_path from the mandatory database_name and scheme
         self.csv_file_path = self._get_mapping_file_path(database_name, scheme)
-        self.logger.info(f"Using mapping file: {self.csv_file_path}")
+        
+        # Ensure the mappings directory exists
+        mappings_dir = os.path.dirname(self.csv_file_path)
+        if not os.path.exists(mappings_dir):
+            try:
+                os.makedirs(mappings_dir)
+                logging.info(f"Created mappings directory: {mappings_dir}")
+            except (IOError, PermissionError) as e:
+                logging.warning(f"Could not create mappings directory: {str(e)}")
+        
+        logging.info(f"Using mapping file: {self.csv_file_path}")
 
         # Mapping: Dict[str, Tuple[str, str, Optional[str]]] -> Dict[external_id, (_type, uuid, inCollection)]
         self.mapping: Dict[str, Tuple[str, str, Optional[str]]] = {}
@@ -114,9 +57,26 @@ class BaseDataspotMapping(DataspotMappingInterface):
         """Get the field name for the ID in this mapping"""
         return self._id_field_name
 
+    @property
+    def csv_headers(self) -> List[str]:
+        """Get the CSV headers for this mapping"""
+        return [self.id_field_name, '_type', 'uuid', 'inCollection']
+
     def _get_mapping_file_path(self, database_name: str, scheme: str) -> str:
-        """Get the file path for the mapping file based on database name and scheme. Format: {database_name}_{scheme}_{file_prefix}-mapping.csv"""
-        return f"{database_name}_{scheme}_{self._file_prefix}-mapping.csv"
+        """Get the file path for the mapping file based on database name and scheme. Format: mappings/{database_name}_{scheme}_{file_prefix}-mapping.csv"""
+        # Get project root directory (2 levels up from this module)
+        current_file_path = os.path.abspath(__file__)
+        src_dir = os.path.dirname(os.path.dirname(current_file_path))
+        project_root = os.path.dirname(src_dir)
+        
+        # Define mappings directory
+        mappings_dir = os.path.join(project_root, "mappings")
+        
+        # Construct the filename
+        filename = f"{database_name}_{scheme}_{self._file_prefix}-mapping.csv"
+        
+        # Return the full path
+        return os.path.join(mappings_dir, filename)
 
     def _load_mapping(self) -> None:
         """Load the mapping from the CSV file if it exists."""
@@ -127,7 +87,7 @@ class BaseDataspotMapping(DataspotMappingInterface):
                     writer = csv.writer(csvfile)
                     writer.writerow(self.csv_headers)  # Use defined headers
             except (IOError, PermissionError) as e:
-                self.logger.warning(f"Could not create mapping file: %s", str(e))
+                logging.warning(f"Could not create mapping file: %s", str(e))
             return
 
         try:
@@ -135,7 +95,7 @@ class BaseDataspotMapping(DataspotMappingInterface):
                 reader = csv.DictReader(csvfile)
                 # Check headers
                 if reader.fieldnames != self.csv_headers:
-                    self.logger.warning(f"CSV file header mismatch in {self.csv_file_path}. "
+                    logging.warning(f"CSV file header mismatch in {self.csv_file_path}. "
                                         f"Expected: {self.csv_headers}, Found: {reader.fieldnames}. "
                                         f"Attempting to load anyway, but data might be misinterpreted or fail.")
 
@@ -145,7 +105,7 @@ class BaseDataspotMapping(DataspotMappingInterface):
                     # 'inCollection' is optional in the data, but the column must exist
                     required_fields = [self.id_field_name, '_type', 'uuid']
                     if not all(h in row for h in required_fields):
-                        self.logger.warning(f"Skipping row due to missing required columns ({', '.join(required_fields)}): {row}")
+                        logging.warning(f"Skipping row due to missing required columns ({', '.join(required_fields)}): {row}")
                         continue
 
                     external_id = row[self.id_field_name]
@@ -159,13 +119,13 @@ class BaseDataspotMapping(DataspotMappingInterface):
                     self.mapping[external_id] = (_type, uuid_val, inCollection)
 
         except (IOError, PermissionError) as e:
-            self.logger.warning(f"Could not read mapping file: %s", str(e))
+            logging.warning(f"Could not read mapping file: %s", str(e))
         except KeyError as e:
-            self.logger.warning(f"Missing expected column '{e}' while parsing row in {self.csv_file_path}. Check header format.")
+            logging.warning(f"Missing expected column '{e}' while parsing row in {self.csv_file_path}. Check header format.")
         except Exception as e:
-            self.logger.warning(f"Error parsing mapping file: %s", str(e))
+            logging.warning(f"Error parsing mapping file: %s", str(e))
 
-    def _save_mapping(self) -> None:
+    def save_to_csv(self) -> None:
         """Save the current mapping to the CSV file."""
         try:
             # Sort the items by external_id
@@ -177,7 +137,7 @@ class BaseDataspotMapping(DataspotMappingInterface):
                     # Ensure inCollection is written as empty string if None
                     writer.writerow([external_id, _type, uuid_val, inCollection or ''])
         except (IOError, PermissionError) as e:
-            self.logger.warning(f"Could not write to mapping file: %s", str(e))
+            logging.warning(f"Could not write to mapping file: %s", str(e))
 
     def _is_valid_uuid(self, uuid_str: str) -> bool:
         """
@@ -231,20 +191,20 @@ class BaseDataspotMapping(DataspotMappingInterface):
             empty_params.append("uuid_str")
 
         if empty_params:
-            self.logger.warning("Cannot add entry with empty values for: %s", ", ".join(empty_params))
-            self.logger.warning("Provided values - %s: '%s', _type: '%s', uuid_str: '%s'",
+            logging.warning("Cannot add entry with empty values for: %s", ", ".join(empty_params))
+            logging.warning("Provided values - %s: '%s', _type: '%s', uuid_str: '%s'",
                                self.id_field_name, external_id, _type, uuid_str)
             return False
 
         # Validate UUID format
         if not self._is_valid_uuid(uuid_str):
-            self.logger.warning("Invalid UUID format: '%s' for %s '%s'", uuid_str, self.id_field_name, external_id)
-            self.logger.warning("UUID must match the format: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' (8-4-4-4-12 hex digits)")
+            logging.warning("Invalid UUID format: '%s' for %s '%s'", uuid_str, self.id_field_name, external_id)
+            logging.warning("UUID must match the format: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' (8-4-4-4-12 hex digits)")
             return False
 
         # Store the entry including _type
         self.mapping[external_id] = (_type, uuid_str, in_collection)
-        self._save_mapping()
+        self.save_to_csv()
         return True
 
     def remove_entry(self, external_id: str) -> bool:
@@ -259,7 +219,7 @@ class BaseDataspotMapping(DataspotMappingInterface):
         """
         if external_id in self.mapping:
             del self.mapping[external_id]
-            self._save_mapping()
+            self.save_to_csv()
             return True
         return False
 

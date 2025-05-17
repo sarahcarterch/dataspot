@@ -1,7 +1,7 @@
 import os
 import unittest
 import uuid
-from src.ods_dataspot_mapping import ODSDataspotMapping
+from src.mapping_handlers.dataset_handler import DatasetMapping
 
 
 class TestODSDataspotMapping(unittest.TestCase):
@@ -10,8 +10,9 @@ class TestODSDataspotMapping(unittest.TestCase):
     def setUp(self):
         # Use a temporary test file
         self.database_name = "local-test-environment"
+        self.scheme = "test-scheme"
         # Create mapping first to get the correct path
-        self.mapping = ODSDataspotMapping(database_name=self.database_name)
+        self.mapping = DatasetMapping(database_name=self.database_name, scheme=self.scheme)
         self.test_file = self.mapping.csv_file_path 
         self.test_type = "Dataset"
         
@@ -72,7 +73,7 @@ class TestODSDataspotMapping(unittest.TestCase):
         self.mapping.add_entry("ods-abc", self.test_type, uuid2, inColl2)
         
         # Create a new instance that should load from the same file
-        new_mapping = ODSDataspotMapping(database_name=self.database_name)
+        new_mapping = DatasetMapping(database_name=self.database_name, scheme=self.scheme)
         
         # Check that entries were loaded
         self.assertEqual(new_mapping.get_type("ods-789"), self.test_type)
@@ -153,7 +154,7 @@ class TestODSDataspotMapping(unittest.TestCase):
         empty_file_path = None
         try:
             # Create a new empty mapping using database_name
-            empty_mapping = ODSDataspotMapping(database_name=empty_file_db_name)
+            empty_mapping = DatasetMapping(database_name=empty_file_db_name, scheme=self.scheme)
             empty_file_path = empty_mapping.csv_file_path
             
             # Should not have any entries
@@ -177,7 +178,7 @@ class TestODSDataspotMapping(unittest.TestCase):
         non_existent_file_path = None
         try:
             # Should create the file and add headers when initialized with database_name
-            non_existent_mapping = ODSDataspotMapping(database_name=non_existent_db_name)
+            non_existent_mapping = DatasetMapping(database_name=non_existent_db_name, scheme=self.scheme)
             non_existent_file_path = non_existent_mapping.csv_file_path
             
             # Check that the file was created
@@ -197,7 +198,7 @@ class TestODSDataspotMapping(unittest.TestCase):
         expected_filename = None
         try:
             # Create mapping with database_name
-            db_mapping = ODSDataspotMapping(database_name=database_name)
+            db_mapping = DatasetMapping(database_name=database_name, scheme=self.scheme)
             expected_filename = db_mapping.csv_file_path
             
             # Check that the correct file was created
@@ -268,7 +269,7 @@ class TestODSDataspotMapping(unittest.TestCase):
         self.assertEqual(all_entries["ods-2"], (self.test_type, uuid2, inColl2))
         self.assertEqual(all_entries["ods-3"], (self.test_type, uuid3, None))
     
-    def test_get_all_ods_ids(self):
+    def test_get_all_ids(self):
         # Add multiple entries
         uuid1 = "caeb7cb4-3279-46c5-b7cc-19e0c58d7031"
         uuid2 = "caeb7cb4-3279-46c5-b7cc-19e0c58d7032"
@@ -277,8 +278,8 @@ class TestODSDataspotMapping(unittest.TestCase):
         self.mapping.add_entry("ods-a", self.test_type, uuid1, inColl1)
         self.mapping.add_entry("ods-b", self.test_type, uuid2)
         
-        # Get all ODS IDs
-        all_ids = self.mapping.get_all_ods_ids()
+        # Get all IDs directly using the base method
+        all_ids = self.mapping.get_all_ids()
         
         # Check IDs
         self.assertEqual(len(all_ids), 2)

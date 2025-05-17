@@ -6,6 +6,7 @@ tmp/
 **/*.mdc
 **/*.txt
 **/*.csv
+**/*.json
 **/config.py
 !requirements.txt
 !**/README.txt

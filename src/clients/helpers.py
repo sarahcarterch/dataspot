@@ -37,45 +37,6 @@ def get_uuid_from_response(response: dict) -> str | None:
     """
     return response.get('id')
 
-def generate_potential_staatskalender_url(path: str) -> str:
-    """
-    Generate a URL for the Basel Staatskalender based on an organization path string.
-    
-    This function transforms an organization path into a standardized URL format
-    by applying these transformations:
-    - Convert to lowercase
-    - Replace spaces with hyphens
-    - Convert German umlauts (ö→oe, ä→ae, ü→ue)
-    - Remove all characters except letters, hyphens, and forward slashes
-    - Replace double hyphens with single ones
-    - Remove trailing slashes
-    
-    Args:
-        path (str): The organization path string to transform
-        
-    Returns:
-        str: A formatted URL pointing to the organization in the Basel Staatskalender
-        
-    Example:
-        >>> generate_potential_staatskalender_url("Präsidialdepartement/Kantons- und Stadtentwicklung")
-        "https://staatskalender.bs.ch/organization/praesidialdepartement/kantons-und-stadtentwicklung"
-    """
-    # Make path string lowercase, and replace ö -> oe, ä -> ae, ü -> ue, é -> e, etc., and space -> '-', and remove trailing slashes
-    new_path = path.lower()
-    new_path = new_path.replace(' ', '-')
-    new_path = new_path.replace('ö', 'oe')
-    new_path = new_path.replace('ä', 'ae')
-    new_path = new_path.replace('ü', 'ue')
-    new_path = new_path.replace('é', 'e')
-    new_path = new_path.replace('ê', 'e')
-    new_path = new_path.replace('è', 'e')
-    new_path = new_path.replace('à', 'a')
-    # Keep only letters a-z and hyphens, remove all other characters
-    new_path = ''.join(c for c in new_path if c.isalpha() or c in '-/')
-    new_path = new_path.replace('--', '-')
-    new_path = new_path.rstrip('/')
-    return f"https://staatskalender.bs.ch/organization/{new_path}"
-
 def escape_special_chars(name: str) -> str:
     '''
     Escape special characters in asset names for Dataspot API according to the business key rules. Also remove leading
