@@ -13,7 +13,7 @@ This is put on hold for the moment, as lastactl does not really need to be in da
 
 
 ## How to integrate code from a `dev` (or `feature`) environment into `prod` [Work-In-Progress]
-When integrating a `dev` into `prod`, first we need to clone the `dev` into an `int` database. Please follow the 
+When integrating a `dev` into `prod`, first we need to clone the `dev` into an `int` database.
 
 Then:
 1. Export DNK from `dev` as xlsx and import it again (dry run is enough).
