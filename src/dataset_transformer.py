@@ -96,6 +96,10 @@ def transform_ods_to_dnk(ods_metadata: Dict[str, Any], ods_dataset_id: str) -> O
     description = _get_field_value(ods_metadata['default'].get('description', {}))
     keywords = _get_field_value(ods_metadata['default'].get('keyword', {}))
     tags = _get_field_value(ods_metadata.get('custom', {}).get('tags', {}))
+
+    # Add OGD keyword to the title
+    if title:
+        title = f"{title} (OGD)"
     
     # Get the dataset timezone if available, otherwise default to UTC
     dataset_timezone = None

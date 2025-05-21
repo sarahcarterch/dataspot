@@ -695,6 +695,85 @@ def main_10_sync_organization_structure():
     logging.info("Organization structure synchronization process finished")
     logging.info("===============================================")
 
+def main_11_sync_datasets(max_datasets: int = None):
+    """
+    Sync existing datasets with updated titles without creating duplicates.
+    
+    This function:
+    1. Retrieves public dataset IDs from ODS
+    2. For each dataset, retrieves metadata and transforms it (which adds "(OGD)" to titles)
+    3. Uses the sync_datasets method that's been modified to properly update existing datasets
+    
+    Args:
+        max_datasets (int, optional): Maximum number of datasets to process. Defaults to None.
+    
+    Returns:
+        List[str]: The list of dataset IDs that were processed
+    """
+    logging.info("Syncing existing datasets with updated titles...")
+    
+    # Initialize client
+    dataspot_client = DNKClient()
+    
+    # Get all public dataset IDs
+    logging.info(f"Step 1: Retrieving {max_datasets or 'all'} public dataset IDs from ODS...")
+    ods_ids = ods_utils.get_all_dataset_ids(include_restricted=False, max_datasets=max_datasets)
+    logging.info(f"Found {len(ods_ids)} datasets to process")
+    
+    # Process datasets
+    logging.info("Step 2: Processing datasets - downloading metadata and transforming...")
+    total_processed = 0
+    total_successful = 0
+    total_failed = 0
+    processed_ids = []
+    all_datasets = []
+    
+    for idx, ods_id in enumerate(ods_ids):
+        try:
+            logging.info(f"[{idx+1}/{len(ods_ids)}] Processing dataset {ods_id}...")
+            
+            # Get metadata from ODS
+            ods_metadata = ods_utils.get_dataset_metadata(dataset_id=ods_id)
+            
+            # Transform to Dataspot dataset
+            dataset = transform_ods_to_dnk(ods_metadata=ods_metadata, ods_dataset_id=ods_id)
+            
+            # Add to collection
+            all_datasets.append(dataset)
+            processed_ids.append(ods_id)
+            
+            logging.info(f"Successfully transformed dataset {ods_id}: {dataset.name}")
+            total_successful += 1
+            
+        except Exception as e:
+            logging.error(f"Error processing dataset {ods_id}: {str(e)}")
+            total_failed += 1
+        
+        total_processed += 1
+        
+        # Process in smaller batches to avoid memory issues
+        if len(all_datasets) >= 50 or idx == len(ods_ids) - 1:
+            if all_datasets:
+                try:
+                    logging.info(f"Step 3: Syncing batch of {len(all_datasets)} datasets...")
+                    
+                    # Ensure ODS-Imports collection exists
+                    dataspot_client.ensure_ods_imports_collection_exists()
+                    
+                    # Sync datasets - the method has been modified to handle updates properly
+                    sync_summary = dataspot_client.sync_datasets(datasets=all_datasets)
+                    
+                    logging.info(f"Batch sync completed. Response summary: {sync_summary}")
+                    
+                    # Clear the batch for the next iteration
+                    all_datasets = []
+                    
+                except Exception as e:
+                    logging.error(f"Error during batch sync: {str(e)}")
+
+    logging.info(f"Completed processing {total_processed} datasets: {total_successful} successful, {total_failed} failed")
+    return processed_ids
+
 
 if __name__ == "__main__":
     logging.basicConfig(
@@ -711,7 +790,7 @@ if __name__ == "__main__":
         if answer != 'y':
             exit("Aborting run...")
 
-    main_10_sync_organization_structure()
-    #main_8_test_bulk_ods_datasets_upload_and_delete(max_datasets=3)
+    #main_10_sync_organization_structure()
+    main_11_sync_datasets(max_datasets=None)
 
     logging.info('Job successful!')

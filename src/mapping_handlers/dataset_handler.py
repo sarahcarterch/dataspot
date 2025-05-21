@@ -77,9 +77,11 @@ class DatasetHandler(BaseDataspotHandler):
         
         The method:
         1. Updates mappings before upload
-        2. Uploads datasets using bulk_create_or_update_datasets
-        3. Updates mappings after upload
-        4. Saves mappings to CSV
+        2. Separates datasets into new and existing based on ODS_ID
+        3. Updates existing datasets individually to preserve other fields
+        4. Creates new datasets using bulk upload
+        5. Updates mappings after all operations
+        6. Saves mappings to CSV
 
         Args:
             datasets: List of Dataset objects to synchronize with Dataspot
@@ -101,40 +103,97 @@ class DatasetHandler(BaseDataspotHandler):
         logging.info("Step 1: Updating mappings before upload...")
         self.update_mappings_before_upload()
 
-        # Step 2: Extract ODS IDs for later mapping updates
+        # Step 2: Extract ODS IDs and separate datasets into new and existing
+        logging.info("Step 2: Separating datasets into new and existing...")
+        new_datasets = []
+        existing_datasets = []
         ods_ids = []
+        
         for dataset in datasets:
             dataset_json = dataset.to_json()
             ods_id = dataset_json.get('customProperties', {}).get('ODS_ID')
             if ods_id:
                 ods_ids.append(ods_id)
+                
+                # Check if dataset exists in mapping
+                existing_entry = self.mapping.get_entry(ods_id)
+                if existing_entry:
+                    existing_datasets.append((dataset, ods_id, existing_entry))
+                else:
+                    new_datasets.append(dataset)
 
-        # Step 3: Upload datasets using bulk_create_or_update_datasets
-        logging.info(f"Step 3: Uploading {len(datasets)} datasets...")
-        upload_result = self.bulk_create_or_update_datasets(
-            datasets=datasets,
-            operation="ADD",
-            dry_run=False
-        )
+        # Step 3: Process existing datasets with individual updates to preserve other fields
+        updated_count = 0
+        update_errors = 0
+        
+        logging.info(f"Step 3: Updating {len(existing_datasets)} existing datasets individually...")
+        if existing_datasets:
+            for dataset, ods_id, entry in existing_datasets:
+                try:
+                    # entry format is (_type, uuid, inCollection)
+                    uuid = entry[1]
+                    
+                    # Get the endpoint for this dataset
+                    endpoint = f"/rest/{self.client.database_name}/datasets/{uuid}"
+                    
+                    # Update only specified fields using PATCH to preserve other data
+                    dataset_json = dataset.to_json()
 
-        # Step 4: Update mappings after upload
-        logging.info("Step 4: Updating mappings after upload...")
+                    # Ensure inCollection is preserved from the mapping
+                    retrieved_asset = self.client._get_asset(endpoint=endpoint)
+                    dataset_json['inCollection'] = retrieved_asset['inCollection']
+
+                    # Use the client's update method with replace=False to do a PATCH
+                    try:
+                        self.client._update_asset(
+                            endpoint=endpoint, 
+                            data=dataset_json, 
+                            replace=False
+                        )
+                        updated_count += 1
+                        logging.info(f"Successfully updated dataset with ODS_ID {ods_id}")
+                    except Exception as e:
+                        logging.error(f"Error updating dataset with ODS_ID {ods_id}: {str(e)}")
+                        update_errors += 1
+                
+                except Exception as e:
+                    logging.error(f"Error processing update for dataset with ODS_ID {ods_id}: {str(e)}")
+                    update_errors += 1
+
+        # Step 4: Upload new datasets using bulk_create_or_update_datasets
+        created_count = 0
+        bulk_result = {}
+        
+        logging.info(f"Step 4: Creating {len(new_datasets)} new datasets with bulk upload...")
+        if new_datasets:
+            bulk_result = self.bulk_create_or_update_datasets(
+                datasets=new_datasets,
+                operation="ADD",
+                dry_run=False
+            )
+            created_count = len(new_datasets)
+
+        # Step 5: Update mappings after all operations
+        logging.info("Step 5: Updating mappings after upload...")
         if ods_ids:
             self.update_mappings_after_upload(ods_ids)
 
-        # Step 5: Save mappings to CSV
-        logging.info("Step 5: Saving mappings to CSV...")
+        # Step 6: Save mappings to CSV
+        logging.info("Step 6: Saving mappings to CSV...")
         self.mapping.save_to_csv()
 
         # Generate result summary
         result = {
             "status": "success",
-            "message": f"Successfully synchronized {len(datasets)} datasets",
+            "message": f"Synchronized {len(datasets)} datasets: {updated_count} updated, {created_count} created, {update_errors} errors",
             "datasets_processed": len(datasets),
-            "upload_result": upload_result
+            "updated": updated_count,
+            "created": created_count,
+            "errors": update_errors,
+            "bulk_upload_result": bulk_result if new_datasets else {}
         }
 
-        logging.info(f"Dataset synchronization completed successfully")
+        logging.info(f"Dataset synchronization completed: {updated_count} updated, {created_count} created, {update_errors} errors")
         return result
 
     def update_mappings_after_upload(self, ods_ids: List[str]) -> None:
