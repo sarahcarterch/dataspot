@@ -4,6 +4,8 @@ import json
 import os
 import datetime
 
+from src.clients.base_client import BaseDataspotClient
+from src.clients.fdm_client import FDMClient
 from src.ods_client import ODSClient
 from src.clients.dnk_client import DNKClient
 from src.dataspot_dataset import OGDDataset
@@ -534,7 +536,7 @@ def main_8_test_bulk_ods_datasets_upload_and_delete(max_datasets: int = None):
 
     return processed_ids
 
-def main_10_sync_organization_structure():
+def main_10_sync_organization_structure(ods_client: ODSClient, dataspot_client: BaseDataspotClient):
     """
     Synchronize organizational structure in Dataspot with the latest data from ODS API.
     This method:
@@ -547,10 +549,6 @@ def main_10_sync_organization_structure():
     7. Provides a summary of changes
     """
     logging.info("Starting organization structure synchronization...")
-
-    # Initialize clients
-    ods_client = ODSClient()
-    dataspot_client = DNKClient()
 
     # Fetch organization data
     logging.info("Fetching organization data from ODS API...")
@@ -790,7 +788,12 @@ if __name__ == "__main__":
         if answer != 'y':
             exit("Aborting run...")
 
-    #main_10_sync_organization_structure()
-    main_11_sync_datasets(max_datasets=None)
+    # Initialize clients
+    ods_client = ODSClient()
+    dnk_client = DNKClient()
+    #fdm_client = FDMClient()
+
+    main_10_sync_organization_structure(ods_client=ods_client, dataspot_client=dnk_client)
+    #main_11_sync_datasets(max_datasets=None)
 
     logging.info('Job successful!')
