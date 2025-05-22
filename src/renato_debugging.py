@@ -10,6 +10,7 @@ from src.ods_client import ODSClient
 from src.clients.dnk_client import DNKClient
 from src.dataspot_dataset import OGDDataset
 import ods_utils_py as ods_utils
+from src.common import e_mail_helpers as email_helpers
 
 from src.dataset_transformer import transform_ods_to_dnk
 
@@ -641,6 +642,7 @@ def main_10_sync_organization_structure(ods_client: ODSClient, dataspot_client: 
                 logging.info(f"   - Path: '{deletion.get('inCollection', '')}'")
         
         # Write detailed report to file for email/reference purposes
+        report_filename = None
         try:
             # Get project root directory (one level up from src)
             current_file_path = os.path.abspath(__file__)
@@ -654,15 +656,95 @@ def main_10_sync_organization_structure(ods_client: ODSClient, dataspot_client: 
             
             # Generate filename with timestamp
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = os.path.join(reports_dir, f"org_sync_report_{timestamp}.json")
+            report_filename = os.path.join(reports_dir, f"org_sync_report_{timestamp}.json")
             
             # Write report to file
-            with open(filename, 'w', encoding='utf-8') as f:
+            with open(report_filename, 'w', encoding='utf-8') as f:
                 json.dump(sync_result, f, indent=2, ensure_ascii=False)
                 
-            logging.info(f"\nDetailed report saved to {filename}")
+            logging.info(f"\nDetailed report saved to {report_filename}")
         except Exception as e:
             logging.error(f"Failed to save detailed report to file: {str(e)}")
+        
+        # Create email content
+        counts = sync_result.get('counts', {})
+        total_changes = counts.get('total', 0)
+        
+        # Only send email if there were changes
+        if total_changes > 0:
+            email_subject = f"Dataspot Organization Structure Updated ({total_changes} Changes)"
+            
+            email_text = f"Hi there,\n\n"
+            email_text += f"I've just updated the organization structure in Dataspot.\n"
+            email_text += f"Could you please review the changes and set the status to \"Veröffentlicht\"?\n\n"
+            
+            email_text += f"Here's what changed:\n"
+            email_text += f"- Total: {counts.get('total', 0)} changes\n"
+            email_text += f"- Created: {counts.get('created', 0)} organizational units\n"
+            email_text += f"- Updated: {counts.get('updated', 0)} organizational units\n"
+            email_text += f"- Deleted: {counts.get('deleted', 0)} organizational units\n\n"
+            
+            # Add details about each change type
+            if counts.get('created', 0) > 0 and 'creations' in details:
+                creations = details['creations'].get('items', [])
+                email_text += f"New organizational units ({len(creations)}):\n"
+                for creation in creations:
+                    title = creation.get('title', '(Unknown)')
+                    staatskalender_id = creation.get('staatskalender_id', '(Unknown)')
+                    uuid = creation.get('uuid', '')
+                    asset_link = f"{base_url}/web/{database_name}/collections/{uuid}" if uuid else "Link not available"
+                    email_text += f"- {title} (ID: {staatskalender_id})\n"
+                    email_text += f"  Link: {asset_link}\n"
+                    props = creation.get('properties', {})
+                    if props:
+                        for key, value in props.items():
+                            if value:
+                                email_text += f"  {key}: '{value}'\n"
+                email_text += "\n"
+            
+            if counts.get('updated', 0) > 0 and 'updates' in details:
+                updates = details['updates'].get('items', [])
+                email_text += f"Updated organizational units ({len(updates)}):\n"
+                for update in updates:
+                    title = update.get('title', '(Unknown)')
+                    staatskalender_id = update.get('staatskalender_id', '(Unknown)')
+                    uuid = update.get('uuid', '(Unknown)')
+                    asset_link = f"{base_url}/web/{database_name}/collections/{uuid}"
+                    email_text += f"- {title} (ID: {staatskalender_id}, UUID: {uuid})\n"
+                    email_text += f"  Link: {asset_link}\n"
+                    for field_name, changes in update.get('changed_fields', {}).items():
+                        old_value = changes.get('old_value', '')
+                        new_value = changes.get('new_value', '')
+                        email_text += f"  {field_name}: '{old_value}' → '{new_value}'\n"
+                email_text += "\n"
+            
+            if counts.get('deleted', 0) > 0 and 'deletions' in details:
+                deletions = details['deletions'].get('items', [])
+                email_text += f"Deleted organizational units ({len(deletions)}):\n"
+                for deletion in deletions:
+                    title = deletion.get('title', '(Unknown)')
+                    staatskalender_id = deletion.get('staatskalender_id', '(Unknown)')
+                    uuid = deletion.get('uuid', '(Unknown)')
+                    asset_link = f"{base_url}/web/{database_name}/collections/{uuid}"
+                    email_text += f"- {title} (ID: {staatskalender_id}, UUID: {uuid})\n"
+                    email_text += f"  Link: {asset_link}\n"
+                    email_text += f"  Path: '{deletion.get('inCollection', '')}'\n"
+                email_text += "\n"
+            
+            email_text += "Best regards,\n"
+            email_text += "Your Dataspot Organization Structure Sync Assistant"
+            
+            # Create and send email
+            attachment = report_filename if report_filename and os.path.exists(report_filename) else None
+            msg = email_helpers.email_message(
+                subject=email_subject,
+                text=email_text,
+                attachment=attachment
+            )
+            email_helpers.send_email(msg)
+            logging.info("Email notification sent successfully")
+        else:
+            logging.info("No changes detected - email notification not sent")
         
     except ValueError as e:
         if "Duplicate id_im_staatskalender values detected in Dataspot" in str(e):
@@ -791,7 +873,7 @@ if __name__ == "__main__":
     # Initialize clients
     ods_client = ODSClient()
     dnk_client = DNKClient()
-    #fdm_client = FDMClient()
+    fdm_client = FDMClient()
 
     main_10_sync_organization_structure(ods_client=ods_client, dataspot_client=dnk_client)
     #main_11_sync_datasets(max_datasets=None)
