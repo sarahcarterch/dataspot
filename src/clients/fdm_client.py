@@ -24,10 +24,10 @@ class FDMClient(BaseDataspotClient):
     # Synchronization methods
     def sync_org_units(self, org_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Synchronize organizational units in Dataspot.
-        
+        Synchronize organizational units in Dataspot with data from the Staatskalender ODS API.
+
         Args:
-            org_data: Dictionary containing organization data
+            org_data: Dictionary containing organization data from ODS API
             
         Returns:
             Dict: Summary of the synchronization process
