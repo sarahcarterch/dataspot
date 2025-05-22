@@ -38,7 +38,7 @@ class BaseDataspotClient():
             HTTPError: If API requests fail
             ValueError: If the response format is unexpected or invalid
         """
-        logging.info(f"Downloading datasets from {self.scheme_name_short} scheme for mapping update")
+        logging.info(f"Downloading assets from {self.scheme_name_short} scheme for mapping update")
 
         # Use the download API to retrieve assets from the scheme
         download_path = f"/api/{self.database_name}/schemes/{self.scheme_name}/download?format=JSON"
