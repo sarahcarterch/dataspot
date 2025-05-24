@@ -1289,19 +1289,6 @@ Collection:
       title: Sammlungstypen definieren spezifische Sammlungen zur Strukturierung von Metadatenobjekten.
       literals:
 
-# TODO: Remove DEPARTEMENT, DA, BASISSAMMLUNG
-## SAMMLUNGSART DEPARTEMENT##
-        #DEPARTEMENT:
-        #  label: Departement (veraltet -> Organisationseinheit verwenden!)
-        #  icon: city
-
-## SAMMLUNGSART DIENSTABTEILUNG##
-        #DA:
-        #  label: Dienststelle (veraltet -> Organisationseinheit verwenden!)
-        #  icon: building
-
-        #BASISSAMMLUNG:
-        #  label: deprecated-BASISSAMMLUNG (veraltet -> Organisationseinheit verwenden!)
 ## SAMMLUNGSART ORGANISATIONSEINHEIT ##
         Organisationseinheit:
           label: Organisationseinheit
