@@ -488,3 +488,6 @@ class BaseDataspotClient():
             # If response is not JSON, return the text content
             logging.warning(f"Response was not valid JSON. Content: {response.text[:1000]}...")
             return {"response_text": response.text}
+
+    def sync_org_units(self, all_organizations):
+        raise NotImplementedError("Error: sync_org_units should never be called in the BaseClient! This is a bug, please report it to the DCC.")
