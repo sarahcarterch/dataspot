@@ -27,7 +27,6 @@ from urllib3.exceptions import HTTPError
 from src.common.retry import *
 
 
-
 # Default rate limit to avoid overloading the server
 RATE_LIMIT_DELAY_SEC = 1.0
 
@@ -42,12 +41,6 @@ http_errors_to_handle = (
     requests.ReadTimeout,
     requests.Timeout,
 )
-
-load_dotenv(os.path.join(os.path.dirname(__file__), '../../..', '.proxy.env'))
-proxies = {
-    'http': os.getenv('HTTP_PROXY'),
-    'https': os.getenv('HTTPS_PROXY')
-}
 
 def _print_potential_error_messages(response: requests.Response, silent_status_codes: list = None) -> None:
     """
@@ -91,7 +84,7 @@ def requests_get(*args, **kwargs):
     delay = kwargs.pop('rate_limit_delay', RATE_LIMIT_DELAY_SEC)
     silent_status_codes = kwargs.pop('silent_status_codes', None)
     
-    r = requests.get(*args, proxies=proxies, **kwargs)
+    r = requests.get(*args, **kwargs)
 
     _print_potential_error_messages(r, silent_status_codes)
     r.raise_for_status()
@@ -107,7 +100,7 @@ def requests_post(*args, **kwargs):
     delay = kwargs.pop('rate_limit_delay', RATE_LIMIT_DELAY_SEC)
     silent_status_codes = kwargs.pop('silent_status_codes', None)
     
-    r = requests.post(*args, proxies=proxies, **kwargs)
+    r = requests.post(*args, **kwargs)
     _print_potential_error_messages(r, silent_status_codes)
     r.raise_for_status()
     
@@ -122,7 +115,7 @@ def requests_patch(*args, **kwargs):
     delay = kwargs.pop('rate_limit_delay', RATE_LIMIT_DELAY_SEC)
     silent_status_codes = kwargs.pop('silent_status_codes', None)
     
-    r = requests.patch(*args, proxies=proxies, **kwargs)
+    r = requests.patch(*args, **kwargs)
     _print_potential_error_messages(r, silent_status_codes)
     r.raise_for_status()
     
@@ -137,7 +130,7 @@ def requests_put(*args, **kwargs):
     delay = kwargs.pop('rate_limit_delay', RATE_LIMIT_DELAY_SEC)
     silent_status_codes = kwargs.pop('silent_status_codes', None)
     
-    r = requests.put(*args, proxies=proxies, **kwargs)
+    r = requests.put(*args, **kwargs)
     _print_potential_error_messages(r, silent_status_codes)
     r.raise_for_status()
     
@@ -152,7 +145,7 @@ def requests_delete(*args, **kwargs):
     delay = kwargs.pop('rate_limit_delay', RATE_LIMIT_DELAY_SEC)
     silent_status_codes = kwargs.pop('silent_status_codes', None)
     
-    r = requests.delete(*args, proxies=proxies, **kwargs)
+    r = requests.delete(*args, **kwargs)
     _print_potential_error_messages(r, silent_status_codes)
     r.raise_for_status()
     
