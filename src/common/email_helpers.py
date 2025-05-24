@@ -16,7 +16,20 @@ EMAIL = os.getenv('EMAIL')
 if not EMAIL_RECEIVERS or not EMAIL_SERVER or not EMAIL:
     raise ValueError("EMAIL_RECEIVERS, EMAIL_SERVER, and EMAIL must be set in the environment variables")
 
-def email_message(subject="Python Notification", text="", img=None, attachment=None):
+
+def create_email_msg(subject="Python Notification", text="", img=None, attachment=None) -> MIMEMultipart:
+    """
+    Create an email message with optional attachments and images.
+    
+    Args:
+        subject: Email subject line
+        text: Email body text content
+        img: Image file path or list of image file paths to attach
+        attachment: File path or list of file paths to attach
+        
+    Returns:
+        MIMEMultipart: Email message object ready to be sent
+    """
     # build message contents
     msg = MIMEMultipart()
     msg['Subject'] = f"[Automated Message] {subject}"  # add in the subject
@@ -54,6 +67,12 @@ def email_message(subject="Python Notification", text="", img=None, attachment=N
     return msg
 
 def send_email(msg):
+    """
+    Send an email message using the configured SMTP server.
+    
+    Args:
+        msg: Email message object to send
+    """
     # initialize connection to email server
     host = EMAIL_SERVER
     smtp = smtplib.SMTP(host)

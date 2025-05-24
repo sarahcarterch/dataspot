@@ -10,7 +10,7 @@ from src.ods_client import ODSClient
 from src.clients.dnk_client import DNKClient
 from src.dataspot_dataset import OGDDataset
 import ods_utils_py as ods_utils
-from src.common import e_mail_helpers as email_helpers
+from src.common import email_helpers as email_helpers
 
 from src.dataset_transformer import transform_ods_to_dnk
 
@@ -736,7 +736,7 @@ def main_10_sync_organization_structure(ods_client: ODSClient, dataspot_client: 
             
             # Create and send email
             attachment = report_filename if report_filename and os.path.exists(report_filename) else None
-            msg = email_helpers.email_message(
+            msg = email_helpers.create_email_msg(
                 subject=email_subject,
                 text=email_text,
                 attachment=attachment
