@@ -870,8 +870,10 @@ if __name__ == "__main__":
         if answer != 'y':
             exit("Aborting run...")
 
-    # Initialize clients
+    # Initialize ODSClient
     ods_client = ODSClient()
+
+    # Initialize dataspot_clients
     dnk_client = DNKClient()
     fdm_client = FDMClient()
 
