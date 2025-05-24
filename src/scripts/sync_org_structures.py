@@ -15,6 +15,88 @@ def main():
     fdm_client = FDMClient()
     sync_org_structures(dataspot_client=fdm_client)
 
+def create_email_content(sync_result, base_url, database_name):
+    """
+    Create email content based on synchronization results.
+    
+    Args:
+        sync_result (dict): Synchronization result data
+        base_url (str): Base URL for asset links
+        database_name (str): Database name for asset links
+        
+    Returns:
+        tuple: (email_subject, email_text, should_send)
+    """
+    counts = sync_result.get('counts', {})
+    total_changes = counts.get('total', 0)
+    details = sync_result.get('details', {})
+    
+    # Only create email if there were changes
+    if total_changes == 0:
+        return None, None, False
+    
+    # Create email subject with summary of changes
+    email_subject = f"Dataspot Org Structure: {counts.get('created', 0)} created, {counts.get('updated', 0)} updated, {counts.get('deleted', 0)} deleted"
+
+    email_text = f"Hi there,\n\n"
+    email_text += f"I've just updated the organization structure in Dataspot.\n"
+    email_text += f"Could you please review the changes and set the status to \"Veröffentlicht\"?\n\n"
+
+    email_text += f"Here's what changed:\n"
+    email_text += f"- Total: {counts.get('total', 0)} changes\n"
+    email_text += f"- Created: {counts.get('created', 0)} organizational units\n"
+    email_text += f"- Updated: {counts.get('updated', 0)} organizational units\n"
+    email_text += f"- Deleted: {counts.get('deleted', 0)} organizational units\n\n"
+
+    # Add details about each change type - EMAIL ORDER: deletions, updates, creations
+    if counts.get('deleted', 0) > 0 and 'deletions' in details:
+        deletions = details['deletions'].get('items', [])
+        email_text += f"Deleted organizational units ({len(deletions)}):\n"
+        for deletion in deletions:
+            title = deletion.get('title', '(Unknown)')
+            staatskalender_id = deletion.get('staatskalender_id', '(Unknown)')
+            uuid = deletion.get('uuid', '(Unknown)')
+            asset_link = f"{base_url}/web/{database_name}/collections/{uuid}"
+            email_text += f"- {title} (ID: {staatskalender_id}, link: {asset_link})\n"
+            email_text += f"  Path: '{deletion.get('inCollection', '')}'\n"
+        email_text += "\n"
+
+    if counts.get('updated', 0) > 0 and 'updates' in details:
+        updates = details['updates'].get('items', [])
+        email_text += f"Updated organizational units ({len(updates)}):\n"
+        for update in updates:
+            title = update.get('title', '(Unknown)')
+            staatskalender_id = update.get('staatskalender_id', '(Unknown)')
+            uuid = update.get('uuid', '(Unknown)')
+            asset_link = f"{base_url}/web/{database_name}/collections/{uuid}"
+            email_text += f"- {title} (ID: {staatskalender_id}, link: {asset_link})\n"
+            for field_name, changes in update.get('changed_fields', {}).items():
+                old_value = changes.get('old_value', '')
+                new_value = changes.get('new_value', '')
+                email_text += f"  {field_name}: '{old_value}' → '{new_value}'\n"
+        email_text += "\n"
+
+    if counts.get('created', 0) > 0 and 'creations' in details:
+        creations = details['creations'].get('items', [])
+        email_text += f"New organizational units ({len(creations)}):\n"
+        for creation in creations:
+            title = creation.get('title', '(Unknown)')
+            staatskalender_id = creation.get('staatskalender_id', '(Unknown)')
+            uuid = creation.get('uuid', '')
+            asset_link = f"{base_url}/web/{database_name}/collections/{uuid}" if uuid else "Link not available"
+            email_text += f"- {title} (ID: {staatskalender_id}, link: {asset_link})\n"
+            props = creation.get('properties', {})
+            if props:
+                for key, value in props.items():
+                    if value:
+                        email_text += f"  {key}: '{value}'\n"
+        email_text += "\n"
+
+    email_text += "Best regards,\n"
+    email_text += "Your Dataspot Organization Structure Sync Assistant"
+    
+    return email_subject, email_text, True
+
 def sync_org_structures(dataspot_client: BaseDataspotClient):
     """
     Synchronize organizational structure in Dataspot with the latest data from ODS API.
@@ -60,7 +142,7 @@ def sync_org_structures(dataspot_client: BaseDataspotClient):
             logging.info(f"Changes: {counts['total']} total - {counts['created']} created, "
                          f"{counts['updated']} updated, {counts['deleted']} deleted")
 
-        # Show detailed information for each change type
+        # Show detailed information for each change type - LOG ORDER: creations, updates, deletions
         details = sync_result.get('details', {})
 
         # Process creations
@@ -71,13 +153,12 @@ def sync_org_structures(dataspot_client: BaseDataspotClient):
                 title = creation.get('title', '(Unknown)')
                 staatskalender_id = creation.get('staatskalender_id', '(Unknown)')
                 uuid = creation.get('uuid', '')  # UUID might be missing for newly created items
-
-                logging.info(f"{i}. '{title}' (ID: {staatskalender_id})")
-
-                # Show asset link if UUID is available
-                if uuid:
-                    asset_link = f"{base_url}/web/{database_name}/collections/{uuid}"
-                    logging.info(f"   - Link: {asset_link}")
+                
+                # Create asset link if UUID is available
+                asset_link = f"{base_url}/web/{database_name}/collections/{uuid}" if uuid else "(Link not available)"
+                
+                # Display in new format with link in the first line
+                logging.info(f"{i}. '{title}' (ID: {staatskalender_id}, link: {asset_link})")
 
                 # Show properties
                 props = creation.get('properties', {})
@@ -98,8 +179,8 @@ def sync_org_structures(dataspot_client: BaseDataspotClient):
                 # Create asset link
                 asset_link = f"{base_url}/web/{database_name}/collections/{uuid}"
 
-                logging.info(f"{i}. '{title}' (ID: {staatskalender_id}, UUID: {uuid})")
-                logging.info(f"   - Link: {asset_link}")
+                # Display in new format with link in the first line
+                logging.info(f"{i}. '{title}' (ID: {staatskalender_id}, link: {asset_link})")
 
                 # Show each changed field
                 for field_name, changes in update.get('changed_fields', {}).items():
@@ -119,8 +200,8 @@ def sync_org_structures(dataspot_client: BaseDataspotClient):
                 # Create asset link
                 asset_link = f"{base_url}/web/{database_name}/collections/{uuid}"
 
-                logging.info(f"{i}. '{title}' (ID: {staatskalender_id}, UUID: {uuid})")
-                logging.info(f"   - Link: {asset_link}")
+                # Display in new format with link in the first line
+                logging.info(f"{i}. '{title}' (ID: {staatskalender_id}, link: {asset_link})")
                 logging.info(f"   - Path: '{deletion.get('inCollection', '')}'")
 
         # Write detailed report to file for email/reference purposes
@@ -148,74 +229,15 @@ def sync_org_structures(dataspot_client: BaseDataspotClient):
         except Exception as e:
             logging.error(f"Failed to save detailed report to file: {str(e)}")
 
-        # Create email content
-        counts = sync_result.get('counts', {})
-        total_changes = counts.get('total', 0)
+        # Create email content using the new function
+        email_subject, email_text, should_send = create_email_content(
+            sync_result=sync_result,
+            base_url=base_url,
+            database_name=database_name
+        )
 
-        # Only send email if there were changes
-        if total_changes > 0:
-            email_subject = f"Dataspot Organization Structure Updated ({total_changes} Changes)"
-
-            email_text = f"Hi there,\n\n"
-            email_text += f"I've just updated the organization structure in Dataspot.\n"
-            email_text += f"Could you please review the changes and set the status to \"Veröffentlicht\"?\n\n"
-
-            email_text += f"Here's what changed:\n"
-            email_text += f"- Total: {counts.get('total', 0)} changes\n"
-            email_text += f"- Created: {counts.get('created', 0)} organizational units\n"
-            email_text += f"- Updated: {counts.get('updated', 0)} organizational units\n"
-            email_text += f"- Deleted: {counts.get('deleted', 0)} organizational units\n\n"
-
-            # Add details about each change type
-            if counts.get('created', 0) > 0 and 'creations' in details:
-                creations = details['creations'].get('items', [])
-                email_text += f"New organizational units ({len(creations)}):\n"
-                for creation in creations:
-                    title = creation.get('title', '(Unknown)')
-                    staatskalender_id = creation.get('staatskalender_id', '(Unknown)')
-                    uuid = creation.get('uuid', '')
-                    asset_link = f"{base_url}/web/{database_name}/collections/{uuid}" if uuid else "Link not available"
-                    email_text += f"- {title} (ID: {staatskalender_id})\n"
-                    email_text += f"  Link: {asset_link}\n"
-                    props = creation.get('properties', {})
-                    if props:
-                        for key, value in props.items():
-                            if value:
-                                email_text += f"  {key}: '{value}'\n"
-                email_text += "\n"
-
-            if counts.get('updated', 0) > 0 and 'updates' in details:
-                updates = details['updates'].get('items', [])
-                email_text += f"Updated organizational units ({len(updates)}):\n"
-                for update in updates:
-                    title = update.get('title', '(Unknown)')
-                    staatskalender_id = update.get('staatskalender_id', '(Unknown)')
-                    uuid = update.get('uuid', '(Unknown)')
-                    asset_link = f"{base_url}/web/{database_name}/collections/{uuid}"
-                    email_text += f"- {title} (ID: {staatskalender_id}, UUID: {uuid})\n"
-                    email_text += f"  Link: {asset_link}\n"
-                    for field_name, changes in update.get('changed_fields', {}).items():
-                        old_value = changes.get('old_value', '')
-                        new_value = changes.get('new_value', '')
-                        email_text += f"  {field_name}: '{old_value}' → '{new_value}'\n"
-                email_text += "\n"
-
-            if counts.get('deleted', 0) > 0 and 'deletions' in details:
-                deletions = details['deletions'].get('items', [])
-                email_text += f"Deleted organizational units ({len(deletions)}):\n"
-                for deletion in deletions:
-                    title = deletion.get('title', '(Unknown)')
-                    staatskalender_id = deletion.get('staatskalender_id', '(Unknown)')
-                    uuid = deletion.get('uuid', '(Unknown)')
-                    asset_link = f"{base_url}/web/{database_name}/collections/{uuid}"
-                    email_text += f"- {title} (ID: {staatskalender_id}, UUID: {uuid})\n"
-                    email_text += f"  Link: {asset_link}\n"
-                    email_text += f"  Path: '{deletion.get('inCollection', '')}'\n"
-                email_text += "\n"
-
-            email_text += "Best regards,\n"
-            email_text += "Your Dataspot Organization Structure Sync Assistant"
-
+        # Send email if there were changes
+        if should_send:
             # Create and send email
             attachment = report_filename if report_filename and os.path.exists(report_filename) else None
             msg = email_helpers.email_message(
