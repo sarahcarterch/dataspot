@@ -65,7 +65,8 @@ class OrgStructureHandler(BaseDataspotHandler):
         self, 
         organizational_units: List[Dict[str, Any]], 
         operation: str = "ADD", 
-        dry_run: bool = False
+        dry_run: bool = False,
+        status: str = "WORKING"
     ) -> dict:
         """
         Create multiple organizational units in bulk in Dataspot.
@@ -74,6 +75,8 @@ class OrgStructureHandler(BaseDataspotHandler):
             organizational_units: List of organizational unit data to upload
             operation: Upload operation mode (ADD, REPLACE, FULL_LOAD)
             dry_run: Whether to perform a test run without changing data
+            status: Status to set on all organizational units in the upload. Defaults to "WORKING" (DRAFT group).
+                   Set to None to preserve existing statuses or use defaults.
             
         Returns:
             dict: The JSON response from the API containing the upload results
@@ -83,7 +86,7 @@ class OrgStructureHandler(BaseDataspotHandler):
             return {"status": "error", "message": "No organizational units provided"}
             
         # Call the base class method with our specific asset type
-        return self.bulk_create_or_update_assets(organizational_units, operation, dry_run)
+        return self.bulk_create_or_update_assets(organizational_units, operation, dry_run, status)
 
     @staticmethod
     def _check_for_duplicate_ids_in_ods_staatskalender_data(org_data: Dict[str, Any]) -> None:
@@ -172,7 +175,8 @@ class OrgStructureHandler(BaseDataspotHandler):
                 response = self.bulk_create_or_update_organizational_units(
                     organizational_units=level_units,
                     operation="ADD",
-                    dry_run=False
+                    dry_run=False,
+                    status=status
                 )
                 
                 # Store the result for this level

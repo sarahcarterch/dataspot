@@ -273,7 +273,8 @@ class BaseDataspotHandler:
                                   (f"... and {len(missing_ids)-5} more" if len(missing_ids) > 5 else ""))
     
     def bulk_create_or_update_assets(self, assets: List[Dict[str, Any]], 
-                                     operation: str = "ADD", dry_run: bool = False) -> dict:
+                                     operation: str = "ADD", dry_run: bool = False,
+                                     status: str = "WORKING") -> dict:
         """
         Create multiple assets in bulk in Dataspot.
         
@@ -281,6 +282,8 @@ class BaseDataspotHandler:
             assets: List of asset data to upload
             operation: Upload operation mode (ADD, REPLACE, FULL_LOAD)
             dry_run: Whether to perform a test run without changing data
+            status: Status to set on all assets in the upload. Defaults to "WORKING" (DRAFT group).
+                   Set to None to preserve existing statuses or use defaults.
             
         Returns:
             dict: The JSON response from the API containing the upload results
@@ -296,7 +299,7 @@ class BaseDataspotHandler:
         
         # Count of assets
         num_assets = len(assets)
-        logging.info(f"Bulk creating {num_assets} assets (operation: {operation}, dry_run: {dry_run})...")
+        logging.info(f"Bulk creating {num_assets} assets with status '{status}' (operation: {operation}, dry_run: {dry_run})...")
         
         # Bulk create assets using the scheme name
         try:
@@ -304,7 +307,8 @@ class BaseDataspotHandler:
                 scheme_name=self.scheme_name,
                 data=assets,
                 operation=operation,
-                dry_run=dry_run
+                dry_run=dry_run,
+                status=status
             )
 
             logging.info(f"Bulk creation complete")

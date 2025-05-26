@@ -114,7 +114,7 @@ class OrgStructureUpdater:
         self._process_updates(changes_by_type["update"], is_initial_run, stats, status)
         
         # Finally handle creations
-        self._process_creations(changes_by_type["create"], stats)
+        self._process_creations(changes_by_type["create"], stats, status)
         
         logging.info(f"Change application complete: {stats['created']} created, {stats['updated']} updated, "
                      f"{stats['deleted']} deleted, {stats['errors']} errors")
@@ -363,13 +363,14 @@ class OrgStructureUpdater:
         
         return update_data
     
-    def _process_creations(self, creation_changes: List[OrgUnitChange], stats: Dict[str, int]) -> None:
+    def _process_creations(self, creation_changes: List[OrgUnitChange], stats: Dict[str, int], status: str = "WORKING") -> None:
         """
         Process creation changes.
         
         Args:
             creation_changes: List of creation changes
             stats: Statistics dictionary to update
+            status: Status to set on created org units. Defaults to "WORKING" (DRAFT group).
         """
         if not creation_changes:
             return
@@ -388,15 +389,16 @@ class OrgStructureUpdater:
         
         # Process each parent group
         for parent_path, units in create_by_parent.items():
-            logging.info(f"Creating {len(units)} org units under parent path '{parent_path}'")
+            logging.info(f"Creating {len(units)} org units under parent path '{parent_path}' with status '{status}'")
             
             try:
-                # Bulk upload these units
+                # Bulk upload these units with the specified status
                 response = self.client.bulk_create_or_update_assets(
                     scheme_name=self.client.scheme_name,
                     data=units,
                     operation="ADD",
-                    dry_run=False
+                    dry_run=False,
+                    status=status
                 )
                 
                 # Check for errors
