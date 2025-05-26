@@ -13,7 +13,7 @@ from src.common import email_helpers as email_helpers
 def main():
     dnk_client = DNKClient()
     fdm_client = FDMClient()
-    sync_org_structures(dataspot_client=fdm_client)
+    sync_org_structures(dataspot_client=dnk_client)
 
 def sync_org_structures(dataspot_client: BaseDataspotClient):
     """
@@ -53,9 +53,13 @@ def sync_org_structures(dataspot_client: BaseDataspotClient):
     # Synchronize organization data
     logging.info("Synchronizing organization data with Dataspot...")
     try:
-        # Use the sync method with URL validation feature flag
+        # Use the sync org units method
+        # By default, updates use "WORKING" status (DRAFT group)
+        # To automatically publish updates, use status="PUBLISHED"
+        # To mark for deletion review, deletions use "REVIEWDCC2" (handled automatically)
         sync_result = dataspot_client.sync_org_units(
-            all_organizations
+            all_organizations, 
+            status="PUBLISHED"
         )
 
         # Get the base URL and database name for asset links
@@ -234,7 +238,7 @@ def create_email_content(sync_result, base_url, database_name) -> (str | None, s
 
     email_text = f"Hi there,\n\n"
     email_text += f"I've just updated the organization structure in Dataspot.\n"
-    email_text += f"Could you please review the changes and set the status to \"Veröffentlicht\"?\n\n"
+    email_text += f"Please review the changes below. No action is needed if everything looks correct.\n\n"
 
     email_text += f"Here's what changed:\n"
     email_text += f"- Total: {counts.get('total', 0)} changes\n"

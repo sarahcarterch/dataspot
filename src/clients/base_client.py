@@ -9,7 +9,19 @@ from src.clients.helpers import url_join
 from requests import HTTPError
 
 class BaseDataspotClient():
-    """Base class for Dataspot API clients implementing common functionality."""
+    """Base class for Dataspot API clients implementing common functionality.
+    
+    Status Handling Philosophy:
+    --------------------------
+    1. New assets: By default, assets are created with status="WORKING" (DRAFT group).
+       This can be overridden by passing a different status to creation methods.
+       
+    2. Updates: By default, updates will set status back to "WORKING" to allow for review.
+       To preserve the current status of an asset during update, pass status=None.
+       
+    3. Bulk operations: Status handling follows the same principles, with the status
+       parameter applied to all assets in the operation.
+    """
 
     def __init__(self, base_url: str, database_name: str, scheme_name: str, scheme_name_short: str, ods_imports_collection_name: str, ods_imports_collection_path: str):
         """
@@ -91,7 +103,7 @@ class BaseDataspotClient():
                 return None
             raise
 
-    def _create_asset(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _create_asset(self, endpoint: str, data: Dict[str, Any], status: str = "WORKING") -> Dict[str, Any]:
         """
         Create a new asset via POST request.
 
@@ -100,6 +112,8 @@ class BaseDataspotClient():
         Args:
             endpoint (str): API endpoint path (will be joined with base_url)
             data (Dict[str, Any]): JSON data for the asset, must include '_type'
+            status (str): Status to set on the asset. Defaults to "WORKING" (DRAFT group).
+                         Set to None to use the default status for the asset type.
 
         Returns:
             Dict[str, Any]: JSON response from the API
@@ -118,11 +132,15 @@ class BaseDataspotClient():
         # Validate that _type is present
         if "_type" not in data_to_send:
             raise ValueError("Input data for create_asset must contain a '_type' key.")
+            
+        # Set status if specified (None means use default status for the asset type)
+        if status is not None:
+            data_to_send['status'] = status
 
         response = requests_post(full_url, headers=headers, json=data_to_send)
         return response.json()
 
-    def _update_asset(self, endpoint: str, data: Dict[str, Any], replace: bool = False) -> Dict[str, Any]:
+    def _update_asset(self, endpoint: str, data: Dict[str, Any], replace: bool = False, status: str = "WORKING") -> Dict[str, Any]:
         """
         Update an existing asset via PUT or PATCH request.
 
@@ -132,6 +150,8 @@ class BaseDataspotClient():
             endpoint (str): API endpoint path (will be joined with base_url)
             data (Dict[str, Any]): JSON data for the asset, must include '_type'
             replace (bool): Whether to completely replace (PUT) or partially update (PATCH)
+            status (str): Status to set on the asset. Defaults to "WORKING" (DRAFT group).
+                         Set to None to not modify the asset's status.
 
         Returns:
             Dict[str, Any]: JSON response from the API
@@ -141,7 +161,8 @@ class BaseDataspotClient():
             ValueError: If the asset does not exist when using replace=True, or if data is missing '_type' key
 
         Notes:
-            - All assets will have their status set to 'WORKING' regardless of their previous status.
+            - By default, assets will have their status set to 'WORKING' (DRAFT group).
+            - Pass status=None to preserve the asset's current status.
             - When using replace=True for Datasets, the method will preserve the dataset's location
               (inCollection field).
         """
@@ -155,7 +176,9 @@ class BaseDataspotClient():
         if "_type" not in data_to_send:
             raise ValueError("Input data for update_asset must contain a '_type' key.")
 
-        data_to_send['status'] = 'WORKING'
+        # Set status if specified (None means don't modify status)
+        if status is not None:
+            data_to_send['status'] = status
 
         # Get the type from the data itself
         asset_type = data_to_send.get("_type")
@@ -176,6 +199,46 @@ class BaseDataspotClient():
             # Use PATCH to update only the specified properties
             response = requests_patch(full_url, headers=headers, json=data_to_send)
 
+        return response.json()
+
+    def set_asset_status(self, endpoint: str, status: str) -> Dict[str, Any]:
+        """
+        Set the status of an asset without modifying any other properties.
+        
+        This method should be used carefully to avoid automatically publishing 
+        assets that shouldn't be public.
+
+        Args:
+            endpoint (str): API endpoint path (will be joined with base_url)
+            status (str): The status to set (e.g., "WORKING", "PUBLISHED", "REVIEWDCC2")
+
+        Returns:
+            Dict[str, Any]: JSON response from the API
+
+        Raises:
+            HTTPError: If the request fails
+            ValueError: If the asset does not exist
+        """
+        headers = self.auth.get_headers()
+        full_url = url_join(self.base_url, endpoint)
+
+        # First, get the current asset to determine its type
+        current_asset = self._get_asset(endpoint)
+        if current_asset is None:
+            raise ValueError(f"Cannot set status for asset at {endpoint}: asset does not exist")
+
+        # Prepare minimal update data with only the status change
+        update_data = {
+            "_type": current_asset.get("_type", "Unknown"),  # Required for PATCH
+            "status": status
+        }
+
+        logging.info(f"Setting status of asset at {endpoint} to '{status}'")
+
+        # Use PATCH to update only the status property
+        response = requests_patch(full_url, headers=headers, json=update_data)
+        response.raise_for_status()
+        
         return response.json()
 
     def _delete_asset(self, endpoint: str, force_delete: bool = True) -> None:
@@ -397,7 +460,8 @@ class BaseDataspotClient():
             raise
 
     def bulk_create_or_update_assets(self, scheme_name: str, data: List[Dict[str, Any]],
-                                     operation: str = "ADD", dry_run: bool = False) -> Dict[str, Any]:
+                                     operation: str = "ADD", dry_run: bool = False, 
+                                     status: str = "WORKING") -> Dict[str, Any]:
         """
         Create or update multiple assets in bulk via the upload API.
 
@@ -411,6 +475,8 @@ class BaseDataspotClient():
                                       "REPLACE": Reconcile elements. Items not in the upload are considered obsolete.
                                       "FULL_LOAD": Reconcile model. Completely replaces with the uploaded data.
             dry_run (bool, optional): Whether to perform a test run without changing data. Defaults to False.
+            status (str, optional): Status to set on all assets in the upload. Defaults to "WORKING" (DRAFT group).
+                                   Set to None to preserve existing statuses or use asset type defaults.
 
         Returns:
             Dict[str, Any]: JSON response from the API
@@ -431,6 +497,11 @@ class BaseDataspotClient():
                 raise ValueError(
                     f"Item at index {i} in data list for bulk_create_or_update_assets is missing the '_type' key.")
             item_copy = dict(item)
+            
+            # Set status if specified (None means preserve existing or use defaults)
+            if status is not None:
+                item_copy['status'] = status
+                
             data_to_send.append(item_copy)
 
         # Create upload endpoint directly with scheme name
@@ -489,5 +560,7 @@ class BaseDataspotClient():
             logging.warning(f"Response was not valid JSON. Content: {response.text[:1000]}...")
             return {"response_text": response.text}
 
-    def sync_org_units(self, all_organizations):
-        raise NotImplementedError("Error: sync_org_units should never be called in the BaseClient! This is a bug, please report it to the DCC.")
+    # This method exists to avoid a pycharm warning.
+    #  I don't really want to add an entire interface for just this case
+    def sync_org_units(self, all_organizations: dict, status: str = "WORKING"):
+        raise NotImplementedError("Error: sync_org_units should never be called in the BaseClient! If you see this, then this is a bug.")

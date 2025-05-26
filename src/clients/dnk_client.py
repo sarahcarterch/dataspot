@@ -26,12 +26,14 @@ class DNKClient(BaseDataspotClient):
         self.dataset_handler = DatasetHandler(self)
 
     # Direct API operations for datasets
-    def create_dataset(self, dataset: Dataset) -> dict:
+    def create_dataset(self, dataset: Dataset, status: str = "WORKING") -> dict:
         """
-        Create a new dataset in the 'Datennutzungskatalog/ODS-Imports' in Dataspot.
+        Create a new dataset in the location specified by config.ods_imports_collection_path
         
         Args:
             dataset: The dataset instance to be uploaded
+            status: Status to set on the dataset. Defaults to "WORKING" (DRAFT group).
+                   Set to None to use the default status for datasets.
             
         Returns:
             dict: The JSON response containing the dataset data
@@ -51,9 +53,9 @@ class DNKClient(BaseDataspotClient):
         
         # Create the dataset directly
         endpoint = f"/rest/{self.database_name}/datasets/{collection_uuid}/datasets"
-        return self._create_asset(endpoint=endpoint, data=dataset_json)
+        return self._create_asset(endpoint=endpoint, data=dataset_json, status=status)
     
-    def update_dataset(self, dataset: Dataset, uuid: str, force_replace: bool = False) -> dict:
+    def update_dataset(self, dataset: Dataset, uuid: str, force_replace: bool = False, status: str = "WORKING") -> dict:
         """
         Update an existing dataset in the DNK.
         
@@ -61,12 +63,14 @@ class DNKClient(BaseDataspotClient):
             dataset: The dataset instance with updated data
             uuid: The UUID of the dataset to update
             force_replace: Whether to completely replace the dataset
+            status: Status to set on the dataset. Defaults to "WORKING" (DRAFT group).
+                   Set to None to preserve the dataset's current status.
             
         Returns:
             dict: The JSON response containing the updated dataset data
         """
         endpoint = f"/rest/{self.database_name}/datasets/{uuid}"
-        return self._update_asset(endpoint=endpoint, data=dataset.to_json(), replace=force_replace)
+        return self._update_asset(endpoint=endpoint, data=dataset.to_json(), replace=force_replace, status=status)
     
     def delete_dataset(self, ods_id: str, fail_if_not_exists: bool = False) -> bool:
         """
@@ -111,7 +115,8 @@ class DNKClient(BaseDataspotClient):
             return False
 
     def bulk_create_or_update_datasets(self, datasets: List[Dataset],
-                                      operation: str = "ADD", dry_run: bool = False) -> dict:
+                                      operation: str = "ADD", dry_run: bool = False,
+                                      status: str = "WORKING") -> dict:
         """
         Create multiple datasets in bulk in Dataspot.
         
@@ -119,6 +124,8 @@ class DNKClient(BaseDataspotClient):
             datasets: List of dataset instances to be uploaded
             operation: Upload operation mode (ADD, REPLACE, FULL_LOAD)
             dry_run: Whether to perform a test run without changing data
+            status: Status to set on all datasets in the upload. Defaults to "WORKING" (DRAFT group).
+                   Set to None to preserve existing statuses or use defaults.
             
         Returns:
             dict: The JSON response containing the upload results
@@ -136,21 +143,24 @@ class DNKClient(BaseDataspotClient):
             scheme_name=self.scheme_name,
             data=dataset_jsons,
             operation=operation,
-            dry_run=dry_run
+            dry_run=dry_run,
+            status=status
         )
     
     # Synchronization methods
-    def sync_org_units(self, org_data: Dict[str, Any]) -> Dict[str, Any]:
+    def sync_org_units(self, org_data: Dict[str, Any], status: str = "WORKING") -> Dict[str, Any]:
         """
         Synchronize organizational units in Dataspot with data from the Staatskalender ODS API.
         
         Args:
             org_data: Dictionary containing organization data from ODS API
+            status: Status to set on updated org units. Defaults to "WORKING" (DRAFT group).
+                   Use "PUBLISHED" to make updates public immediately.
             
         Returns:
             Dict: Summary of the synchronization process
         """
-        return self.org_handler.sync_org_units(org_data)
+        return self.org_handler.sync_org_units(org_data, status=status)
     
     def sync_datasets(self, datasets: List[Dataset]) -> Dict[str, Any]:
         """

@@ -22,14 +22,16 @@ class FDMClient(BaseDataspotClient):
         self.org_handler = OrgStructureHandler(self)
 
     # Synchronization methods
-    def sync_org_units(self, org_data: Dict[str, Any]) -> Dict[str, Any]:
+    def sync_org_units(self, org_data: Dict[str, Any], status: str = "WORKING") -> Dict[str, Any]:
         """
         Synchronize organizational units in Dataspot with data from the Staatskalender ODS API.
 
         Args:
             org_data: Dictionary containing organization data from ODS API
+            status: Status to set on updated org units. Defaults to "WORKING" (DRAFT group).
+                   Use "PUBLISHED" to make updates public immediately.
             
         Returns:
             Dict: Summary of the synchronization process
         """
-        return self.org_handler.sync_org_units(org_data)
+        return self.org_handler.sync_org_units(org_data, status=status)

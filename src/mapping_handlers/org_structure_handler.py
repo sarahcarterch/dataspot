@@ -119,17 +119,19 @@ class OrgStructureHandler(BaseDataspotHandler):
             error_msg = f"Duplicate id_im_staatskalender values detected. The following {len(duplicate_ids)} IDs appear multiple times:\n{duplicate_details}"
             raise ValueError(error_msg)
 
-    def build_organization_hierarchy_from_ods_bulk(self, org_data: Dict[str, Any]) -> dict:
+    def build_organization_hierarchy_from_ods_bulk(self, org_data: Dict[str, Any], status: str = "WORKING") -> dict:
         """
         Build organization hierarchy in the DNK based on data from ODS API using bulk upload.
         
         Args:
             org_data: Dictionary containing organization data from ODS API
+            status: Status to set on created org units. Defaults to "WORKING" (DRAFT group).
+                   Use "PUBLISHED" to make units public immediately.
             
         Returns:
             dict: The response with status information
         """
-        logging.info("Building organization hierarchy using bulk upload...")
+        logging.info(f"Building organization hierarchy using bulk upload with status '{status}'...")
         
         # Check for duplicate id_im_staatskalender values
         self._check_for_duplicate_ids_in_ods_staatskalender_data(org_data)
@@ -141,10 +143,13 @@ class OrgStructureHandler(BaseDataspotHandler):
             logging.warning("No organizational units to upload")
             return {"status": "error", "message": "No organizational units to upload"}
         
-        # Extract Staatskalender IDs for mapping updates
+        # Set status on all units and extract Staatskalender IDs for mapping updates
         staatskalender_ids = []
         for depth, units in units_by_depth.items():
             for unit in units:
+                # Set the status on each unit
+                unit["status"] = status
+                
                 staatskalender_id = unit.get("id_im_staatskalender")
                 if staatskalender_id:
                     staatskalender_ids.append(staatskalender_id)
@@ -260,17 +265,19 @@ class OrgStructureHandler(BaseDataspotHandler):
             error_msg = f"Duplicate id_im_staatskalender values detected in Dataspot. The following {len(duplicate_ids)} IDs appear multiple times:\n{duplicate_details}"
             raise ValueError(error_msg)
 
-    def sync_org_units(self, org_data: Dict[str, Any]) -> Dict[str, Any]:
+    def sync_org_units(self, org_data: Dict[str, Any], status: str = "WORKING") -> Dict[str, Any]:
         """
         Synchronize organizational units in Dataspot with data from the Staatskalender ODS API.
         
         Args:
             org_data: Dictionary containing organization data from ODS API
+            status: Status to set on updated org units. Defaults to "WORKING" (DRAFT group).
+                   Use "PUBLISHED" to make updates public immediately.
             
         Returns:
             Dict[str, Any]: Summary of the synchronization process
         """
-        logging.info("Starting synchronization of organizational units...")
+        logging.info(f"Starting synchronization of organizational units with status '{status}'...")
         
         # Check for duplicate id_im_staatskalender values in ODS data
         self._check_for_duplicate_ids_in_ods_staatskalender_data(org_data)
@@ -289,8 +296,8 @@ class OrgStructureHandler(BaseDataspotHandler):
         
         # If this is an initial run, perform bulk upload
         if is_initial_run:
-            logging.info("No organizational units found in Dataspot. Performing initial bulk upload...")
-            result = self.build_organization_hierarchy_from_ods_bulk(org_data)
+            logging.info(f"No organizational units found in Dataspot. Performing initial bulk upload with status '{status}'...")
+            result = self.build_organization_hierarchy_from_ods_bulk(org_data, status=status)
             
             # Save updated mappings
             source_ids = [str(org_unit['id']) for org_unit in org_data.get('results', [])]
@@ -325,8 +332,8 @@ class OrgStructureHandler(BaseDataspotHandler):
                 "counts": {"total": 0, "created": 0, "updated": 0, "deleted": 0}
             }
         
-        # Apply changes
-        self.updater.apply_changes(changes, is_initial_run=False)
+        # Apply changes with the specified status
+        self.updater.apply_changes(changes, is_initial_run=False, status=status)
         
         # Update mappings after changes
         if changes:

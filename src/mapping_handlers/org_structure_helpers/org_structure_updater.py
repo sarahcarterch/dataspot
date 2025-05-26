@@ -74,13 +74,15 @@ class OrgStructureUpdater:
         self.client = client
         self.database_name = client.database_name
     
-    def apply_changes(self, changes: List[OrgUnitChange], is_initial_run: bool = False) -> Dict[str, int]:
+    def apply_changes(self, changes: List[OrgUnitChange], is_initial_run: bool = False, status: str = "WORKING") -> Dict[str, int]:
         """
         Apply the identified changes to the system.
         
         Args:
             changes: List of changes to apply
             is_initial_run: Whether this is an initial run with no existing org units
+            status: Status to set on updated org units. Defaults to "WORKING" (DRAFT group).
+                   Use "PUBLISHED" to make updates public immediately.
             
         Returns:
             Dict[str, int]: Statistics about applied changes
@@ -109,7 +111,7 @@ class OrgStructureUpdater:
         self._process_deletions(changes_by_type["delete"], stats)
         
         # Then handle updates
-        self._process_updates(changes_by_type["update"], is_initial_run, stats)
+        self._process_updates(changes_by_type["update"], is_initial_run, stats, status)
         
         # Finally handle creations
         self._process_creations(changes_by_type["create"], stats)
@@ -159,7 +161,7 @@ class OrgStructureUpdater:
                 logging.error(f"Error checking existence of org unit '{change.title}' (ID: {change.staatskalender_id}): {str(e)}")
                 stats["errors"] += 1
     
-    def _process_updates(self, update_changes: List[OrgUnitChange], is_initial_run: bool, stats: Dict[str, int]) -> None:
+    def _process_updates(self, update_changes: List[OrgUnitChange], is_initial_run: bool, stats: Dict[str, int], status: str) -> None:
         """
         Process update changes.
         
@@ -167,6 +169,7 @@ class OrgStructureUpdater:
             update_changes: List of update changes
             is_initial_run: Whether this is an initial run with no existing org units
             stats: Statistics dictionary to update
+            status: Status to set on updated org units
         """
         # First, process label/name changes to ensure parent references are correct
         label_changes = [c for c in update_changes if "label" in c.details.get("changes", {})]
@@ -175,16 +178,21 @@ class OrgStructureUpdater:
         # Process label changes first (important for correct parent references)
         if label_changes:
             logging.info(f"Processing {len(label_changes)} label/name changes first")
-            self._process_specific_changes(label_changes, stats)
+            self._process_specific_changes(label_changes, stats, status)
             
         # Then process collection moves and other changes
         if other_changes:
             logging.info(f"Processing {len(other_changes)} other changes")
-            self._process_specific_changes(other_changes, stats)
+            self._process_specific_changes(other_changes, stats, status)
     
-    def _process_specific_changes(self, changes: List[OrgUnitChange], stats: Dict[str, int]) -> None:
+    def _process_specific_changes(self, changes: List[OrgUnitChange], stats: Dict[str, int], status: str) -> None:
         """
         Process specific change updates.
+        
+        Args:
+            changes: List of changes to process
+            stats: Statistics dictionary to update
+            status: Status to set on updated org units
         """
         # Sort changes based on the source hierarchy layer (golden source)
         # Process root/parent collections first
@@ -216,7 +224,7 @@ class OrgStructureUpdater:
             
             # Construct endpoint for update
             endpoint = url_join('rest', self.database_name, 'collections', uuid, leading_slash=True)
-            logging.info(f"Updating org unit '{change.title}' (ID: {change.staatskalender_id})")
+            logging.info(f"Updating org unit '{change.title}' (ID: {change.staatskalender_id}) with status '{status}'")
             
             # Create update data with only necessary fields
             update_data = self._create_update_data(change)
@@ -227,8 +235,8 @@ class OrgStructureUpdater:
                 continue
             
             try:
-                # Update the asset
-                self.client._update_asset(endpoint, update_data, replace=False)
+                # Update the asset with the specified status
+                self.client._update_asset(endpoint, update_data, replace=False, status=status)
                 stats["updated"] += 1
             except Exception as e:
                 logging.error(f"Error updating org unit '{change.title}' (ID: {change.staatskalender_id}): {str(e)}")

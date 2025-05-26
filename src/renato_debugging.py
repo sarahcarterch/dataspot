@@ -559,7 +559,7 @@ def main_10_sync_organization_structure(ods_client: ODSClient, dataspot_client: 
     # Synchronize organization data
     logging.info("Synchronizing organization data with Dataspot...")
     try:
-        # Use the sync method with URL validation feature flag
+        # Use the sync method
         sync_result = dataspot_client.sync_org_units(
             all_organizations
         )
