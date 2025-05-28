@@ -9,12 +9,12 @@ from email.mime.multipart import MIMEMultipart
 
 from dotenv import load_dotenv
 load_dotenv()
-EMAIL_RECEIVERS = json.loads(os.getenv('EMAIL_RECEIVERS'))
-EMAIL_SERVER = os.getenv('EMAIL_SERVER')
-EMAIL = os.getenv('EMAIL')
+DATASPOT_EMAIL_RECEIVERS = json.loads(os.getenv('DATASPOT_EMAIL_RECEIVERS'))
+DATASPOT_EMAIL_SERVER = os.getenv('EMAIL_SERVER')
+DATASPOT_EMAIL_SENDER = os.getenv('DATASPOT_EMAIL_SENDER')
 
-if not EMAIL_RECEIVERS or not EMAIL_SERVER or not EMAIL:
-    raise ValueError("EMAIL_RECEIVERS, EMAIL_SERVER, and EMAIL must be set in the environment variables")
+if not DATASPOT_EMAIL_RECEIVERS or not DATASPOT_EMAIL_SERVER or not DATASPOT_EMAIL_SENDER:
+    raise ValueError("DATASPOT_EMAIL_RECEIVERS, DATASPOT_EMAIL_SERVER, and DATASPOT_EMAIL_SENDER must be set in the environment variables")
 
 
 def create_email_msg(subject="Python Notification", text="", img=None, attachment=None) -> MIMEMultipart:
@@ -74,11 +74,11 @@ def send_email(msg):
         msg: Email message object to send
     """
     # initialize connection to email server
-    host = EMAIL_SERVER
+    host = DATASPOT_EMAIL_SERVER
     smtp = smtplib.SMTP(host)
 
     # send email
-    smtp.sendmail(from_addr=EMAIL,
-                  to_addrs=EMAIL_RECEIVERS,
+    smtp.sendmail(from_addr=DATASPOT_EMAIL_SENDER,
+                  to_addrs=DATASPOT_EMAIL_RECEIVERS,
                   msg=msg.as_string())
     smtp.quit()
