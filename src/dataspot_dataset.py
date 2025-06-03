@@ -132,6 +132,7 @@ class OGDDataset(BasicDataset):
     # TODO: referenz
     # TODO: zuschreibungen
     #publizierende_organisation - GELÖSCHT
+    datenportal_link: Optional[str] = field(default=None, metadata={'json_key': 'ODS_LINK', 'custom_property': True})
     datenportal_identifikation: Optional[str] = field(default=None, metadata={'json_key': 'ODS_ID', 'custom_property': True})
     tags: Optional[List[str]] = field(default=None, metadata={'json_key': 'TAG', 'custom_property': True})
 

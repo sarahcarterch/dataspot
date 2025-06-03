@@ -202,6 +202,7 @@ def transform_ods_to_dnk(ods_metadata: Dict[str, Any], ods_dataset_id: str) -> O
         nutzungsrechte=rechte,
         
         # Identifiers
+        datenportal_link=f"https://data.bs.ch/explore/dataset/{ods_dataset_id}/",
         datenportal_identifikation=ods_dataset_id,
         
         # Custom properties

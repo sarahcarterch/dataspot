@@ -380,6 +380,13 @@ Dataset:
               baseType: STRING
               group: OGD
               order: 70
+            ODS_LINK:
+              label: Datenportal-Link
+              title:
+              baseType: STRING
+              group: OGD
+              order: 90
+              readOnly: true
             ODS_ID:
               label: Datenportal-Identifikation
               title:
@@ -652,6 +659,13 @@ Dataset:
               baseType: STRING
               group: OGD
               order: 70
+            ODS_LINK:
+              label: Datenportal-Link
+              title:
+              baseType: STRING
+              group: OGD
+              order: 90
+              readOnly: true
             ODS_ID:
               label: Datenportal-Identifikation
               title:

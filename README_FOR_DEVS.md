@@ -202,6 +202,7 @@ classDiagram
     class OGDDataset {
         +lizenz: List[str]
         +nutzungsrechte: str
+        +datenportal_link: str
         +datenportal_identifikation: str
         +tags: List[str]
         +stereotype: str = "OGD"
