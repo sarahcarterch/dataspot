@@ -279,22 +279,28 @@ def _get_field_value(field: Dict[str, Any] | Any) -> Any:
     
     # If it's not a dictionary, return it directly    
     if not isinstance(field, dict):
-        return field
-    
+        value = field
     # If it's an empty dict, return None
-    if not field:
+    elif not field:
         return None
-    
     # Handle different field structures
-    if 'override_remote_value' in field:
-        return field['value'] if field['override_remote_value'] else field.get('remote_value', None)
+    elif 'override_remote_value' in field:
+        value = field['value'] if field['override_remote_value'] else field.get('remote_value', None)
+    elif 'value' in field:
+        value = field['value']
+    else:
+        # Last resort: return the first value we find
+        value = None
+        for key, val in field.items():
+            if key not in ('type', 'name', 'label', 'description'):
+                value = val
+                break
     
-    if 'value' in field:
-        return field['value']
+    # Clean string values by stripping whitespace
+    if isinstance(value, str):
+        return value.strip()
+    # Handle lists of strings (e.g., keywords)
+    elif isinstance(value, list):
+        return [item.strip() if isinstance(item, str) else item for item in value]
     
-    # Last resort: return the first value we find
-    for key, value in field.items():
-        if key not in ('type', 'name', 'label', 'description'):
-            return value
-    
-    return None 
+    return value

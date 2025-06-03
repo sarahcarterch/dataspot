@@ -877,7 +877,7 @@ if __name__ == "__main__":
     dnk_client = DNKClient()
     fdm_client = FDMClient()
 
-    main_10_sync_organization_structure(ods_client=ods_client, dataspot_client=dnk_client)
-    #main_11_sync_datasets(max_datasets=None)
+    #main_10_sync_organization_structure(ods_client=ods_client, dataspot_client=dnk_client)
+    main_11_sync_datasets(max_datasets=None)
 
     logging.info('Job successful!')
