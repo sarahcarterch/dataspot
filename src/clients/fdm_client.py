@@ -1,6 +1,6 @@
 from typing import Dict, Any
 
-from src import config
+import config
 from src.clients.base_client import BaseDataspotClient
 from src.mapping_handlers.org_structure_handler import OrgStructureHandler
 

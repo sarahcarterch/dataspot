@@ -1,7 +1,7 @@
 from typing import Dict, Any, List
 import logging
 
-from src import config
+import config
 from src.clients.base_client import BaseDataspotClient
 from src.mapping_handlers.org_structure_handler import OrgStructureHandler
 from src.mapping_handlers.dataset_handler import DatasetHandler

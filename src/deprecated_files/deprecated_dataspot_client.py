@@ -7,7 +7,7 @@ from src.dataspot_auth import DataspotAuth
 from src.common import requests_get, requests_delete, requests_post, requests_put, requests_patch
 from src.deprecated_files.deprecated_dataspot_uuid_cache import DataspotUUIDCache
 import src.clients.helpers as client_helpers
-import src.config as config
+import config as config
 import json
 
 from src.dataspot_dataset import Dataset
