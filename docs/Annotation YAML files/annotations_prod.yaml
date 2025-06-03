@@ -460,6 +460,8 @@ Dataset:
                   label: Landwirtschaft
                 "026":
                   label: Wirtschaftliche Aktivitäten
+                "027":
+                  label: Leitungskataster                  
             AUSDBESCHR:
               label: Ausdehnung Beschreibung
               title: Beschreibung der räumlichen Ausdehnung der Daten
@@ -731,6 +733,8 @@ Dataset:
                   label: Landwirtschaft
                 "026":
                   label: Wirtschaftliche Aktivitäten
+                "027":
+                  label: Leitungskataster                  
             AUSDBESCHR:
               label: Ausdehnung Beschreibung
               title: Beschreibung der räumlichen Ausdehnung der Daten
