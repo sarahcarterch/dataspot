@@ -10,7 +10,7 @@ from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 load_dotenv()
 DATASPOT_EMAIL_RECEIVERS = json.loads(os.getenv('DATASPOT_EMAIL_RECEIVERS'))
-DATASPOT_EMAIL_SERVER = os.getenv('EMAIL_SERVER')
+DATASPOT_EMAIL_SERVER = os.getenv('DATASPOT_EMAIL_SERVER')
 DATASPOT_EMAIL_SENDER = os.getenv('DATASPOT_EMAIL_SENDER')
 
 if not DATASPOT_EMAIL_RECEIVERS or not DATASPOT_EMAIL_SERVER or not DATASPOT_EMAIL_SENDER:
