@@ -7,13 +7,15 @@ from src.clients.base_client import BaseDataspotClient
 from src.clients.fdm_client import FDMClient
 from src.ods_client import ODSClient
 from src.clients.dnk_client import DNKClient
+from src.clients.tdm_client import TDMClient
 from src.common import email_helpers as email_helpers
 
 
 def main():
     dnk_client = DNKClient()
     fdm_client = FDMClient()
-    sync_org_structures(dataspot_client=dnk_client)
+    tdm_client = TDMClient()
+    sync_org_structures(dataspot_client=tdm_client)
 
 def sync_org_structures(dataspot_client: BaseDataspotClient):
     """
