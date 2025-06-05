@@ -564,3 +564,35 @@ class BaseDataspotClient():
     #  I don't really want to add an entire interface for just this case
     def sync_org_units(self, all_organizations: dict, status: str = "WORKING"):
         raise NotImplementedError("Error: sync_org_units should never be called in the BaseClient! If you see this, then this is a bug.")
+
+    def get_org_units_by_staatskalender_ids(self, staatskalender_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        """
+        Fetch organization units by their staatskalender_id values.
+        
+        Args:
+            staatskalender_ids: List of staatskalender_id values to fetch
+            
+        Returns:
+            Dict mapping staatskalender_id to the full unit data, including UUID
+        """
+        if not staatskalender_ids:
+            return {}
+            
+        # Get all org units with the appropriate filter function
+        org_filter = lambda asset: (
+            asset.get('_type') == 'Collection' and 
+            asset.get('stereotype') == 'Organisationseinheit' and
+            asset.get('id_im_staatskalender') is not None
+        )
+        
+        units = self.get_all_assets_from_scheme(org_filter)
+        
+        # Build a lookup table mapping staatskalender_id to unit data
+        result = {}
+        for unit in units:
+            # Convert to string for consistent comparison
+            unit_id = str(unit.get('id_im_staatskalender'))
+            if unit_id in staatskalender_ids:
+                result[unit_id] = unit
+                
+        return result

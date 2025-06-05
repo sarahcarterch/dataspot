@@ -18,11 +18,12 @@ def main():
     fdm_client = FDMClient()
     sync_org_structures(dataspot_client=fdm_client)
 
-    tdm_client = TDMClient()
+    #tdm_client = TDMClient()
 
 def sync_org_structures(dataspot_client: BaseDataspotClient):
     """
-    Synchronize organizational structure in Dataspot with the latest data from ODS API.
+    Synchronize organizational structures (consisting of org units) of the specified dataspot client
+    with the latest data from ODS API.
 
     This method retrieves organization data from the ODS API, validates for duplicate IDs,
     fetches existing organizational units from Dataspot, compares the structures,
@@ -83,6 +84,22 @@ def sync_org_structures(dataspot_client: BaseDataspotClient):
 
         # Show detailed information for each change type - LOG ORDER: creations, updates, deletions
         details = sync_result.get('details', {})
+        
+        # Fetch UUIDs for newly created organization units
+        if 'creations' in details and details['creations'].get('count', 0) > 0:
+            created_items = details['creations'].get('items', [])
+            created_ids = [str(item['staatskalender_id']) for item in created_items if 'staatskalender_id' in item]
+            
+            if created_ids:
+                logging.info(f"Fetching UUIDs for {len(created_ids)} newly created organizational units...")
+                created_units = dataspot_client.get_org_units_by_staatskalender_ids(created_ids)
+                
+                # Update each creation with its UUID
+                for i, item in enumerate(created_items):
+                    staatskalender_id = str(item.get('staatskalender_id', ''))
+                    if staatskalender_id in created_units:
+                        # Add UUID to the sync result
+                        details['creations']['items'][i]['uuid'] = created_units[staatskalender_id].get('id')
 
         # Process creations
         if 'creations' in details:

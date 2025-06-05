@@ -36,6 +36,7 @@ classDiagram
         +require_scheme_exists()
         +ensure_ods_imports_collection_exists()
         +bulk_create_or_update_assets()
+        +get_org_units_by_staatskalender_ids()
     }
 
     %% DNK Client
