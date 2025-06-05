@@ -34,4 +34,4 @@ COPY . /code/
 
 RUN pip install -r requirements.txt
 
-CMD ["python3", "src/scripts/sync_org_structures.py"]
+CMD ["python3", "scripts/sync_org_structures.py"]
