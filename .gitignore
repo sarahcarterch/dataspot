@@ -7,7 +7,6 @@ tmp/
 **/*.txt
 **/*.csv
 **/*.json
-**/config.py
 !requirements.txt
 !**/README.txt
 **/_basic_annotations.yaml
