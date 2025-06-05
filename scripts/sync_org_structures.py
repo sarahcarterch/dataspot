@@ -13,9 +13,12 @@ from src.common import email_helpers as email_helpers
 
 def main():
     dnk_client = DNKClient()
+    sync_org_structures(dataspot_client=dnk_client)
+
     fdm_client = FDMClient()
+    sync_org_structures(dataspot_client=fdm_client)
+
     tdm_client = TDMClient()
-    sync_org_structures(dataspot_client=tdm_client)
 
 def sync_org_structures(dataspot_client: BaseDataspotClient):
     """
