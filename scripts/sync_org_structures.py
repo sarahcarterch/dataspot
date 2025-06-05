@@ -256,7 +256,7 @@ def create_email_content(sync_result, base_url, database_name) -> (str | None, s
         return None, None, False
 
     # Create email subject with summary of changes
-    email_subject = f"Dataspot Org Structure: {counts.get('created', 0)} created, {counts.get('updated', 0)} updated, {counts.get('deleted', 0)} deleted"
+    email_subject = f"[{database_name}] Org Structure: {counts.get('created', 0)} created, {counts.get('updated', 0)} updated, {counts.get('deleted', 0)} deleted"
 
     email_text = f"Hi there,\n\n"
     email_text += f"I've just updated the organization structure in Dataspot.\n"
