@@ -1,11 +1,11 @@
 # Dataspot configuration variables
 
 # Database name
-database_name = 'metadatenmanagement'
+database_name = 'prod'
 
 # Base URL
 base_url = 'https://bs.dataspot.io'
-database_name_prod = 'metadatenmanagement'
+database_name_prod = 'prod'
 
 # Scheme names
 dnk_scheme_name = 'Datennutzungskatalog'
