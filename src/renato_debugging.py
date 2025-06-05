@@ -790,7 +790,7 @@ def main_11_sync_datasets(max_datasets: int = None):
     Returns:
         List[str]: The list of dataset IDs that were processed
     """
-    logging.info("Syncing existing datasets with updated titles...")
+    logging.info("Syncing existing datasets...")
     
     # Initialize client
     dataspot_client = DNKClient()
