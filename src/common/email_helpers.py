@@ -32,8 +32,7 @@ def create_email_msg(subject="Python Notification", text="", img=None, attachmen
     """
     # build message contents
     msg = MIMEMultipart()
-    msg['Subject'] = f"[Automated Message] {subject}"  # add in the subject
-    # msg.attach(MIMEText(text))  # add text contents
+    msg['Subject'] = subject  # add in the subject
     msg.attach(MIMEText(text, 'plain', 'utf-8'))  # add plain text contents
 
     # check if we have anything given in the img parameter
