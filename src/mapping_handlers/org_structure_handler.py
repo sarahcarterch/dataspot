@@ -122,9 +122,10 @@ class OrgStructureHandler(BaseDataspotHandler):
             error_msg = f"Duplicate id_im_staatskalender values detected. The following {len(duplicate_ids)} IDs appear multiple times:\n{duplicate_details}"
             raise ValueError(error_msg)
 
-    def build_organization_hierarchy_from_ods_bulk(self, org_data: Dict[str, Any], status: str = "WORKING") -> dict:
+    def _initialize_org_hierarchy_from_ods(self, org_data: Dict[str, Any], status: str = "WORKING") -> dict:
         """
-        Build organization hierarchy in the DNK based on data from ODS API using bulk upload.
+        Build organization hierarchy in the DNK based on data from ODS API using bulk upload. This function should only
+        be called if the org hierarchy does not yet exist at all in the scheme.
         
         Args:
             org_data: Dictionary containing organization data from ODS API
@@ -301,7 +302,7 @@ class OrgStructureHandler(BaseDataspotHandler):
         # If this is an initial run, perform bulk upload
         if is_initial_run:
             logging.info(f"No organizational units found in Dataspot. Performing initial bulk upload with status '{status}'...")
-            result = self.build_organization_hierarchy_from_ods_bulk(org_data, status=status)
+            result = self._initialize_org_hierarchy_from_ods(org_data, status=status)
             
             # Save updated mappings
             source_ids = [str(org_unit['id']) for org_unit in org_data.get('results', [])]

@@ -197,7 +197,7 @@ def test_build_organization_hierarchy_from_ods_bulk(mock_transform, handler, sam
     handler.update_mappings_after_upload = MagicMock(return_value=2)
     
     # Execute
-    result = handler.build_organization_hierarchy_from_ods_bulk(sample_org_data)
+    result = handler._initialize_org_hierarchy_from_ods(sample_org_data)
     
     # Verify
     mock_transform.assert_called_once_with(sample_org_data)
@@ -253,7 +253,7 @@ def test_sync_org_units_initial(handler, sample_org_data):
     # Setup
     handler._fetch_current_org_units = MagicMock(return_value=[])  # No existing units
     handler.update_mappings_before_upload = MagicMock()
-    handler.build_organization_hierarchy_from_ods_bulk = MagicMock(
+    handler._initialize_org_hierarchy_from_ods = MagicMock(
         return_value={"status": "success", "message": "Initial upload successful"}
     )
     handler.update_mappings_after_upload = MagicMock()
@@ -264,7 +264,7 @@ def test_sync_org_units_initial(handler, sample_org_data):
     # Verify
     handler._fetch_current_org_units.assert_called_once()
     handler.update_mappings_before_upload.assert_called_once()
-    handler.build_organization_hierarchy_from_ods_bulk.assert_called_once_with(sample_org_data)
+    handler._initialize_org_hierarchy_from_ods.assert_called_once_with(sample_org_data)
     assert result["status"] == "success"
     assert "Performed initial bulk upload" in result["message"]
 
@@ -326,7 +326,7 @@ def test_malformed_data_handling(handler, sample_malformed_org_data):
                 def mock_sync(org_data):
                     try:
                         # This will raise our mocked exception
-                        handler.build_organization_hierarchy_from_ods_bulk(org_data)
+                        handler._initialize_org_hierarchy_from_ods(org_data)
                     except KeyError:
                         return {"status": "error", "message": "Error in data transformation: Missing required field"}
                 
@@ -360,7 +360,7 @@ def test_empty_org_data_handling(handler):
                 def mock_sync(org_data):
                     try:
                         # This will raise our mocked exception
-                        handler.build_organization_hierarchy_from_ods_bulk(org_data)
+                        handler._initialize_org_hierarchy_from_ods(org_data)
                     except ValueError as e:
                         return {"status": "error", "message": f"Error with empty data: {str(e)}"}
                 
@@ -393,7 +393,7 @@ def test_circular_reference_handling(handler, sample_circular_org_data):
                 def mock_sync(org_data):
                     try:
                         # This will raise our mocked exception
-                        handler.build_organization_hierarchy_from_ods_bulk(org_data)
+                        handler._initialize_org_hierarchy_from_ods(org_data)
                     except RecursionError:
                         return {"status": "error", "message": "Circular reference detected in organization structure"}
                 

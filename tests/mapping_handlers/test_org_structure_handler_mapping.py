@@ -132,7 +132,7 @@ class TestOrgStructureHandlerMapping:
         
         # Mock functions to avoid actually calling API
         handler.update_mappings_before_upload = MagicMock()
-        handler.build_organization_hierarchy_from_ods_bulk = MagicMock(
+        handler._initialize_org_hierarchy_from_ods = MagicMock(
             return_value={"status": "success", "message": "Initial upload successful"}
         )
         
@@ -141,7 +141,7 @@ class TestOrgStructureHandlerMapping:
         
         # Verify
         assert "initial bulk upload" in result["message"].lower()
-        handler.build_organization_hierarchy_from_ods_bulk.assert_called_once()
+        handler._initialize_org_hierarchy_from_ods.assert_called_once()
 
     def test_update_mappings_after_upload_with_nonexistent_ids(self, handler):
         """Test updating mappings after upload with IDs that don't exist in Dataspot."""
