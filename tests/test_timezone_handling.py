@@ -47,6 +47,41 @@ class TestTimezoneHandling(unittest.TestCase):
     def test_malformed_datetime(self):
         """Test with malformed datetime string"""
         self.assertIsNone(_iso_8601_to_unix_timestamp("not-a-date"))
+        
+    # New tests for time normalization
+    
+    def test_normalize_utc_time_to_midnight(self):
+        """Test that any time in UTC gets normalized to midnight UTC"""
+        # These should all normalize to the same midnight timestamp
+        midnight = _iso_8601_to_unix_timestamp("2025-03-07T00:00:00Z")
+        morning = _iso_8601_to_unix_timestamp("2025-03-07T08:30:45Z")
+        evening = _iso_8601_to_unix_timestamp("2025-03-07T23:59:59Z")
+        
+        self.assertEqual(morning, midnight)
+        self.assertEqual(evening, midnight)
+        self.assertEqual(midnight, 1741305600000)  # 2025-03-07T00:00:00Z
+    
+    def test_normalize_zurich_time_to_midnight(self):
+        """Test that any time in Europe/Zurich gets normalized to midnight Zurich time"""
+        # These should all normalize to the same midnight timestamp
+        midnight = _iso_8601_to_unix_timestamp("2025-03-07T00:00:00+01:00")  # CET
+        morning = _iso_8601_to_unix_timestamp("2025-03-07T08:30:45+01:00")  # CET
+        evening = _iso_8601_to_unix_timestamp("2025-03-07T23:59:59+01:00")  # CET
+        
+        self.assertEqual(morning, midnight)
+        self.assertEqual(evening, midnight)
+        self.assertEqual(midnight, 1741302000000)  # 2025-03-07T00:00:00+01:00 in UTC milliseconds
+    
+    def test_normalize_zurich_dataset_timezone(self):
+        """Test normalization with dataset timezone"""
+        # These should all normalize to the same midnight timestamp
+        midnight = _iso_8601_to_unix_timestamp("2025-03-07T00:00:00", "Europe/Zurich")
+        morning = _iso_8601_to_unix_timestamp("2025-03-07T08:30:45", "Europe/Zurich")
+        evening = _iso_8601_to_unix_timestamp("2025-03-07T23:59:59", "Europe/Zurich")
+        
+        self.assertEqual(morning, midnight)
+        self.assertEqual(evening, midnight)
+        self.assertEqual(midnight, 1741302000000)  # 2025-03-07T00:00:00+01:00 in UTC milliseconds
 
 if __name__ == '__main__':
     unittest.main() 

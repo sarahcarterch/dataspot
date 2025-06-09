@@ -2,6 +2,7 @@ from typing import Dict, Any, Optional
 import logging
 import pytz
 from dateutil import parser
+import datetime
 
 from src.dataspot_dataset import OGDDataset
 
@@ -111,9 +112,11 @@ def transform_ods_to_dnk(ods_metadata: Dict[str, Any], ods_dataset_id: str) -> O
         ods_metadata.get('dcat', {}).get('accrualperiodicity', {'value': None})
     )
     
+    # For publication date (PD), normalize to midnight in source timezone
     publication_date = _iso_8601_to_unix_timestamp(
         _get_field_value(ods_metadata.get('dcat', {}).get('issued')),
-        dataset_timezone
+        dataset_timezone,
+        normalize_to_midnight=True  # Only normalize PD field to midnight
     )
     
     # Extract geographical/spatial information
@@ -213,7 +216,7 @@ def transform_ods_to_dnk(ods_metadata: Dict[str, Any], ods_dataset_id: str) -> O
     return ogd_dataset
 
 
-def _iso_8601_to_unix_timestamp(datetime_str: str, dataset_timezone: str = None) -> Optional[int]:
+def _iso_8601_to_unix_timestamp(datetime_str: str, dataset_timezone: str = None, normalize_to_midnight: bool = False) -> Optional[int]:
     """
     Converts an ISO 8601 formatted datetime string to a Unix timestamp in milliseconds.
     
@@ -222,9 +225,14 @@ def _iso_8601_to_unix_timestamp(datetime_str: str, dataset_timezone: str = None)
     If no timezone is in the string but a dataset_timezone is provided, that will be used.
     Otherwise, UTC is assumed as the fallback.
     
+    When normalize_to_midnight is True, the function normalizes the datetime to midnight (00:00:00) 
+    in its source timezone before converting to UTC. This ensures consistency with Dataspot's 
+    handling of date fields like publication date (PD).
+    
     Args:
         datetime_str (str): ISO 8601 formatted datetime string (e.g., "2025-03-07T00:00:00Z")
         dataset_timezone (str, optional): The timezone specified in the dataset metadata (e.g., "Europe/Zurich")
+        normalize_to_midnight (bool, optional): Whether to normalize the time to midnight in source timezone
         
     Returns:
         Optional[int]: Unix timestamp in milliseconds (UTC), or None if conversion fails
@@ -236,6 +244,9 @@ def _iso_8601_to_unix_timestamp(datetime_str: str, dataset_timezone: str = None)
     try:
         # Parse the datetime string - if it contains timezone info, it will be used
         dt = parser.parse(datetime_str)
+        
+        # Record the original timezone info before any modifications
+        original_tzinfo = dt.tzinfo
         
         # If the datetime has no timezone info but we have a dataset timezone
         if dt.tzinfo is None and dataset_timezone:
@@ -251,8 +262,40 @@ def _iso_8601_to_unix_timestamp(datetime_str: str, dataset_timezone: str = None)
             # If no timezone info in the string and no dataset timezone, assume UTC
             dt = dt.replace(tzinfo=pytz.UTC)
         
+        # Normalize to midnight in the source timezone if requested
+        if normalize_to_midnight:
+            # First, extract the date part only (removing the time component)
+            date_only = dt.date()
+            
+            # Then combine with midnight time in the same timezone
+            if original_tzinfo is None and dataset_timezone:
+                # For datetimes that were localized using the dataset timezone
+                try:
+                    tz = pytz.timezone(dataset_timezone)
+                    dt = tz.localize(datetime.datetime.combine(date_only, datetime.time(0, 0, 0)))
+                except pytz.exceptions.UnknownTimeZoneError:
+                    # Fallback to UTC if timezone is invalid
+                    dt = datetime.datetime.combine(date_only, datetime.time(0, 0, 0), tzinfo=pytz.UTC)
+            else:
+                # For datetimes that already had timezone info or defaulted to UTC
+                # We need to use the timezone that the datetime currently has
+                current_tz = dt.tzinfo
+                naive_midnight = datetime.datetime.combine(date_only, datetime.time(0, 0, 0))
+                
+                # Handle pytz timezones vs fixed offset timezones differently
+                if hasattr(current_tz, 'localize'):
+                    # For pytz timezones
+                    dt = current_tz.localize(naive_midnight)
+                else:
+                    # For fixed offset timezones (like UTC)
+                    dt = naive_midnight.replace(tzinfo=current_tz)
+            
+            logging.debug(f"Normalized '{datetime_str}' to midnight in source timezone")
+        
         # Convert to milliseconds, ensuring we're in UTC
         timestamp_ms = int(dt.astimezone(pytz.UTC).timestamp() * 1000)
+        
+        logging.debug(f"Converted '{datetime_str}' to timestamp {timestamp_ms}")
         return timestamp_ms
     except (ValueError, TypeError) as e:
         # Log the error and return None for invalid datetime strings
