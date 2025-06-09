@@ -52,7 +52,7 @@ class DNKClient(BaseDataspotClient):
         dataset_json['inCollection'] = self.ods_imports_collection_name
         
         # Create the dataset directly
-        endpoint = f"/rest/{self.database_name}/datasets/{collection_uuid}/datasets"
+        endpoint = f"/rest/{self.database_name}/collections/{collection_uuid}/datasets"
         return self._create_asset(endpoint=endpoint, data=dataset_json, status=status)
     
     def update_dataset(self, dataset: Dataset, uuid: str, force_replace: bool = False, status: str = "WORKING") -> dict:

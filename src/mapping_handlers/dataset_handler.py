@@ -1,8 +1,6 @@
 import logging
 from typing import List, Dict, Any
 
-from requests import HTTPError
-
 from src.clients.base_client import BaseDataspotClient
 from src.clients.helpers import url_join, get_uuid_from_response
 from src.dataspot_dataset import Dataset
@@ -539,7 +537,7 @@ class DatasetHandler(BaseDataspotHandler):
             logging.error(error_msg)
             raise ValueError(error_msg)
 
-        collection_href = url_join('rest', self.database_name, 'datasets', collection_uuid, leading_slash=True)
+        collection_href = url_join('rest', self.database_name, 'collections', collection_uuid, leading_slash=True)
         logging.debug(f"Using collection UUID: {collection_uuid} and constructed href: {collection_href}")
         
         # Create a new dataset
@@ -557,7 +555,7 @@ class DatasetHandler(BaseDataspotHandler):
             # No path, just use the collection name directly
             logging.debug(f"Using default inCollection: '{self.client.ods_imports_collection_name}'")
             dataset_json['inCollection'] = self.client.ods_imports_collection_name
-        
+
         response = self.client._create_asset(
             endpoint=dataset_creation_endpoint,
             data=dataset_json
