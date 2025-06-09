@@ -87,7 +87,7 @@ class DatasetHandler(BaseDataspotHandler):
             datasets: List of Dataset objects to synchronize with Dataspot
             
         Returns:
-            Dict[str, Any]: Summary of the synchronization process
+            Dict[str, Any]: Report of the synchronization process
         """
         if not datasets:
             logging.warning("No datasets provided for synchronization")
@@ -122,11 +122,26 @@ class DatasetHandler(BaseDataspotHandler):
                 else:
                     new_datasets.append(dataset)
 
+        # Prepare results structure with detailed change tracking
+        result = {
+            "status": "success",
+            "datasets_processed": len(datasets),
+            "created": 0,
+            "updated": 0,
+            "unchanged": 0,
+            "errors": 0,
+            "deleted": 0,
+            "details": {
+                "creations": {"count": 0, "items": []},
+                "updates": {"count": 0, "items": []},
+                "deletions": {"count": 0, "items": []},
+                "errors": {"count": 0, "items": []}
+            }
+        }
+
         # Step 3: Process existing datasets with individual updates to preserve other fields
-        updated_count = 0
-        update_errors = 0
-        
         logging.info(f"Step 3: Updating {len(existing_datasets)} existing datasets individually...")
+        
         if existing_datasets:
             for dataset, ods_id, entry in existing_datasets:
                 try:
@@ -136,73 +151,205 @@ class DatasetHandler(BaseDataspotHandler):
                     # Get the endpoint for this dataset
                     endpoint = f"/rest/{self.client.database_name}/datasets/{uuid}"
                     
-                    # Update only specified fields using PATCH to preserve other data
+                    # First, get the current dataset to compare
+                    current_dataset = self.client._get_asset(endpoint=endpoint)
+                    if not current_dataset:
+                        # Dataset no longer exists in Dataspot
+                        logging.warning(f"Dataset with ODS_ID {ods_id} no longer exists in Dataspot")
+                        result["errors"] += 1
+                        result["details"]["errors"]["count"] += 1
+                        result["details"]["errors"]["items"].append({
+                            "ods_id": ods_id,
+                            "message": "Dataset no longer exists in Dataspot"
+                        })
+                        continue
+                    
+                    # New dataset data
                     dataset_json = dataset.to_json()
+                    
+                    # Compare fields to track changes
+                    changes = {}
+                    
+                    # Fields to compare (add more as needed)
+                    compare_fields = [
+                        ("label", "Title"),
+                        ("description", "Description"),
+                        ("shortDescription", "Short Description")
+                    ]
+                    
+                    # Compare basic fields
+                    for field_name, display_name in compare_fields:
+                        old_value = current_dataset.get(field_name)
+                        new_value = dataset_json.get(field_name)
+                        
+                        if old_value != new_value:
+                            changes[display_name] = {
+                                "old_value": old_value,
+                                "new_value": new_value
+                            }
+                    
+                    # Compare custom properties
+                    current_custom_props = current_dataset.get('customProperties', {})
+                    new_custom_props = dataset_json.get('customProperties', {})
+                    
+                    for prop_key in set(list(current_custom_props.keys()) + list(new_custom_props.keys())):
+                        old_value = current_custom_props.get(prop_key)
+                        new_value = new_custom_props.get(prop_key)
+                        
+                        if old_value != new_value:
+                            changes[f"Custom Property: {prop_key}"] = {
+                                "old_value": old_value,
+                                "new_value": new_value
+                            }
+                    
+                    # Only update if there are actual changes
+                    if changes:
+                        # Ensure inCollection is preserved from the mapping
+                        dataset_json['inCollection'] = current_dataset['inCollection']
 
-                    # Ensure inCollection is preserved from the mapping
-                    retrieved_asset = self.client._get_asset(endpoint=endpoint)
-                    dataset_json['inCollection'] = retrieved_asset['inCollection']
-
-                    # Use the client's update method with replace=False to do a PATCH
-                    try:
-                        self.client._update_asset(
-                            endpoint=endpoint, 
-                            data=dataset_json, 
-                            replace=False
-                        )
-                        updated_count += 1
-                        logging.info(f"Successfully updated dataset with ODS_ID {ods_id}")
-                    except Exception as e:
-                        logging.error(f"Error updating dataset with ODS_ID {ods_id}: {str(e)}")
-                        update_errors += 1
+                        # Use the client's update method with replace=False to do a PATCH
+                        try:
+                            # Update the existing dataset
+                            response = self.client._update_asset(
+                                endpoint=endpoint, 
+                                data=dataset_json, 
+                                replace=False
+                            )
+                            
+                            # Extract UUID (should be the same as entry[1])
+                            uuid = entry[1]
+                            
+                            # Track successful update
+                            result["updated"] += 1
+                            result["details"]["updates"]["count"] += 1
+                            
+                            # Create update details entry
+                            title = dataset_json.get('label', f"<Unnamed Dataset {ods_id}>")
+                            ods_url = f"https://data.bs.ch/explore/dataset/{ods_id}"
+                            
+                            update_entry = {
+                                "ods_id": ods_id,
+                                "title": title,
+                                "link": ods_url,
+                                "uuid": uuid,  # Add the UUID to the update entry
+                                "changes": changes
+                            }
+                            
+                            result["details"]["updates"]["items"].append(update_entry)
+                            logging.info(f"Successfully updated dataset with ODS_ID {ods_id}: {title}")
+                            
+                            # Log detailed changes
+                            for field, values in changes.items():
+                                logging.debug(f"  - Changed {field}:")
+                                logging.debug(f"    - Old: {values.get('old_value')}")
+                                logging.debug(f"    - New: {values.get('new_value')}")
+                                
+                        except Exception as e:
+                            error_msg = f"Error updating dataset with ODS_ID {ods_id}: {str(e)}"
+                            logging.error(error_msg)
+                            
+                            result["errors"] += 1
+                            result["details"]["errors"]["count"] += 1
+                            result["details"]["errors"]["items"].append({
+                                "ods_id": ods_id,
+                                "message": error_msg
+                            })
+                    else:
+                        # No changes needed
+                        result["unchanged"] += 1
+                        logging.info(f"No changes needed for dataset with ODS_ID {ods_id}")
                 
                 except Exception as e:
-                    logging.error(f"Error processing update for dataset with ODS_ID {ods_id}: {str(e)}")
-                    update_errors += 1
+                    error_msg = f"Error processing update for dataset with ODS_ID {ods_id}: {str(e)}"
+                    logging.error(error_msg)
+                    
+                    result["errors"] += 1
+                    result["details"]["errors"]["count"] += 1
+                    result["details"]["errors"]["items"].append({
+                        "ods_id": ods_id,
+                        "message": error_msg
+                    })
 
         # Step 4: Upload new datasets using bulk_create_or_update_datasets
-        created_count = 0
-        bulk_result = {}
-        
         logging.info(f"Step 4: Creating {len(new_datasets)} new datasets with bulk upload...")
+        
         if new_datasets:
-            bulk_result = self.bulk_create_or_update_datasets(
-                datasets=new_datasets,
-                operation="ADD",
-                dry_run=False
-            )
-            created_count = len(new_datasets)
+            try:
+                # Process new datasets
+                for dataset in new_datasets:
+                    dataset_json = dataset.to_json()
+                    ods_id = dataset_json.get('customProperties', {}).get('ODS_ID')
+                    title = dataset_json.get('label', f"<Unnamed Dataset {ods_id}>")
+                    
+                    try:
+                        # Create the dataset
+                        response = self.create_dataset(dataset)
+                        
+                        # Get UUID from response
+                        uuid = get_uuid_from_response(response)
+                        
+                        # Track successful creation
+                        result["created"] += 1
+                        result["details"]["creations"]["count"] += 1
+                        
+                        # Create creation details entry
+                        ods_url = f"https://data.bs.ch/explore/dataset/{ods_id}"
+                        
+                        creation_entry = {
+                            "ods_id": ods_id,
+                            "title": title,
+                            "link": ods_url,
+                            "uuid": uuid
+                        }
+                        
+                        result["details"]["creations"]["items"].append(creation_entry)
+                        logging.info(f"Successfully created dataset with ODS_ID {ods_id}: {title}")
+                        
+                    except Exception as e:
+                        error_msg = f"Error creating dataset with ODS_ID {ods_id}: {str(e)}"
+                        logging.error(error_msg)
+                        
+                        result["errors"] += 1
+                        result["details"]["errors"]["count"] += 1
+                        result["details"]["errors"]["items"].append({
+                            "ods_id": ods_id,
+                            "message": error_msg
+                        })
+                
+            except Exception as e:
+                error_msg = f"Error during bulk creation: {str(e)}"
+                logging.error(error_msg)
+                result["errors"] += 1
 
         # Step 5: Update mappings after all operations
         logging.info("Step 5: Updating mappings after upload...")
         if ods_ids:
-            self.update_mappings_after_upload(ods_ids)
+            self.update_mappings_after_upload(ods_ids, result)
 
         # Step 6: Save mappings to CSV
         logging.info("Step 6: Saving mappings to CSV...")
         self.mapping.save_to_csv()
 
-        # Generate result summary
-        result = {
-            "status": "success",
-            "message": f"Synchronized {len(datasets)} datasets: {updated_count} updated, {created_count} created, {update_errors} errors",
-            "datasets_processed": len(datasets),
-            "updated": updated_count,
-            "created": created_count,
-            "errors": update_errors,
-            "bulk_upload_result": bulk_result if new_datasets else {}
-        }
+        # Generate result message
+        result["message"] = (
+            f"Synchronized {len(datasets)} datasets: "
+            f"{result['created']} created, {result['updated']} updated, "
+            f"{result['unchanged']} unchanged, {result['deleted']} deleted, "
+            f"{result['errors']} errors"
+        )
 
-        logging.info(f"Dataset synchronization completed: {updated_count} updated, {created_count} created, {update_errors} errors")
+        logging.info(f"Dataset synchronization completed: {result['updated']} updated, {result['created']} created, {result['errors']} errors")
         return result
 
-    def update_mappings_after_upload(self, ods_ids: List[str]) -> None:
+    def update_mappings_after_upload(self, ods_ids: List[str], result: Dict[str, Any] = None) -> None:
         """
         Updates the mapping between ODS IDs and Dataspot UUIDs after uploading datasets.
         Uses the download API to retrieve all datasets and then updates the mapping for matching ODS IDs.
+        Also updates the creation/update items in the result with UUIDs if provided.
         
         Args:
             ods_ids (List[str]): List of ODS IDs to update in the mapping
+            result (Dict[str, Any], optional): Result dictionary to update with UUIDs
             
         Raises:
             HTTPError: If API requests fail
@@ -210,6 +357,32 @@ class DatasetHandler(BaseDataspotHandler):
         """
         # Call the base class method with our specific ID type
         super().update_mappings_after_upload(ods_ids)
+        
+        # Update sync result with UUIDs if result is provided
+        if result and 'details' in result:
+            details = result['details']
+            
+            # Update UUIDs in creation items
+            if 'creations' in details and details['creations']['count'] > 0:
+                for i, creation in enumerate(details['creations']['items']):
+                    ods_id = creation.get('ods_id')
+                    if ods_id:
+                        # Get the UUID from mapping
+                        entry = self.mapping.get_entry(ods_id)
+                        if entry and len(entry) >= 2:
+                            uuid = entry[1]
+                            details['creations']['items'][i]['uuid'] = uuid
+            
+            # Update UUIDs in update items
+            if 'updates' in details and details['updates']['count'] > 0:
+                for i, update in enumerate(details['updates']['items']):
+                    ods_id = update.get('ods_id')
+                    if ods_id and not update.get('uuid'):  # Only update if not already set
+                        # Get the UUID from mapping
+                        entry = self.mapping.get_entry(ods_id)
+                        if entry and len(entry) >= 2:
+                            uuid = entry[1]
+                            details['updates']['items'][i]['uuid'] = uuid
 
     def bulk_create_or_update_datasets(self, datasets: List[Dataset],
                                       operation: str = "ADD", dry_run: bool = False) -> dict:
@@ -315,7 +488,7 @@ class DatasetHandler(BaseDataspotHandler):
         # Update mapping for each dataset (only for non-dry runs)
         if not dry_run:
             # After bulk upload, retrieve the datasets and update mapping
-            self.update_mappings_after_upload(ods_ids)
+            self.update_mappings_after_upload(ods_ids, response)
         
         logging.info(f"Bulk dataset creation completed successfully")
         return response

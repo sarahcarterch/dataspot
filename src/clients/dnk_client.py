@@ -170,6 +170,6 @@ class DNKClient(BaseDataspotClient):
             datasets: List of Dataset objects to synchronize
             
         Returns:
-            Dict: Summary of the synchronization process
+            Dict: Report of the synchronization process
         """
         return self.dataset_handler.sync_datasets(datasets)

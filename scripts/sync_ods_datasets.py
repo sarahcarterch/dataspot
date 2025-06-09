@@ -11,7 +11,7 @@ from src.dataset_transformer import transform_ods_to_dnk
 
 
 def main():
-    logging.info(f"Running sync_ods_datasets on {config.database_name}")
+    logging.info(f"=== CURRENT DATABASE: {config.database_name} ===")
     sync_ods_datasets()
 
 
@@ -58,6 +58,7 @@ def sync_ods_datasets(max_datasets: int = None, batch_size: int = 50):
             'created': 0,
             'updated': 0,
             'deleted': 0,
+            'unchanged': 0,
             'errors': 0,
             'processed': 0
         },
@@ -78,8 +79,7 @@ def sync_ods_datasets(max_datasets: int = None, batch_size: int = 50):
                 'count': 0,
                 'items': []
             }
-        },
-        '_batches': [] # Internal tracking, not part of final report
+        }
     }
     
     for idx, ods_id in enumerate(ods_ids):
@@ -101,8 +101,8 @@ def sync_ods_datasets(max_datasets: int = None, batch_size: int = 50):
         # Process in smaller batches to avoid memory issues
         if len(all_datasets) >= batch_size or idx == len(ods_ids) - 1:
             if all_datasets:
-                batch_num = len(sync_results['_batches']) + 1
-                logging.info(f"Step 3: Syncing batch {batch_num} of {len(all_datasets)} datasets...")
+                batch_num = len(all_datasets)
+                logging.info(f"Step 3: Syncing batch of {batch_num} datasets...")
                 
                 # Ensure ODS-Imports collection exists
                 dataspot_client.ensure_ods_imports_collection_exists()
@@ -113,23 +113,39 @@ def sync_ods_datasets(max_datasets: int = None, batch_size: int = 50):
                 
                 logging.info(f"Batch sync completed. Response summary: {sync_summary}")
                 
-                # Store batch results for reporting
-                sync_results['_batches'].append({
-                    'batch_number': batch_num,
-                    'batch_size': len(all_datasets),
-                    'summary': sync_summary
-                })
-                
                 # Update overall counts
                 sync_results['counts']['created'] += sync_summary.get('created', 0)
                 sync_results['counts']['updated'] += sync_summary.get('updated', 0)
                 sync_results['counts']['deleted'] += sync_summary.get('deleted', 0)
                 sync_results['counts']['errors'] += sync_summary.get('errors', 0)
+                sync_results['counts']['unchanged'] += sync_summary.get('unchanged', 0)
                 sync_results['counts']['total'] += (
                     sync_summary.get('created', 0) + 
                     sync_summary.get('updated', 0) + 
                     sync_summary.get('deleted', 0)
                 )
+                
+                # Append detailed change information to the report
+                if 'details' in sync_summary:
+                    # Merge creations
+                    if 'creations' in sync_summary['details']:
+                        sync_results['details']['creations']['count'] += sync_summary['details']['creations'].get('count', 0)
+                        sync_results['details']['creations']['items'].extend(sync_summary['details']['creations'].get('items', []))
+                    
+                    # Merge updates
+                    if 'updates' in sync_summary['details']:
+                        sync_results['details']['updates']['count'] += sync_summary['details']['updates'].get('count', 0)
+                        sync_results['details']['updates']['items'].extend(sync_summary['details']['updates'].get('items', []))
+                    
+                    # Merge deletions
+                    if 'deletions' in sync_summary['details']:
+                        sync_results['details']['deletions']['count'] += sync_summary['details']['deletions'].get('count', 0)
+                        sync_results['details']['deletions']['items'].extend(sync_summary['details']['deletions'].get('items', []))
+                    
+                    # Merge errors
+                    if 'errors' in sync_summary['details']:
+                        sync_results['details']['errors']['count'] += sync_summary['details']['errors'].get('count', 0)
+                        sync_results['details']['errors']['items'].extend(sync_summary['details']['errors'].get('items', []))
                 
                 # Clear the batch for the next iteration
                 all_datasets = []
@@ -139,7 +155,7 @@ def sync_ods_datasets(max_datasets: int = None, batch_size: int = 50):
     sync_results['message'] = (
         f"ODS datasets synchronization completed with {sync_results['counts']['total']} changes: "
         f"{sync_results['counts']['created']} created, {sync_results['counts']['updated']} updated, "
-        f"{sync_results['counts']['deleted']} deleted."
+        f"{sync_results['counts']['unchanged']} unchanged, {sync_results['counts']['deleted']} deleted."
     )
     
     # Update final counts (processed may differ from total changes)
@@ -176,43 +192,8 @@ def sync_ods_datasets(max_datasets: int = None, batch_size: int = 50):
         scheme_name_short=dataspot_client.database_name
     )
     
-    # Print a report to the logs, similar to the email content
-    if total_processed > 0:
-        logging.info("===== ODS DATASETS SYNC SUMMARY =====")
-        logging.info(f"Status: {sync_results['status']}")
-        logging.info(f"Message: {sync_results['message']}")
-        logging.info(f"Database: {dataspot_client.database_name}")
-        
-        # Show counts
-        counts = sync_results['counts']
-        logging.info(f"Changes: {counts['total']} total - {counts['created']} created, "
-                    f"{counts['updated']} updated, {counts['deleted']} deleted")
-        logging.info(f"Total datasets processed: {counts['processed']}")
-        
-        # Log summary of batch processing
-        if sync_results['_batches']:
-            logging.info(f"Batches processed: {len(sync_results['_batches'])}")
-            
-            for batch in sync_results['_batches']:
-                batch_number = batch['batch_number']
-                batch_size = batch['batch_size']
-                summary = batch['summary']
-                
-                created = summary.get('created', 0)
-                updated = summary.get('updated', 0)
-                deleted = summary.get('deleted', 0)
-                errors = summary.get('errors', 0)
-                
-                if created > 0 or updated > 0 or deleted > 0 or errors > 0:
-                    logging.info(f"Batch {batch_number} ({batch_size} datasets): "
-                                f"{created} created, {updated} updated, {deleted} deleted, {errors} errors")
-        
-        logging.info("====================================")
-    
-    # Clean up the final report to match org_sync_report format
-    # Remove the internal _batches tracking before writing to file
-    if '_batches' in sync_results:
-        del sync_results['_batches']
+    # Print a detailed report to the logs
+    log_detailed_sync_report(sync_results)
     
     # Send email if there were datasets processed
     if should_send:
@@ -239,6 +220,69 @@ def sync_ods_datasets(max_datasets: int = None, batch_size: int = 50):
     return processed_ids
 
 
+def log_detailed_sync_report(sync_results):
+    """
+    Log a detailed report of the synchronization results.
+    
+    Args:
+        sync_results (dict): The synchronization results dictionary
+    """
+    logging.info("===== DETAILED ODS DATASETS SYNC REPORT =====")
+    logging.info(f"Status: {sync_results['status']}")
+    logging.info(f"Message: {sync_results['message']}")
+    logging.info(f"Total datasets processed: {sync_results['counts']['processed']}")
+    logging.info(f"Changes: {sync_results['counts']['total']} total - "
+               f"{sync_results['counts']['created']} created, "
+               f"{sync_results['counts']['updated']} updated, "
+               f"{sync_results['counts']['unchanged']} unchanged, "
+               f"{sync_results['counts']['deleted']} deleted, "
+               f"{sync_results['counts']['errors']} errors")
+    
+    # Log detailed information about updated datasets
+    if sync_results['details']['updates']['count'] > 0:
+        logging.info("\n--- UPDATED DATASETS ---")
+        for update in sync_results['details']['updates']['items']:
+            ods_id = update.get('ods_id', 'Unknown')
+            title = update.get('title', 'Unknown')
+            uuid = update.get('uuid', '')
+            
+            # Create Dataspot link instead of ODS source link
+            dataspot_link = f"{config.base_url}/web/dataset/{uuid}" if uuid else update.get('link', '')
+            
+            logging.info(f"\nChanged OGD dataset {ods_id}: {title} (Link: {dataspot_link})")
+            
+            # Log field changes
+            if 'changes' in update:
+                for field, values in update['changes'].items():
+                    logging.info(f"- {field}")
+                    logging.info(f"  - Old value: {values.get('old_value', 'None')}")
+                    logging.info(f"  - New value: {values.get('new_value', 'None')}")
+    
+    # Log detailed information about created datasets
+    if sync_results['details']['creations']['count'] > 0:
+        logging.info("\n--- CREATED DATASETS ---")
+        for creation in sync_results['details']['creations']['items']:
+            ods_id = creation.get('ods_id', 'Unknown')
+            title = creation.get('title', 'Unknown')
+            uuid = creation.get('uuid', '')
+            
+            # Create Dataspot link instead of ODS source link
+            dataspot_link = f"{config.base_url}/web/dataset/{uuid}" if uuid else creation.get('link', '')
+            
+            logging.info(f"Created OGD dataset {ods_id}: {title} (Link: {dataspot_link})")
+    
+    # Log detailed information about errors
+    if sync_results['details']['errors']['count'] > 0:
+        logging.info("\n--- ERRORS ---")
+        for error in sync_results['details']['errors']['items']:
+            ods_id = error.get('ods_id', 'Unknown')
+            message = error.get('message', 'Unknown error')
+            
+            logging.info(f"Error processing dataset {ods_id}: {message}")
+    
+    logging.info("=============================================")
+
+
 def create_email_content(sync_results, scheme_name_short):
     """
     Create email content based on synchronization results.
@@ -254,11 +298,13 @@ def create_email_content(sync_results, scheme_name_short):
     total_changes = counts['total']
     
     # Only create email if there were changes
-    if total_changes == 0:
+    if total_changes == 0 and counts.get('errors', 0) == 0:
         return None, None, False
     
     # Create email subject with summary following the requested format
     email_subject = f"[{scheme_name_short}] ODS Datasets: {counts['created']} created, {counts['updated']} updated, {counts['deleted']} deleted"
+    if counts.get('errors', 0) > 0:
+        email_subject += f", {counts['errors']} errors"
     
     email_text = f"Hi there,\n\n"
     email_text += f"I've just synchronized ODS datasets with Dataspot.\n"
@@ -268,17 +314,36 @@ def create_email_content(sync_results, scheme_name_short):
     email_text += f"Changes: {counts['total']} total\n"
     email_text += f"- Created: {counts['created']} datasets\n"
     email_text += f"- Updated: {counts['updated']} datasets\n"
+    email_text += f"- Unchanged: {counts['unchanged']} datasets\n"
     email_text += f"- Deleted: {counts['deleted']} datasets\n"
     if counts.get('errors', 0) > 0:
         email_text += f"- Errors: {counts['errors']}\n"
     email_text += f"\nTotal datasets processed: {counts['processed']}\n\n"
     
-    # Add a note about batches but don't include detailed batch information
-    # as we're moving to a more consolidated report like org_sync_report
-    if '_batches' in sync_results and sync_results['_batches']:
-        email_text += f"The synchronization was performed in {len(sync_results['_batches'])} batches.\n\n"
+    # Add detailed information if available
+    if sync_results['details']['updates']['count'] > 0:
+        email_text += "\nUPDATED DATASETS:\n"
+        for update in sync_results['details']['updates']['items'][:10]:  # Limit to first 10 for email
+            ods_id = update.get('ods_id', 'Unknown')
+            title = update.get('title', 'Unknown')
+            uuid = update.get('uuid', '')
+            
+            # Create Dataspot link instead of ODS source link
+            dataspot_link = f"{config.base_url}/web/dataset/{uuid}" if uuid else update.get('link', '')
+            
+            email_text += f"\nChanged OGD dataset {ods_id}: {title} (Link: {dataspot_link})\n"
+            
+            # Add field changes
+            if 'changes' in update:
+                for field, values in update['changes'].items():
+                    email_text += f"- {field}\n"
+                    email_text += f"  - Old value: {values.get('old_value', 'None')}\n"
+                    email_text += f"  - New value: {values.get('new_value', 'None')}\n"
+        
+        if sync_results['details']['updates']['count'] > 10:
+            email_text += f"\n... and {sync_results['details']['updates']['count'] - 10} more updated datasets. See the attached report for details.\n"
     
-    email_text += "Please review the synchronization results in Dataspot.\n\n"
+    email_text += "\nPlease review the synchronization results in Dataspot.\n\n"
     email_text += "Best regards,\n"
     email_text += "Your Dataspot ODS Datasets Sync Assistant"
     
