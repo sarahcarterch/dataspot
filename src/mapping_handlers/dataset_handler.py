@@ -545,16 +545,6 @@ class DatasetHandler(BaseDataspotHandler):
         
         # Ensure inCollection property is set with the full path
         dataset_json = dataset.to_json()
-        collection_path = self.client.ods_imports_collection_path
-        
-        if collection_path:
-            # Use the centralized default dataset path
-            logging.debug(f"Using default dataset path: '{self.default_dataset_path_full}'")
-            dataset_json['inCollection'] = self.default_dataset_path_full
-        else:
-            # No path, just use the collection name directly
-            logging.debug(f"Using default inCollection: '{self.client.ods_imports_collection_name}'")
-            dataset_json['inCollection'] = self.client.ods_imports_collection_name
 
         response = self.client._create_asset(
             endpoint=dataset_creation_endpoint,
