@@ -183,9 +183,10 @@ def sync_ods_datasets(max_datasets: int = None, batch_size: int = 50):
     # Write report to file
     with open(report_filename, 'w', encoding='utf-8') as f:
         json.dump(sync_results, f, indent=2, ensure_ascii=False)
-        
-    logging.info(f"\nDetailed report saved to {report_filename}")
-    
+
+    logging.info("")
+    logging.info(f"Detailed report saved to {report_filename}")
+
     # Create email content
     email_subject, email_content, should_send = create_email_content(
         sync_results=sync_results,
@@ -240,7 +241,8 @@ def log_detailed_sync_report(sync_results):
     
     # Log detailed information about updated datasets
     if sync_results['details']['updates']['count'] > 0:
-        logging.info("\n--- UPDATED DATASETS ---")
+        logging.info("")
+        logging.info("--- UPDATED DATASETS ---")
         for update in sync_results['details']['updates']['items']:
             ods_id = update.get('ods_id', 'Unknown')
             title = update.get('title', 'Unknown')
@@ -248,8 +250,9 @@ def log_detailed_sync_report(sync_results):
             
             # Create Dataspot link instead of ODS source link
             dataspot_link = f"{config.base_url}/web/dataset/{uuid}" if uuid else update.get('link', '')
-            
-            logging.info(f"\nChanged OGD dataset {ods_id}: {title} (Link: {dataspot_link})")
+
+            logging.info("")
+            logging.info(f"Changed OGD dataset {ods_id}: {title} (Link: {dataspot_link})")
             
             # Log field changes
             if 'changes' in update:
@@ -260,7 +263,8 @@ def log_detailed_sync_report(sync_results):
     
     # Log detailed information about created datasets
     if sync_results['details']['creations']['count'] > 0:
-        logging.info("\n--- CREATED DATASETS ---")
+        logging.info("")
+        logging.info("--- CREATED DATASETS ---")
         for creation in sync_results['details']['creations']['items']:
             ods_id = creation.get('ods_id', 'Unknown')
             title = creation.get('title', 'Unknown')
@@ -273,7 +277,8 @@ def log_detailed_sync_report(sync_results):
     
     # Log detailed information about errors
     if sync_results['details']['errors']['count'] > 0:
-        logging.info("\n--- ERRORS ---")
+        logging.info("")
+        logging.info("--- ERRORS ---")
         for error in sync_results['details']['errors']['items']:
             ods_id = error.get('ods_id', 'Unknown')
             message = error.get('message', 'Unknown error')
