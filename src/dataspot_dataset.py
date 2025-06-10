@@ -128,10 +128,10 @@ class OGDDataset(BasicDataset):
     lizenz: Optional[List[str]] = field(default=None, metadata={'json_key': 'LICENSE', 'custom_property': True})
     nutzungsrechte: Optional[str] = field(default=None, metadata={'json_key': 'RECHT', 'custom_property': True})
     # TODO: themen
-    #herausgeber - GELÖSCHT
+    herausgeber: Optional[str] = field(default=None, metadata={'json_key': 'HERAUSGEBER', 'custom_property': True})
     # TODO: referenz
     # TODO: zuschreibungen
-    #publizierende_organisation - GELÖSCHT
+    publizierende_organisation: Optional[str] = field(default=None, metadata={'json_key': 'PUB_ORG', 'custom_property': True})
     datenportal_link: Optional[str] = field(default=None, metadata={'json_key': 'ODS_LINK', 'custom_property': True})
     datenportal_identifikation: Optional[str] = field(default=None, metadata={'json_key': 'ODS_ID', 'custom_property': True})
     tags: Optional[List[str]] = field(default=None, metadata={'json_key': 'TAG', 'custom_property': True})

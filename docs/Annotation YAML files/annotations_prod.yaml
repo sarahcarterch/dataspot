@@ -313,6 +313,20 @@ Dataset:
                   label: NonCommercialNotAllowed-CommercialWithPermission-ReferenceRequired
                   order: 12
 
+            HERAUSGEBER:
+              label: Herausgeber
+              title: 
+              baseType: STRING
+              group: OGD
+              order: 35
+
+            PUB_ORG:
+              label: Publizierende Organisation
+              title: 
+              baseType: STRING
+              group: OGD
+              order: 36
+
             THEMA:
               label: Themen
               title:
@@ -591,6 +605,20 @@ Dataset:
                 NonCommercialNotAllowed-CommercialWithPermission-ReferenceRequired:
                   label: NonCommercialNotAllowed-CommercialWithPermission-ReferenceRequired
                   order: 12
+
+            HERAUSGEBER:
+              label: Herausgeber
+              title:
+              baseType: STRING
+              group: OGD
+              order: 35
+
+            PUB_ORG:
+              label: Publizierende Organisation
+              title:
+              baseType: STRING
+              group: OGD
+              order: 36
 
             THEMA:
               label: Themen

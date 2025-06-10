@@ -179,6 +179,10 @@ def transform_ods_to_dnk(ods_metadata: Dict[str, Any], ods_dataset_id: str) -> O
     # TODO (Renato): Map default.publisher to appropriate field (example: "Generalsekretariat" or "Statistisches Amt")
     # Note: Will need to add this field to dataspot_dataset.py annotations YAML
     
+    # Extract herausgeber (creator) and publizierende_organisation (publisher)
+    herausgeber = _get_field_value(ods_metadata.get('dcat', {}).get('creator', {}))
+    publizierende_organisation = _get_field_value(ods_metadata.get('default', {}).get('publisher', {}))
+    
     # TODO (Renato): Map default.references to appropriate field (example: "https://statistik.bs.ch/unterthema/9#Preise")
     
     # TODO (Renato): Consider if it makes sense to import creation date (dcat.created) and modification date (default.modified)
@@ -203,6 +207,10 @@ def transform_ods_to_dnk(ods_metadata: Dict[str, Any], ods_dataset_id: str) -> O
         lizenz=license,
         
         nutzungsrechte=rechte,
+        
+        # Publisher information
+        herausgeber=herausgeber,
+        publizierende_organisation=publizierende_organisation,
         
         # Identifiers
         datenportal_link=f"https://data.bs.ch/explore/dataset/{ods_dataset_id}/",
