@@ -353,6 +353,9 @@ def _get_field_value(field: Dict[str, Any] | Any) -> Any:
         return value.strip()
     # Handle lists of strings (e.g., keywords)
     elif isinstance(value, list):
-        return [item.strip() if isinstance(item, str) else item for item in value]
+        l = [item.strip() if isinstance(item, str) else item for item in value]
+        # Sort list lexicographically (case-insensitive) for canonical ordering
+        l.sort(key=lambda x: x.lower())
+        return l
     
     return value
