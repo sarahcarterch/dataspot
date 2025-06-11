@@ -187,7 +187,6 @@ classDiagram
         +schluesselwoerter: List[str]
         +synonyme: List[str]
         +aktualisierungszyklus: str
-        +identifikation: str
         +geographische_dimension: str
         +publikationsdatum: int
         +archivierung_details: str

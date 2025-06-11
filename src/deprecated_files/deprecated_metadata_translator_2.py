@@ -33,7 +33,6 @@ def ods_to_dataspot(ods_metadata: Dict[str, Any], ods_dataset_id: str) -> OGDDat
         aktualisierungszyklus=get_field_value(
             ods_metadata.get('dcat', {}).get('accrualperiodicity', {'value': None})
         ),
-        identifikation=f"ogd_{ods_dataset_id}", # TODO: Remove this field.
         publikationsdatum=iso_8601_to_unix_timestamp(
             get_field_value(ods_metadata.get('dcat', {}).get('issued')), 
             dataset_timezone
