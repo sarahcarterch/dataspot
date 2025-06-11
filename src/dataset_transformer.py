@@ -172,15 +172,11 @@ def transform_ods_to_dnk(ods_metadata: Dict[str, Any], ods_dataset_id: str) -> O
             logging.debug(f"Mapped license ID '{license_id}' to '{license}'")
     
     # TODO (Renato): Map temporal coverage information (example: "1939-08-01/2025-03-31" or "2024-02-10/2032-08-08")
-    
-    # TODO (Renato): Map dcat.creator to appropriate field (example: "Erziehungsdepartement" or "Statistisches Amt")
-    # Note: Will need to add this field to dataspot_dataset.py annotations YAML
-    
-    # TODO (Renato): Map default.publisher to appropriate field (example: "Generalsekretariat" or "Statistisches Amt")
-    # Note: Will need to add this field to dataspot_dataset.py annotations YAML
-    
-    # Extract herausgeber (creator) and publizierende_organisation (publisher)
+
+    # Get Herausgeber from dcat.creator
     herausgeber = _get_field_value(ods_metadata.get('dcat', {}).get('creator', {}))
+
+    # and Publizierende Organisation from default.publisher
     publizierende_organisation = _get_field_value(ods_metadata.get('default', {}).get('publisher', {}))
     
     # TODO (Renato): Map default.references to appropriate field (example: "https://statistik.bs.ch/unterthema/9#Preise")
