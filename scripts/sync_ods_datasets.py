@@ -25,7 +25,9 @@ def sync_ods_datasets(max_datasets: int = None, batch_size: int = 50):
     3. For each dataset, retrieves metadata and transforms it
     4. Processes datasets in batches to avoid memory issues
     5. Uses the sync_datasets method to properly update existing datasets
-    6. Provides a summary of changes
+    6. Processes deletions by identifying datasets no longer in ODS
+    7. Provides a summary of changes and logs a detailed report
+    8. Sends an email notification if there were changes
     
     Args:
         max_datasets (int, optional): Maximum number of datasets to process. Defaults to None (all datasets).
@@ -82,17 +84,20 @@ def sync_ods_datasets(max_datasets: int = None, batch_size: int = 50):
         }
     }
     
+    # Keep a master set of all ODS IDs we've processed
+    all_processed_ods_ids = set()
+    
     for idx, ods_id in enumerate(ods_ids):
         logging.info(f"[{idx+1}/{len(ods_ids)}] Processing dataset {ods_id}...")
         
         # Get metadata from ODS and transform to Dataspot dataset
-        # Following fail-fast principle - no try/catch here to make debugging easier
         ods_metadata = ods_utils.get_dataset_metadata(dataset_id=ods_id)
         dataset = transform_ods_to_dnk(ods_metadata=ods_metadata, ods_dataset_id=ods_id)
         
         # Add to collection
         all_datasets.append(dataset)
         processed_ids.append(ods_id)
+        all_processed_ods_ids.add(ods_id)
         
         logging.info(f"Successfully transformed dataset {ods_id}: {dataset.name}")
         total_successful += 1
@@ -108,7 +113,6 @@ def sync_ods_datasets(max_datasets: int = None, batch_size: int = 50):
                 dataspot_client.ensure_ods_imports_collection_exists()
                 
                 # Sync datasets - the method handles updates properly
-                # Following fail-fast principle - no try/catch here to make debugging easier
                 sync_summary = dataspot_client.sync_datasets(datasets=all_datasets)
                 
                 logging.info(f"Batch sync completed. Response summary: {sync_summary}")
@@ -150,6 +154,84 @@ def sync_ods_datasets(max_datasets: int = None, batch_size: int = 50):
                 # Clear the batch for the next iteration
                 all_datasets = []
 
+    # After all batches have been processed, handle deletions
+    logging.info("Step 4: Processing deletions - identifying datasets no longer in ODS...")
+    
+    # Get all existing ODS dataset IDs from Dataspot using the asset filter
+    logging.info("Getting all ODS dataset IDs from Dataspot...")
+
+    # Define a filter function to get only datasets with ODS_ID
+    ods_filter = lambda asset: (
+        asset.get('_type') == 'Dataset' and
+        asset.get('ODS_ID') is not None)
+    
+    # Get all datasets from Dataspot with ODS_ID
+    all_dataspot_datasets = dataspot_client.get_all_assets_from_scheme(filter_function=ods_filter)
+    
+    # Extract ODS IDs from the datasets
+    dataspot_ods_ids = set()
+    for dataset in all_dataspot_datasets:
+        ods_id = dataset.get('ODS_ID')
+        if ods_id:
+            dataspot_ods_ids.add(ods_id)
+    
+    logging.info(f"Found {len(dataspot_ods_ids)} datasets with ODS_ID in Dataspot")
+    
+    # Find datasets that are in Dataspot but not in the current ODS fetch
+    datasets_to_delete = dataspot_ods_ids - all_processed_ods_ids
+    
+    if datasets_to_delete:
+        logging.info(f"Found {len(datasets_to_delete)} datasets to mark for deletion")
+        
+        # Process each dataset for deletion
+        for ods_id in datasets_to_delete:
+            try:
+                # Call delete_dataset to mark it for deletion
+                deleted = dataspot_client.dataset_handler.delete_dataset(ods_id, fail_if_not_exists=False)
+                
+                if deleted:
+                    # Track deletion in results
+                    sync_results['counts']['deleted'] += 1
+                    sync_results['counts']['total'] += 1
+                    sync_results['details']['deletions']['count'] += 1
+                    
+                    # Find the dataset info from all_dataspot_datasets
+                    dataset_info = next((d for d in all_dataspot_datasets if d.get('customProperties', {}).get('ODS_ID') == ods_id), None)
+                    
+                    if dataset_info:
+                        title = dataset_info.get('label', f"<Unnamed Dataset {ods_id}>")
+                        uuid = dataset_info.get('id')
+                        
+                        # Add to deletion details
+                        deletion_entry = {
+                            "ods_id": ods_id,
+                            "title": title,
+                            "uuid": uuid
+                        }
+                        
+                        sync_results['details']['deletions']['items'].append(deletion_entry)
+                        logging.info(f"Marked dataset with ODS_ID {ods_id} for deletion: {title}")
+                    else:
+                        # Fallback if dataset info not found
+                        sync_results['details']['deletions']['items'].append({
+                            "ods_id": ods_id,
+                            "title": f"<Unnamed Dataset {ods_id}>"
+                        })
+                        logging.info(f"Marked dataset with ODS_ID {ods_id} for deletion")
+                
+            except Exception as e:
+                error_msg = f"Error marking dataset with ODS_ID {ods_id} for deletion: {str(e)}"
+                logging.error(error_msg)
+                
+                sync_results['counts']['errors'] += 1
+                sync_results['details']['errors']['count'] += 1
+                sync_results['details']['errors']['items'].append({
+                    "ods_id": ods_id,
+                    "message": error_msg
+                })
+    else:
+        logging.info("No datasets found for deletion")
+
     # Update final report status and message
     sync_results['status'] = 'success'
     sync_results['message'] = (
@@ -165,7 +247,6 @@ def sync_ods_datasets(max_datasets: int = None, batch_size: int = 50):
     logging.info(f"Completed processing {total_processed} datasets: {total_successful} successful, {total_failed} failed")
     
     # Write detailed report to file for email/reference purposes
-    # Following fail-fast principle - no try/catch here to make debugging easier
     # Get project root directory (one level up from scripts)
     current_file_path = os.path.abspath(__file__)
     project_root = os.path.dirname(os.path.dirname(current_file_path))
@@ -275,6 +356,21 @@ def log_detailed_sync_report(sync_results):
             
             logging.info(f"Created OGD dataset {ods_id}: {title} (Link: {dataspot_link})")
     
+    # Log detailed information about deleted datasets
+    if sync_results['details']['deletions']['count'] > 0:
+        logging.info("")
+        logging.info("--- DELETED DATASETS ---")
+        for deletion in sync_results['details']['deletions']['items']:
+            ods_id = deletion.get('ods_id', 'Unknown')
+            title = deletion.get('title', 'Unknown')
+            uuid = deletion.get('uuid', '')
+            
+            # Create Dataspot link if UUID is available
+            dataspot_link = f"{config.base_url}/web/dataset/{uuid}" if uuid else ''
+            link_info = f" (Link: {dataspot_link})" if dataspot_link else ""
+            
+            logging.info(f"Marked for deletion OGD dataset {ods_id}: {title}{link_info}")
+    
     # Log detailed information about errors
     if sync_results['details']['errors']['count'] > 0:
         logging.info("")
@@ -347,6 +443,23 @@ def create_email_content(sync_results, scheme_name_short):
         
         if sync_results['details']['updates']['count'] > 10:
             email_text += f"\n... and {sync_results['details']['updates']['count'] - 10} more updated datasets. See the attached report for details.\n"
+    
+    # Add information about deleted datasets
+    if sync_results['details']['deletions']['count'] > 0:
+        email_text += "\nDELETED DATASETS:\n"
+        for deletion in sync_results['details']['deletions']['items'][:10]:  # Limit to first 10 for email
+            ods_id = deletion.get('ods_id', 'Unknown')
+            title = deletion.get('title', 'Unknown')
+            uuid = deletion.get('uuid', '')
+            
+            # Create Dataspot link if UUID is available
+            dataspot_link = f"{config.base_url}/web/dataset/{uuid}" if uuid else ''
+            link_info = f" (Link: {dataspot_link})" if dataspot_link else ""
+            
+            email_text += f"\nMarked for deletion OGD dataset {ods_id}: {title}{link_info}\n"
+        
+        if sync_results['details']['deletions']['count'] > 10:
+            email_text += f"\n... and {sync_results['details']['deletions']['count'] - 10} more deleted datasets. See the attached report for details.\n"
     
     email_text += "\nPlease review the synchronization results in Dataspot.\n\n"
     email_text += "Best regards,\n"

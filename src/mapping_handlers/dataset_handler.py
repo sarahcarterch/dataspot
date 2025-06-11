@@ -336,7 +336,7 @@ class DatasetHandler(BaseDataspotHandler):
             f"{result['errors']} errors"
         )
 
-        logging.info(f"Dataset synchronization completed: {result['updated']} updated, {result['created']} created, {result['errors']} errors")
+        logging.info(f"Dataset synchronization completed: {result['updated']} updated, {result['created']} created, {result['deleted']} deleted, {result['errors']} errors")
         return result
 
     def update_mappings_after_upload(self, ods_ids: List[str], result: Dict[str, Any] = None) -> None:
