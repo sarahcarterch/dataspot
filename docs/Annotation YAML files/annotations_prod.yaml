@@ -1371,7 +1371,7 @@ Asset:
 
 ##### Status aus Standard Workflow d. #####
         WORKING:
-          label: In Entwurf
+          label: Entwurf
           labelEn: Working
           icon: wrench
           order: 0
@@ -1395,7 +1395,7 @@ Asset:
           order: 30
           group: NOT_PUBLIC
         PUBLISHED:
-          label: Veröffentlicht
+          label: Öffentlich
           labelEn: Published
           icon: globe
           order: 40
