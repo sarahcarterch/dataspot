@@ -482,7 +482,7 @@ Dataset:
                 "026":
                   label: Wirtschaftliche Aktivitäten
                 "027":
-                  label: Leitungskataster                  
+                  label: Leitungskataster
             AUSDBESCHR:
               label: Ausdehnung Beschreibung
               title: Beschreibung der räumlichen Ausdehnung der Daten
@@ -776,7 +776,7 @@ Dataset:
                 "026":
                   label: Wirtschaftliche Aktivitäten
                 "027":
-                  label: Leitungskataster                  
+                  label: Leitungskataster
             AUSDBESCHR:
               label: Ausdehnung Beschreibung
               title: Beschreibung der räumlichen Ausdehnung der Daten
