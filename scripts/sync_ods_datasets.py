@@ -163,7 +163,8 @@ def sync_ods_datasets(max_datasets: int = None, batch_size: int = 50):
     # Define a filter function to get only datasets with ODS_ID
     ods_filter = lambda asset: (
         asset.get('_type') == 'Dataset' and
-        asset.get('ODS_ID') is not None)
+        asset.get('ODS_ID') is not None and
+        asset.get('status') not in ['INTERMINATION2']) # Ignore archived assets
     
     # Get all datasets from Dataspot with ODS_ID
     all_dataspot_datasets = dataspot_client.get_all_assets_from_scheme(filter_function=ods_filter)
