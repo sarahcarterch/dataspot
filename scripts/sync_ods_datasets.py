@@ -204,7 +204,7 @@ def sync_ods_datasets(max_datasets: int = None, batch_size: int = 50):
                         uuid = dataset_info.get('id')
                         
                         # Create Dataspot link
-                        dataspot_link = f"{config.base_url}/web/dataset/{uuid}" if uuid else ''
+                        dataspot_link = f"{config.base_url}/web/{config.database_name}/datasets/{uuid}" if uuid else ''
                         
                         # Add to deletion details
                         deletion_entry = {
@@ -337,7 +337,7 @@ def log_detailed_sync_report(sync_results):
             uuid = update.get('uuid', '')
             
             # Create Dataspot link instead of ODS source link
-            dataspot_link = f"{config.base_url}/web/dataset/{uuid}" if uuid else update.get('link', '')
+            dataspot_link = f"{config.base_url}/web/{config.database_name}/datasets/{uuid}" if uuid else update.get('link', '')
 
             logging.info("")
             logging.info(f"Changed OGD dataset {ods_id}: {title} (Link: {dataspot_link})")
@@ -359,7 +359,7 @@ def log_detailed_sync_report(sync_results):
             uuid = creation.get('uuid', '')
             
             # Create Dataspot link instead of ODS source link
-            dataspot_link = f"{config.base_url}/web/dataset/{uuid}" if uuid else creation.get('link', '')
+            dataspot_link = f"{config.base_url}/web/{config.database_name}/datasets/{uuid}" if uuid else creation.get('link', '')
             
             logging.info(f"Created OGD dataset {ods_id}: {title} (Link: {dataspot_link})")
     
@@ -434,7 +434,7 @@ def create_email_content(sync_results, scheme_name_short):
             uuid = update.get('uuid', '')
             
             # Create Dataspot link instead of ODS source link
-            dataspot_link = f"{config.base_url}/web/dataset/{uuid}" if uuid else update.get('link', '')
+            dataspot_link = f"{config.base_url}/web/{config.database_name}/datasets/{uuid}" if uuid else update.get('link', '')
             
             email_text += f"\nChanged OGD dataset {ods_id}: {title} (Link: {dataspot_link})\n"
             
@@ -469,4 +469,4 @@ if __name__ == '__main__':
         format='%(levelname)s:%(name)s:[%(filename)s:%(funcName)s:%(lineno)d] %(message)s'
     )
     logging.info(f'Executing {__file__}...')
-    main() 
+    main()
