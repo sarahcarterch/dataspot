@@ -428,7 +428,7 @@ def create_email_content(sync_results, scheme_name_short):
     # Add detailed information if available
     if sync_results['details']['updates']['count'] > 0:
         email_text += "\nUPDATED DATASETS:\n"
-        for update in sync_results['details']['updates']['items'][:10]:  # Limit to first 10 for email
+        for update in sync_results['details']['updates']['items']:
             ods_id = update.get('ods_id', 'Unknown')
             title = update.get('title', 'Unknown')
             uuid = update.get('uuid', '')
@@ -444,23 +444,17 @@ def create_email_content(sync_results, scheme_name_short):
                     email_text += f"- {field}\n"
                     email_text += f"  - Old value: {values.get('old_value', 'None')}\n"
                     email_text += f"  - New value: {values.get('new_value', 'None')}\n"
-        
-        if sync_results['details']['updates']['count'] > 10:
-            email_text += f"\n... and {sync_results['details']['updates']['count'] - 10} more updated datasets. See the attached report for details.\n"
     
     # Add information about deleted datasets
     if sync_results['details']['deletions']['count'] > 0:
         email_text += "\nDELETED DATASETS:\n"
-        for deletion in sync_results['details']['deletions']['items'][:10]:  # Limit to first 10 for email
+        for deletion in sync_results['details']['deletions']['items']:
             ods_id = deletion.get('ods_id', 'Unknown')
             title = deletion.get('title', 'Unknown')
             dataspot_link = deletion.get('link', '')
             link_info = f" (Link: {dataspot_link})" if dataspot_link else ""
             
             email_text += f"\nMarked for deletion OGD dataset {ods_id}: {title}{link_info}\n"
-        
-        if sync_results['details']['deletions']['count'] > 10:
-            email_text += f"\n... and {sync_results['details']['deletions']['count'] - 10} more deleted datasets. See the attached report for details.\n"
     
     email_text += "\nPlease review the synchronization results in Dataspot.\n\n"
     email_text += "Best regards,\n"
