@@ -197,26 +197,32 @@ def sync_ods_datasets(max_datasets: int = None, batch_size: int = 50):
                     sync_results['details']['deletions']['count'] += 1
                     
                     # Find the dataset info from all_dataspot_datasets
-                    dataset_info = next((d for d in all_dataspot_datasets if d.get('customProperties', {}).get('ODS_ID') == ods_id), None)
+                    dataset_info = next((d for d in all_dataspot_datasets if d.get('ODS_ID') == ods_id), None)
                     
                     if dataset_info:
                         title = dataset_info.get('label', f"<Unnamed Dataset {ods_id}>")
                         uuid = dataset_info.get('id')
                         
+                        # Create Dataspot link
+                        dataspot_link = f"{config.base_url}/web/dataset/{uuid}" if uuid else ''
+                        
                         # Add to deletion details
                         deletion_entry = {
                             "ods_id": ods_id,
                             "title": title,
-                            "uuid": uuid
+                            "uuid": uuid,
+                            "link": dataspot_link
                         }
                         
                         sync_results['details']['deletions']['items'].append(deletion_entry)
-                        logging.info(f"Marked dataset with ODS_ID {ods_id} for deletion: {title}")
+                        logging.info(f"Marked dataset with ODS_ID {ods_id} for deletion: {title} (Link: {dataspot_link})")
                     else:
                         # Fallback if dataset info not found
                         sync_results['details']['deletions']['items'].append({
                             "ods_id": ods_id,
-                            "title": f"<Unnamed Dataset {ods_id}>"
+                            "title": f"<Unnamed Dataset {ods_id}>",
+                            "uuid": "",
+                            "link": ""
                         })
                         logging.info(f"Marked dataset with ODS_ID {ods_id} for deletion")
                 
@@ -364,10 +370,7 @@ def log_detailed_sync_report(sync_results):
         for deletion in sync_results['details']['deletions']['items']:
             ods_id = deletion.get('ods_id', 'Unknown')
             title = deletion.get('title', 'Unknown')
-            uuid = deletion.get('uuid', '')
-            
-            # Create Dataspot link if UUID is available
-            dataspot_link = f"{config.base_url}/web/dataset/{uuid}" if uuid else ''
+            dataspot_link = deletion.get('link', '')
             link_info = f" (Link: {dataspot_link})" if dataspot_link else ""
             
             logging.info(f"Marked for deletion OGD dataset {ods_id}: {title}{link_info}")
@@ -451,10 +454,7 @@ def create_email_content(sync_results, scheme_name_short):
         for deletion in sync_results['details']['deletions']['items'][:10]:  # Limit to first 10 for email
             ods_id = deletion.get('ods_id', 'Unknown')
             title = deletion.get('title', 'Unknown')
-            uuid = deletion.get('uuid', '')
-            
-            # Create Dataspot link if UUID is available
-            dataspot_link = f"{config.base_url}/web/dataset/{uuid}" if uuid else ''
+            dataspot_link = deletion.get('link', '')
             link_info = f" (Link: {dataspot_link})" if dataspot_link else ""
             
             email_text += f"\nMarked for deletion OGD dataset {ods_id}: {title}{link_info}\n"
