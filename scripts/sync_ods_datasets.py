@@ -43,6 +43,8 @@ def sync_ods_datasets(max_datasets: int = None, batch_size: int = 50):
     ods_ids = ods_utils.get_all_dataset_ids(include_restricted=False, max_datasets=max_datasets)
     logging.info(f"Found {len(ods_ids)} datasets to process")
     
+    dataspot_client.ensure_ods_imports_collection_exists()
+    
     # Process datasets
     logging.info("Step 2: Processing datasets - downloading metadata and transforming...")
     total_processed = 0
@@ -108,9 +110,6 @@ def sync_ods_datasets(max_datasets: int = None, batch_size: int = 50):
             if all_datasets:
                 batch_num = len(all_datasets)
                 logging.info(f"Step 3: Syncing batch of {batch_num} datasets...")
-                
-                # Ensure ODS-Imports collection exists
-                dataspot_client.ensure_ods_imports_collection_exists()
                 
                 # Sync datasets - the method handles updates properly
                 sync_summary = dataspot_client.sync_datasets(datasets=all_datasets)
