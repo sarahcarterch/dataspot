@@ -76,4 +76,3 @@ if not df.empty:
     st.dataframe(df[["label", "_type"]])  # oder weitere Felder, je nach API
 else:
     st.info("Keine Projekte gefunden.")
-
