@@ -1,11 +1,11 @@
 # Dataspot configuration variables
 
 # Database name
-database_name = 'prod'
+database_name = 'test-sarah-1'
 
 # Base URL
 base_url = 'https://bs.dataspot.io'
-database_name_prod = 'prod'
+database_name_prod = 'test-sarah-1'
 
 # Scheme names
 dnk_scheme_name = 'Datennutzungskatalog'
