@@ -2,10 +2,10 @@ from typing import Dict, Any, List
 import logging
 
 import config
-from clients.base_client import BaseDataspotClient
-from mapping_handlers.org_structure_handler import OrgStructureHandler
-from mapping_handlers.dataset_handler import DatasetHandler
-from dataspot_dataset import Dataset
+from src.clients.base_client import BaseDataspotClient
+from src.mapping_handlers.org_structure_handler import OrgStructureHandler
+from src.mapping_handlers.dataset_handler import DatasetHandler
+from src.dataspot_dataset import Dataset
 
 class OGDClient(BaseDataspotClient):
     """Client for interacting with the Project OGD-Freigaben (Projektverzeichnisse)."""
