@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+from collections import defaultdict
 
 import os
 import logging
@@ -58,15 +59,30 @@ def main():
 if __name__ == "__main__":
     main()
 
+projects = main()
+
+# Projekte gruppieren
+subprojects_by_parent = defaultdict(list)
+main_projects = []
+
 # Streamlit UI
 st.title("Projektübersicht")
 
-projects = main()
+for main in main_projects:
+    if "subprojectOf" in project:
+        subprojects_by_parent[project["subprojectOf"]].append(project)
+    else:
+        main_projects.append(project)
+
 
 # Als einfache Liste ausgeben
 st.subheader("Gefundene Projekte:")
-for proj in projects:
-    st.markdown(f"- **{proj.get('label', 'Kein Label')}**")
+for main in main_projects:
+    st.markdown(f"- **{main['label']}**")
+
+    for sub in subprojects_by_parent.get(main["id"], []):
+        st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;↳ {sub['label']}", unsafe_allow_html=True)
+
 
 # Optional: Als Tabelle anzeigen
 import pandas as pd
