@@ -29,79 +29,70 @@ logger = logging.getLogger(__name__)
 auth = DataspotAuth()
 ogd_client = OGDClient()
 
-project_uuid = f"{directory_uuid}/projects"      # dann: {base_path}/projects/["id"]/attributedTo
-# endpoint = f"/rest/test-sarah-1/{project_uuid}"
-# endpoint = f"projects/bdb3fbbe-3ab0-4a08-bb9e-ed8c19b42924/attributedTo" # Test1
+endpoint = f"/rest/test-sarah-1/attributions"
+existing = ogd_client._get_asset(endpoint)
 
-endpoint = "https://bs.dataspot.io/rest/test-sarah-1/attributions"
-url = endpoint
-# url = f"{base_url}{endpoint}"
+bereits_zugewiesen = set()
+if existing and "_embedded" in existing and "attributedTo" in existing["_embedded"]:
+    for eintrag in existing["_embedded"]["attributedTo"]:
+        person = eintrag.get("attributedTo")
+        rolle = eintrag.get("attributedAs")
+        if person and rolle:
+            bereits_zugewiesen.add((person, rolle))
 
-new_id = None
-new_tenantId = None
-new_modelId = new_modelId
-new_attributionFor = new_attributionFor
-new_attributedTo = new_attributedTo # ID der gewünschten Person einfügen
-new_attributedAs_do = data_owner
-new_attributedAs_ds = data_steward
-new_type = "Attribution"     # "_type"
+url = f"{base_url}{endpoint}"
+
+new_attributionFor = new_attributionFor # Projekt-ID kommt von uuid.py
+new_type = "Attribution"     # "_type" (wird offenbar nicht gebraucht)
 
 def main():
     rollenzuweisungen = [
         {
             "rollenname": "Data Owner",
-            "rollen_uuid": new_attributedAs_do,
+            "rollen_uuid": data_owner,
             "person_uuid": lm,
         },
         {
             "rollenname": "Data Steward",
-            "rollen_uuid": new_attributedAs_ds,
+            "rollen_uuid": data_steward,
             "person_uuid": ug,
         }
     ]
-# Aktuelle Projektdaten holen (optional)
-    # projekt = ogd_client._get_asset(endpoint=endpoint)
+
     for eintrag in rollenzuweisungen:
+
         data = {
-            "_embedded": {
-                "attributedTo": [
-                    {
-                        # "id": None,
-                        "tenantId": "bf6a14c1-ed03-4d8a-beea-c6db320502fd",
-                        "modelId": new_modelId,
-                        "attributionFor": new_attributionFor,
-                        "attributedTo": eintrag["person_uuid"],
-                        "attributedAs": eintrag["rollen_uuid"],
-                        "_type": new_type,
-                        #"_links": {
-                            #"self": {
-                                #"href": None
-                            #}
-                        #}
-                    }
-                ]
+
+            "attributionFor": new_attributionFor, # UUID vom Projekt
+            "attributedAs": eintrag["rollen_uuid"], # UUID von Rolle, Wert kommt von uuid.py
+            "attributedTo": eintrag["person_uuid"], # UUID vom Posten oder von Person, , Wert kommt von uuid.py
             }
-        }
     
-    print(f"\nSende {eintrag['rollenname']}:")
-    print(json.dumps(data, indent=2))
+        print(f"\nSende {eintrag['rollenname']}:")
+        print(json.dumps(data, indent=2))
 
-# Eingabe überprüfen
-    print("Sende folgende Daten an API:")
-    print(json.dumps(data, indent=2))
-# Projekt mit PATCH updaten
-    response = requests_put(
-    url,
-    headers=auth.get_headers(),
-    json=data,
-    # verify=False
-    )
+    # Eingabe überprüfen
+        print("Sende folgende Daten an API:")
+        print(json.dumps(data, indent=2))
 
-    print("Status:", response.status_code)
-    try:
-        print("Antwort:", response.json())
-    except Exception:
-        print("Antwort (Text):", response.text)
+        kandidat = (eintrag["person_uuid"], eintrag["rollen_uuid"])
+    
+        if kandidat in bereits_zugewiesen:
+            print(f"Überspringe {eintrag['rollenname']} – bereits zugewiesen.")
+            continue  # nicht posten
+    # Projekt mit POST updaten
+        response = requests_post(
+        url,
+        headers=auth.get_headers(),
+        json=data,
+        verify=False
+        )
+
+        print("Status:", response.status_code)
+        try:
+            print("Antwort:", response.json())
+        except Exception:
+            print("Antwort (Text):", response.text)
 
 if __name__ == "__main__":
     main()
