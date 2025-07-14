@@ -30,7 +30,8 @@ auth = DataspotAuth()
 ogd_client = OGDClient()
 
 endpoint = f"/rest/test-sarah-1/attributions"
-existing = ogd_client._get_asset(endpoint)
+endpoint_two = f"/rest/test-sarah-1/projects/{new_attributionFor}/attributedTo"
+existing = ogd_client._get_asset(endpoint_two)
 
 bereits_zugewiesen = set()
 if existing and "_embedded" in existing and "attributedTo" in existing["_embedded"]:
@@ -60,6 +61,11 @@ def main():
     ]
 
     for eintrag in rollenzuweisungen:
+        kandidat = (eintrag["person_uuid"], eintrag["rollen_uuid"])
+    
+        if kandidat in bereits_zugewiesen:
+            print(f"Überspringe {eintrag['rollenname']} – bereits zugewiesen.")
+            continue  # nicht posten
 
         data = {
 
@@ -75,11 +81,6 @@ def main():
         print("Sende folgende Daten an API:")
         print(json.dumps(data, indent=2))
 
-        kandidat = (eintrag["person_uuid"], eintrag["rollen_uuid"])
-    
-        if kandidat in bereits_zugewiesen:
-            print(f"Überspringe {eintrag['rollenname']} – bereits zugewiesen.")
-            continue  # nicht posten
     # Projekt mit POST updaten
         response = requests_post(
         url,

@@ -2,10 +2,10 @@ ogd_collect_url = "https://bs.dataspot.io/web/prod/schemes/8386fbc7-2315-4d00-9b
 ogd_collect_uuid = "8386fbc7-2315-4d00-9bf8-47d2b04a6a7d"
 
 base_url = "https://bs.dataspot.io"
-base_path = "/rest/test-sarah-1/"
-directory_uuid = "schemes/8386fbc7-2315-4d00-9bf8-47d2b04a6a7d"
+base_path = "/rest/test-sarah-1"
+directory_uuid = "/schemes/8386fbc7-2315-4d00-9bf8-47d2b04a6a7d"
 
-# project_uuid = "schemes/8386fbc7-2315-4d00-9bf8-47d2b04a6a7d/projects"      # dann: {base_path}/projects/["id"]/attributedTo
+working_project_uuid = "/projects/30cc89ad-1bd2-475f-9804-7ca5d6cf3260"
 
 data_owner = "02222f05-5690-4cb8-8d90-c27ca57e98e9"
 data_steward = "e3ffbec6-86fd-4719-8b7f-5bfd08768a92"
