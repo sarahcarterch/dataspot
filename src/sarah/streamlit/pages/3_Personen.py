@@ -54,18 +54,31 @@ for project in projects:
     personen = []
     if response is not None and "_embedded" in response and "attributedTo" in response["_embedded"]:
         for attribution in response["_embedded"]["attributedTo"]:
+            # attributedTo holen
             person_uuid = attribution.get("attributedTo")
             if person_uuid:
                 # Personen-Details holen
                 person_endpoint = f"{base_path}persons/{person_uuid}"
                 person_response = ogd_client._get_asset(endpoint=person_endpoint)
                 person_label = person_response.get("label", "Unbekannte Person")
+                person_role = None # endpoint finden
                 personen.append(person_label)
                 print(" -", person_label)
             else:
                 print(" - Keine gültige Person gefunden")
+            # attributedAs holen
+            role_uuid = attribution.get("attributedAs")
+            if role_uuid:
+                # Rollen-Details holen
+                role_endpoint = f"{base_path}roles/{role_uuid}"
+                role_response = ogd_client._get_asset(endpoint=role_endpoint)
+                role_label = role_response.get("label", "Unbekannte Rolle")
+                personen.append(role_label)
+                print(f"({person_label})")
+            else:
+                print(" - Keine gültige Rolle gefunden")
     else:
-        print(f"⚠️ Keine attributedTo-Einträge für Projekt {project_name} gefunden.")
+        print(f"Keine attributedTo-Einträge für Projekt {project_name} gefunden.")
 
     # Struktur für spätere Anzeige speichern
     all_projects.append({
@@ -77,6 +90,6 @@ for project in projects:
 st.title("Alle Projekte und ihre zugewiesenen Personen")
 
 for eintrag in all_projects:
-    st.write(eintrag["projekt"])
+    st.write(f"{eintrag["projekt"]} ({eintrag["titel"]})")
     for person in eintrag["personen"]:
         st.write("- ", person)
