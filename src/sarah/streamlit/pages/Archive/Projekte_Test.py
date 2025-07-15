@@ -48,7 +48,8 @@ for project in projects:
     print(f"\nProjekt: {project_name}")
 
     # Personen abrufen, die diesem Projekt zugewiesen sind
-    endpoint = f"{base_path}projects/{project_uuid}/attributedTo"
+    endpoint = f"{base_path}/projects/{project_uuid}/attributedTo"
+    print(endpoint)
     response = ogd_client._get_asset(endpoint=endpoint)
 
     personen = []
@@ -58,16 +59,15 @@ for project in projects:
             person_uuid = attribution.get("attributedTo")
             if person_uuid:
                 # Personen-Details holen
-                person_endpoint = f"{base_path}persons/{person_uuid}"
+                person_endpoint = f"{base_path}/persons/{person_uuid}"
                 person_response = ogd_client._get_asset(endpoint=person_endpoint)
                 person_label = person_response.get("label", "Unbekannte Person")
-                print(" -", person_label)
 
                 # attributedAs holen
                 role_uuid = attribution.get("attributedAs")
                 if role_uuid:
                     # Rollen-Details holen
-                    role_endpoint = f"{base_path}roles/{role_uuid}"
+                    role_endpoint = f"{base_path}/roles/{role_uuid}"
                     role_response = ogd_client._get_asset(endpoint=role_endpoint)
                     role_label = role_response.get("label", "Unbekannte Rolle")
                     personen.append(f"{person_label} ({role_label})")
