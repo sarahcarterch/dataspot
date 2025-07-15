@@ -41,8 +41,35 @@ if not required_keys.issubset(data.keys()):
     st.error(f"JSON-Datei hat unerwartete Struktur: {data.keys()}")
     st.stop()
 
-# DataFrame aus Attributions erzeugen
-df = pd.DataFrame(data["attributions"])
+# Attributions in flache Liste umwandeln
+attributions = []
+
+# Set für spätere Prüfung, welche Projekte bereits Einträge haben
+projekte_mit_attributions = set()
+
+for project_id, eintraege in data["attributions"].items():
+    if eintraege:
+        for entry in eintraege:
+            attributions.append({
+                "project": project_id,
+                "person": entry.get("person"),
+                "role": entry.get("role")
+            })
+        projekte_mit_attributions.add(project_id)
+
+# Projekte ohne Attributions ergänzen
+alle_projekte = set(data["projects"].keys())
+projekte_ohne_attributions = alle_projekte - projekte_mit_attributions
+
+for pid in projekte_ohne_attributions:
+    attributions.append({
+        "project": pid,
+        "person": None,
+        "role": None
+    })
+
+# In DataFrame umwandeln
+df = pd.DataFrame(attributions)
 
 # Sicherstellen, dass Spalten existieren
 expected_cols = ["project", "person", "role"]
