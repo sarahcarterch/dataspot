@@ -16,6 +16,13 @@ class DataspotAuth:
         self.password = os.getenv("DATASPOT_ADMIN_PASSWORD")
         self.token = None
         self.token_expires_at = None
+    
+    def get_user_id(self):
+        """Gibt die Benutzer-ID zurück, z. B. für Workflow-Transitions."""
+        user_id = os.getenv("DATASPOT_USER_ID")
+        if not user_id:
+            raise ValueError("Bitte DATASPOT_USER_ID in .env setzen für Statuswechselprüfung.")
+        return user_id
 
     def get_bearer_token(self):
         """Get a valid token, either from cache or by requesting a new one."""

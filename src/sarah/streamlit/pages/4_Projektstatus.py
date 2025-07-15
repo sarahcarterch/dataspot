@@ -1,58 +1,74 @@
 import streamlit as st
 import json
 import os
+import subprocess
 
 st.set_page_config(page_title="Projektstatus", layout="wide")
 st.title("Status pro Projekt")
 
-# JSON-Datei laden
+# === Dateien laden ===
 json_path = "attributions.json"
-if not os.path.exists(json_path):
-    st.error("Datei attributions.json nicht gefunden.")
+workflow_path = "workflow_ogd_stati.json"
+
+if not os.path.exists(json_path) or not os.path.exists(workflow_path):
+    st.error("Benötigte Datei fehlt.")
     st.stop()
 
 with open(json_path, "r", encoding="utf-8") as f:
     data = json.load(f)
 
-# Projekt-Mapping
-projekt_mapping = data.get("projects", {})
+with open(workflow_path, "r", encoding="utf-8") as f:
+    status_liste = json.load(f)
 
-# Status aus Attributionsdaten extrahieren (Status aus dritten Eintrag je Projekt)
+# Mapping für schnellen Zugriff: {"WORKING": "In Entwurf", ...}
+status_labels = {entry["status"]: entry["label"] for entry in status_liste}
+
+# Reine Statuswerte für Dropdown
+status_options = [entry["status"] for entry in status_liste]
+
+# === Projekt-Daten vorbereiten ===
+projekt_mapping = data.get("projects", {})
 attributions = data.get("attributions", {})
 
-status_mapping = {
-    projekt_id: attributions[projekt_id]["status"]
-    for projekt_id in projekt_mapping
-    if projekt_id in attributions
-}
-
-# Projekt-Auswahl
 projekt_namen = sorted(projekt_mapping.values())
 projekt_id_lookup = {v: k for k, v in projekt_mapping.items()}
 gewähltes_projekt = st.selectbox("Projekt auswählen", projekt_namen)
 
 if gewähltes_projekt:
     projekt_id = projekt_id_lookup[gewähltes_projekt]
-    status_code = status_mapping[projekt_id]
+    aktueller_status = attributions.get(projekt_id, {}).get("status", None)
 
-    # Lesbare Labels
-    status_labels = {
-        "WORKING": "In Entwurf",
-        "REVIEW3DS": "Entwurfsprüfung Data Steward",
-        "PUBLISHEDDCC2": "Veröffentlicht",
-        "REJECTED": "Abgelehnt",
-        "MUTATION_NV": "Mutation mit Abhängigkeiten"
-    }
+    st.markdown(f"**Aktueller Status:** `{aktueller_status}` – **{status_labels.get(aktueller_status, 'Unbekannt')}`**")
 
-    label = status_labels.get(status_code, status_code)
+    neuer_status = st.selectbox(
+    "Neuen Status wählen",
+    options=status_options,
+    format_func=lambda x: status_labels.get(x, x),
+    index=status_options.index(aktueller_status) if aktueller_status in status_options else 0
+)
 
-    st.markdown(f"### Aktueller Status: **{label}** (`{status_code}`)")
+    if st.button("Status aktualisieren und hochladen"):
+        if projekt_id in attributions:
+            attributions[projekt_id]["status"] = neuer_status
+        else:
+            st.warning("Projekt nicht in attributions.json gefunden – wird neu angelegt.")
+            attributions[projekt_id] = {"status": neuer_status, "personen": []}
+            st.json(attributions[projekt_id])
 
-    # Fortschrittsanzeige
-    status_keys = list(status_labels.keys())
-    if status_code in status_keys:
-        index = status_keys.index(status_code)
-        progress = (index + 1) / len(status_keys)
-        st.progress(progress)
-    else:
-        st.info("Status ist definiert, aber nicht im Fortschrittsmapping enthalten.")
+        data["attributions"] = attributions
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+        result = subprocess.run(["python", "src/sarah/project_attr_sync.py", projekt_id], capture_output=True, text=True)
+        if result.returncode == 0:
+            st.success("Status gespeichert und zur API übertragen.")
+        else:
+            # st.error(f"Fehler beim Sync: {result.stderr}")
+            st.error(f"Fehler beim Sync")
+
+    if st.button("Aktuelle Daten von API laden"):
+        result = subprocess.run(["python", "src/sarah/project_attributions.py"], capture_output=True, text=True)
+        if result.returncode == 0:
+            st.success("Daten erfolgreich neu geladen. Bitte Seite neu laden.")
+        else:
+            st.error(f"Fehler beim Neuladen: {result.stderr}")
