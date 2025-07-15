@@ -33,6 +33,7 @@ projects = {}
 for projekt in projekte_liste:
     pid = projekt.get("id")
     label = projekt.get("label")
+    status = projekt.get("status")
     if pid:
         gueltige_project_ids.add(pid)
         projects[pid] = label
@@ -65,25 +66,51 @@ for rid in role_ids:
     roles[rid] = r.get("label") if r and isinstance(r, dict) else rid
 
 # Attributions strukturieren: Nach Projekt gruppieren
-attributions_pro_projekt = {pid: [] for pid in projects}
 
+# Attributions strukturieren: Nach Projekt gruppieren
+
+struktur_pro_projekt = {}
+
+projekt_status_map = {
+    projekt.get("id"): projekt.get("status")
+    for projekt in projekte_liste
+}
+projekt_status_map[freigaben_uuid] = "OGD_ROOT"
+
+# Gefundene Attributions zuordnen
 for a in gefilterte_attributions:
     project_id = a.get("attributionFor")
     person_id = a.get("attributedTo")
     role_id = a.get("attributedAs")
+    status = projekt_status_map.get(project_id)
 
-    if project_id in attributions_pro_projekt:
-        attributions_pro_projekt[project_id].append({
-            "person": person_id,
-            "role": role_id
-        })
+    # Initialisieren, wenn Projekt noch nicht bekannt
+    if project_id not in struktur_pro_projekt:
+        struktur_pro_projekt[project_id] = {
+            "status": status,
+            "personen": []
+        }
+
+    # Person hinzufügen (immer)
+    struktur_pro_projekt[project_id]["personen"].append({
+        "person": person_id,
+        "role": role_id
+    })
+
+# Ergänzung: Leere Projekte ohne Attributions hinzufügen
+for projekt_id in projects:
+    if projekt_id not in struktur_pro_projekt:
+        struktur_pro_projekt[projekt_id] = {
+            "status": projekt_status_map.get(projekt_id),
+            "personen": []
+        }
 
 # Finales JSON
 daten = {
     "projects": projects,
     "persons": persons,
     "roles": roles,
-    "attributions": attributions_pro_projekt
+    "attributions": struktur_pro_projekt
 }
 
 with open("attributions.json", "w", encoding="utf-8") as f:
