@@ -17,10 +17,12 @@ ogd_client = OGDClient()
 API_BASE = "https://bs.dataspot.io/rest/test-sarah-1"
 
 
-def patch_project_status(project_id, neuer_status):
+def patch_project_status(project_id, neuer_status, project_type):
     url = f"{API_BASE}/projects/{project_id}"
     headers = auth.get_headers()
-    payload = {"status": neuer_status.strip()}
+    payload = {
+        "_type": project_type.strip(),
+        "status": neuer_status.strip()}
 
     logger.info(f"Versuche direkten PATCH: Projekt {project_id} → {neuer_status}")
     response = requests_patch(url, headers=headers, json=payload, verify=False)
@@ -53,6 +55,7 @@ def sync_project_attributions(project_id, eintrag):
 
     ziel_attributions = eintrag.get("personen", [])
     ziel_status = eintrag.get("status")
+    ziel_type = eintrag.get("_type")
 
     # Aktuellen Status aus der API laden
     project_url = f"{API_BASE}/projects/{project_id}"
@@ -65,7 +68,7 @@ def sync_project_attributions(project_id, eintrag):
     logger.info(f"Zielstatus aus JSON: {ziel_status}")
 
     if ziel_status and ziel_status != current_status:
-        patch_project_status(project_id, ziel_status)
+        patch_project_status(project_id, ziel_status, ziel_type)
 
     logger.debug(f"\n---\nStarte Sync für Projekt: {project_id}")
     logger.debug(f"Zielattributions (roh): {json.dumps(ziel_attributions, indent=2)}")

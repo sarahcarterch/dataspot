@@ -34,10 +34,11 @@ for projekt in projekte_liste:
     pid = projekt.get("id")
     label = projekt.get("label")
     status = projekt.get("status")
+    type = projekt.get("_type")
     if pid:
         gueltige_project_ids.add(pid)
         projects[pid] = label
-        logger.info(f"Projekt gefunden: {label} ({pid})")
+        logger.info(f"Projekt gefunden: {label} ({pid}, {type})")
 
 # Root-Verzeichnis ebenfalls aufnehmen
 gueltige_project_ids.add(freigaben_uuid)
@@ -67,8 +68,6 @@ for rid in role_ids:
 
 # Attributions strukturieren: Nach Projekt gruppieren
 
-# Attributions strukturieren: Nach Projekt gruppieren
-
 struktur_pro_projekt = {}
 
 projekt_status_map = {
@@ -77,16 +76,23 @@ projekt_status_map = {
 }
 projekt_status_map[freigaben_uuid] = "OGD_ROOT"
 
+projekt_type_map = {
+    projekt.get("id"): projekt.get("_type")
+    for projekt in projekte_liste
+}
+
 # Gefundene Attributions zuordnen
 for a in gefilterte_attributions:
     project_id = a.get("attributionFor")
     person_id = a.get("attributedTo")
     role_id = a.get("attributedAs")
     status = projekt_status_map.get(project_id)
+    type = projekt_type_map.get(project_id)
 
     # Initialisieren, wenn Projekt noch nicht bekannt
     if project_id not in struktur_pro_projekt:
         struktur_pro_projekt[project_id] = {
+            "_type": type,
             "status": status,
             "personen": []
         }
@@ -101,6 +107,7 @@ for a in gefilterte_attributions:
 for projekt_id in projects:
     if projekt_id not in struktur_pro_projekt:
         struktur_pro_projekt[projekt_id] = {
+            "_type": projekt_type_map.get(projekt_id),
             "status": projekt_status_map.get(projekt_id),
             "personen": []
         }
