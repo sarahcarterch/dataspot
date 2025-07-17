@@ -28,9 +28,18 @@ if gewähltes_projekt:
 
     # Sicherstellen, dass Attributions existieren
     if projekt_id not in data["attributions"]:
-        data["attributions"][projekt_id] = []
+        data["attributions"][projekt_id] = {
+            "status": "",
+            "personen": []
+        }
 
-    aktuelle_attributions = data["attributions"][projekt_id]
+    projekt_eintrag = data["attributions"][projekt_id]
+
+    if isinstance(projekt_eintrag, dict) and "personen" in projekt_eintrag:
+        aktuelle_attributions = projekt_eintrag["personen"]
+    else:
+        st.warning("Dieses Projekt verwendet ein älteres Format und kann hier nicht bearbeitet werden.")
+        st.stop()
 
     # Optionen
     person_options = data.get("persons", {})

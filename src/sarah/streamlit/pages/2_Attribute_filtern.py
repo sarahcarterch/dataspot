@@ -47,15 +47,17 @@ attributions = []
 # Set für spätere Prüfung, welche Projekte bereits Einträge haben
 projekte_mit_attributions = set()
 
-for project_id, eintraege in data["attributions"].items():
-    if eintraege:
-        for entry in eintraege:
+for project_id, eintrag in data["attributions"].items():
+    personen = eintrag.get("personen", [])
+    if personen:
+        for entry in personen:
             attributions.append({
                 "project": project_id,
                 "person": entry.get("person"),
                 "role": entry.get("role")
             })
         projekte_mit_attributions.add(project_id)
+
 
 # Projekte ohne Attributions ergänzen
 alle_projekte = set(data["projects"].keys())
