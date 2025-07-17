@@ -1,107 +1,44 @@
 # Beispiel-Datenstruktur
-beispiel = {
-  "projects": {
-    "12178ec7-3e63-412b-9015-78554401c20d": "Datensatz 100444 anlegen und freigeben",
-    "04fff422-969c-4bf8-abfc-d2dd377fe186": "Datensatz 100445 anlegen und freigeben",
-    "d6fec291-fe0d-4a59-bdc2-c0346e76e02d": "Datensatz 100446 anlegen und freigeben",
-    "bd4aa6b8-09e1-4348-99a7-bf6cda88e725": "Datensatz 100447 anlegen und freigeben",
-    "868ef5c7-8bd7-4d6e-ad3d-8aec632c3973": "Test",
-    "bdb3fbbe-3ab0-4a08-bb9e-ed8c19b42924": "Hunde",
-    "8386fbc7-2315-4d00-9bf8-47d2b04a6a7d": "OGD-Freigaben"
-  },
-  "persons": {
-    "fa57207d-c3ff-4741-9e0d-c638a22584df": "Mohler, Lukas",
-    "b3eb6c86-c0a3-4eec-b2ae-1f21a5cabafc": "Gräf, Ulrich",
-    "da2b46db-c376-4a61-bef7-cd065cd12cdc": "Carter, Sarah"
-  },
-  "roles": {
-    "02222f05-5690-4cb8-8d90-c27ca57e98e9": "Data Owner",
-    "e3ffbec6-86fd-4719-8b7f-5bfd08768a92": "Data Steward",
-    "b9c2b21d-4852-440f-9c64-8d1f3984c3fd": "Kantonaler Data Steward"
-  },
-  "attributions": {
-    "12178ec7-3e63-412b-9015-78554401c20d": {
-      "_type": "Project",
-      "status": "REVIEW3DS",
-      "personen": [
-        {
-          "person": "fa57207d-c3ff-4741-9e0d-c638a22584df",
-          "role": "02222f05-5690-4cb8-8d90-c27ca57e98e9"
-        },
-        {
-          "person": "b3eb6c86-c0a3-4eec-b2ae-1f21a5cabafc",
-          "role": "e3ffbec6-86fd-4719-8b7f-5bfd08768a92"
-        },
-        {
-          "person": "da2b46db-c376-4a61-bef7-cd065cd12cdc",
-          "role": "b9c2b21d-4852-440f-9c64-8d1f3984c3fd"
+beispiel = {"_embedded": {
+    "persons": [
+      {
+        "_type": "Person",
+        "id": "74e55232-f5f2-4370-98e9-d599cb335549",
+        "_version": 4,
+        "tenantId": "bf6a14c1-ed03-4d8a-beea-c6db320502fd",
+        "familyName": "Editor DCC",
+        "givenName": "(API)",
+        "label": "Editor DCC (API)",
+        "title": "(API) Editor DCC",
+        "agentOf": "f3948c30-269b-4601-87e7-4c56f63acd5a",
+        "memberOf": [],
+        "reportsTo": [],
+        "holdsPost": [
+          "e6593ed8-4753-49c8-a0af-28ef19810459"
+        ],
+        "publicState": "PUBLIC",
+        "modelId": "f3948c30-269b-4601-87e7-4c56f63acd5a",
+        "href": "/web/test-sarah-1/persons/74e55232-f5f2-4370-98e9-d599cb335549",
+        "status": "PUBLISHED",
+        "createdBy": "renato.farruggio@bs.ch",
+        "db": "test-sarah-1",
+        "dateCreated": 1741092297252,
+        "parentId": "f3948c30-269b-4601-87e7-4c56f63acd5a",
+        "_links": {
+          "self": {
+            "href": "/rest/test-sarah-1/persons/74e55232-f5f2-4370-98e9-d599cb335549"
+          },
+          "agentOf": {
+            "href": "/rest/test-sarah-1/organizations/f3948c30-269b-4601-87e7-4c56f63acd5a"
+          },
+          "holdsPost": [
+            {
+              "href": "/rest/test-sarah-1/posts/e6593ed8-4753-49c8-a0af-28ef19810459"
+            }
+          ]
         }
-      ]
-    },
-    "8386fbc7-2315-4d00-9bf8-47d2b04a6a7d": {
-      "_type": None,
-      "status": "OGD_ROOT",
-      "personen": [
-        {
-          "person": "da2b46db-c376-4a61-bef7-cd065cd12cdc",
-          "role": "b9c2b21d-4852-440f-9c64-8d1f3984c3fd"
-        }
-      ]
-    },
-    "04fff422-969c-4bf8-abfc-d2dd377fe186": {
-      "_type": "Project",
-      "status": "WORKING",
-      "personen": [
-        {
-          "person": "b3eb6c86-c0a3-4eec-b2ae-1f21a5cabafc",
-          "role": "e3ffbec6-86fd-4719-8b7f-5bfd08768a92"
-        },
-        {
-          "person": "fa57207d-c3ff-4741-9e0d-c638a22584df",
-          "role": "02222f05-5690-4cb8-8d90-c27ca57e98e9"
-        }
-      ]
-    },
-    "d6fec291-fe0d-4a59-bdc2-c0346e76e02d": {
-      "_type": "Project",
-      "status": "WORKING",
-      "personen": [
-        {
-          "person": "b3eb6c86-c0a3-4eec-b2ae-1f21a5cabafc",
-          "role": "e3ffbec6-86fd-4719-8b7f-5bfd08768a92"
-        },
-        {
-          "person": "fa57207d-c3ff-4741-9e0d-c638a22584df",
-          "role": "02222f05-5690-4cb8-8d90-c27ca57e98e9"
-        }
-      ]
-    },
-    "bd4aa6b8-09e1-4348-99a7-bf6cda88e725": {
-      "_type": "Project",
-      "status": "WORKING",
-      "personen": [
-        {
-          "person": "b3eb6c86-c0a3-4eec-b2ae-1f21a5cabafc",
-          "role": "e3ffbec6-86fd-4719-8b7f-5bfd08768a92"
-        },
-        {
-          "person": "fa57207d-c3ff-4741-9e0d-c638a22584df",
-          "role": "02222f05-5690-4cb8-8d90-c27ca57e98e9"
-        }
-      ]
-    },
-    "868ef5c7-8bd7-4d6e-ad3d-8aec632c3973": {
-      "_type": "Project",
-      "status": "WORKING",
-      "personen": []
-    },
-    "bdb3fbbe-3ab0-4a08-bb9e-ed8c19b42924": {
-      "_type": "Project",
-      "status": "WORKING",
-      "personen": []
-    }
-  }
-}
+      }
+    ]}}
 
 def ersetze_alle_werte_durch_platzhalter(objekt, platzhalter="<WERT>"):
     """
