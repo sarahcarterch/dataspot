@@ -13,10 +13,6 @@ from src.common import email_helpers
 import json
 from src.common import requests_get, requests_put, requests_patch, requests_post
 
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.image import MIMEImage
-from email.mime.application import MIMEApplication
 from dotenv import load_dotenv
 
 from src.sarah.uuid import *
@@ -68,7 +64,7 @@ def main():
             continue  # nicht posten
 
         data = {
-
+            "_type": "Project",
             "attributionFor": new_attributionFor, # UUID vom Projekt
             "attributedAs": eintrag["rollen_uuid"], # UUID von Rolle, Wert kommt von uuid.py
             "attributedTo": eintrag["person_uuid"], # UUID vom Posten oder von Person, , Wert kommt von uuid.py

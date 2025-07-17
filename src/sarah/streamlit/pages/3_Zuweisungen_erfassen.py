@@ -16,7 +16,15 @@ with open(json_path, "r", encoding="utf-8") as f:
     data = json.load(f)
 
 # Projekte extrahieren
-projekt_mapping = data.get("projects", {})
+projekt_mapping = {
+    pid: label
+    for pid, label in data.get("projects", {}).items()
+    if (
+        isinstance(data.get("attributions", {}).get(pid), dict)
+        and data["attributions"][pid].get("_type") == "Project"
+    )
+}
+print (projekt_mapping)
 projekt_namen = sorted(projekt_mapping.values())
 projekt_id_lookup = {v: k for k, v in projekt_mapping.items()}
 
@@ -25,6 +33,8 @@ gewähltes_projekt = st.selectbox("Projekt auswählen", projekt_namen)
 
 if gewähltes_projekt:
     projekt_id = projekt_id_lookup[gewähltes_projekt]
+    projekt_eintrag = data["attributions"][projekt_id]
+    aktuelle_attributions = projekt_eintrag.get("personen", [])
 
     # Sicherstellen, dass Attributions existieren
     if projekt_id not in data["attributions"]:
@@ -84,7 +94,11 @@ if gewähltes_projekt:
             })
 
     if st.button("Änderungen speichern"):
-        data["attributions"][projekt_id] = neue_attributions
+        if isinstance(data["attributions"][projekt_id], dict):
+            data["attributions"][projekt_id]["personen"] = neue_attributions
+        else:
+            st.error("Fehler: Die Attributions-Struktur ist nicht wie erwartet.")
+            st.stop()
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         st.success("Änderungen gespeichert.")
