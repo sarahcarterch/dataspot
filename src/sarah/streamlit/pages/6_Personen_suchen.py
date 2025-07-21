@@ -3,6 +3,7 @@ import pandas as pd
 from src.dataspot_auth import DataspotAuth
 from src.common import requests_get
 from dotenv import load_dotenv
+from src.sarah.uuid import *
 
 load_dotenv()
 
@@ -28,6 +29,13 @@ def lade_posten_label(url):
         return response.json().get("label", "Unbekannt")
     except Exception as e:
         return f"Fehler: {e}"
+
+@st.cache_data
+def load_data():
+    return pd.read_csv(CSV_PATH, sep=";")
+data = load_data()
+
+print(data.columns.tolist())
 
 persons = lade_personen()
 
@@ -55,18 +63,83 @@ selected_posten = st.sidebar.multiselect("Posten auswählen", posten_liste)
 personen_liste = sorted(df["name"].dropna().unique())
 selected_person = st.sidebar.multiselect("Person auswählen", personen_liste)
 
+# NEU: Person aus Projekten suchen
+contact_liste = sorted(
+    data["Kontakt"]  # beide Spalten zusammenführen
+    .dropna()                                         # NaN entfernen
+    .astype(str)                                      # sicherstellen, dass alle Strings sind
+    .str.strip()                                      # führende/trailing Leerzeichen entfernen
+    .loc[lambda x: x != ""]                           # leere Strings rausfiltern
+    .unique()                                         # Duplikate entfernen
+)
+selected_project_contact = st.sidebar.selectbox(
+    "Person aus Projekten durchsuchen",
+    [""] + contact_liste,  # "" für „nichts gewählt“
+    index=0
+)
+
 # Filter anwenden
 filtered_df = df.copy()
+filtered_data = data.copy()
 if selected_posten:
     filtered_df = filtered_df[filtered_df["post_label"].isin(selected_posten)]
 
 if selected_person:
     filtered_df = filtered_df[filtered_df["name"].isin(selected_person)]
 
+if selected_project_contact:  # nur wenn etwas gewählt wurde
+    if selected_project_contact in df["name"].values:
+        filtered_df = filtered_df[filtered_df["name"] == selected_project_contact]
+    else:
+        filtered_df = filtered_df[0:0]
+
 # Tabelle anzeigen
 st.subheader(f"{len(filtered_df)} Personen gefunden")
 st.dataframe(
     filtered_df[["name", "post_label", "link"]].rename(columns={
+        "name": "Name",
+        "post_label": "Posten",
+        "link": "Link"
+    }),
+    use_container_width=True,
+    hide_index=True
+)
+
+# Ergänzung: Alle Personen, die sowohl in der Projektdatei (data) als auch in der API (df) vorkommen
+
+# Alle Werte aus 'Kontakt' und 'Kontakt II' zusammenführen
+spalten = [col for col in ["Kontakt", "Kontakt II"] if col in data.columns]
+projektkontakte = pd.concat([data[col] for col in spalten])
+projektkontakte = (
+    projektkontakte.dropna()
+    .astype(str)
+    .str.strip()
+    .loc[lambda x: x != ""]
+    .unique()
+)
+
+# Jetzt prüfen, ob df["name"] in projektkontakte vorkommt
+df_gemeinsame = df[df["name"].isin(projektkontakte)]
+
+# Ergebnis anzeigen
+st.subheader(f"{len(df_gemeinsame)} Personen sind sowohl in der Projektdatei als auch in der API vorhanden")
+st.dataframe(
+    df_gemeinsame[["name", "post_label", "link"]].rename(columns={
+        "name": "Name",
+        "post_label": "Posten",
+        "link": "Link"
+    }),
+    use_container_width=True,
+    hide_index=True
+)
+
+# Jetzt prüfen, ob df["name"] NICHT in projektkontakte vorkommt
+df_gemeinsame = df[~df["name"].isin(projektkontakte)]
+
+# Ergebnis anzeigen
+st.subheader(f"{len(df_gemeinsame)} Personen sind nicht in der API vorhanden")
+st.dataframe(
+    df_gemeinsame[["name", "post_label", "link"]].rename(columns={
         "name": "Name",
         "post_label": "Posten",
         "link": "Link"

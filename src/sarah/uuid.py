@@ -5,6 +5,8 @@ base_url = "https://bs.dataspot.io"
 base_path = "/rest/test-sarah-1"
 directory_uuid = "/schemes/8386fbc7-2315-4d00-9bf8-47d2b04a6a7d"
 
+CSV_PATH = "src\\sarah\\data\\csv\\ogd_datensaetze.csv"
+
 working_project_uuid = "/projects/30cc89ad-1bd2-475f-9804-7ca5d6cf3260"
 
 data_owner = "02222f05-5690-4cb8-8d90-c27ca57e98e9"
