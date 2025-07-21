@@ -44,6 +44,120 @@ def dcc_vorb():
         st.subheader("Datensatz im Datenkatalog")
         st.success("Workflow abgeschlossen.")
 
+def ds_first():
+    # Tabs für Schritt 1 DCC: Vorbereitung
+    tabs = st.tabs(["Einstieg", "Frage 1", "Frage 2", "Frage 3", "Abschluss"])
+
+    # Tab Einstieg
+    with tabs[0]:
+        st.subheader("Einstieg")
+        st.info("Hier können Benutzereingaben erfasst oder Dateien hochgeladen werden.")
+        uploaded_file = st.file_uploader("Datei hochladen", type=["csv", "xlsx"])
+        if uploaded_file:
+            st.success("Datei erfolgreich hochgeladen.")
+        
+
+    # Tab Frage 1
+    with tabs[1]:
+        st.subheader("Frage 1: Sind die Daten, die veröffentlicht werden sollen, Sachdaten?")
+        st.warning("Hier erfolgt die Prüfung der Eingabedaten.")
+        # Beispielhafte Validierung
+        st.checkbox("Formatprüfung abgeschlossen")
+        st.checkbox("Inhaltliche Prüfung abgeschlossen")
+
+    # Tab Frage 2
+    with tabs[2]:
+        st.subheader("Frage 2: Kann bei Personendaten, die veröffentlicht werden sollen, der Personenbezug irreversibel entfernt werden?")
+        st.info("Verarbeite die validierten Daten.")
+        if st.button("Verarbeitung starten"):
+            with st.spinner("Verarbeite..."):
+                # Hier folgt deine Logik
+                st.success("Verarbeitung abgeschlossen.")
+
+    # Tab Frage 3
+    with tabs[3]:
+        st.subheader("Frage 3: Ihre Verantwortung")
+        st.download_button("Ergebnis herunterladen", data="Ergebnisdaten...", file_name="ergebnis.txt")
+
+    # Tab Abschluss
+    with tabs[4]:
+        st.subheader("Erste Freigabestufe")
+        st.success("Workflow abgeschlossen.")
+
+def do_second():
+    # Tabs für Schritt 1 DCC: Vorbereitung
+    tabs = st.tabs(["Einstieg", "Frage 1", "Frage 2", "Frage 3", "Abschluss"])
+
+    # Tab Einstieg
+    with tabs[0]:
+        st.subheader("Einstieg")
+        st.info("Hier können Benutzereingaben erfasst oder Dateien hochgeladen werden.")
+        uploaded_file = st.file_uploader("Datei hochladen", type=["csv", "xlsx"])
+        if uploaded_file:
+            st.success("Datei erfolgreich hochgeladen.")
+        
+
+    # Tab Frage 1
+    with tabs[1]:
+        st.subheader("Frage 1: Sind die Daten, die veröffentlicht werden sollen, Sachdaten?")
+        st.warning("Hier erfolgt die Prüfung der Eingabedaten.")
+        # Beispielhafte Validierung
+        st.checkbox("Formatprüfung abgeschlossen")
+        st.checkbox("Inhaltliche Prüfung abgeschlossen")
+
+    # Tab Frage 2
+    with tabs[2]:
+        st.subheader("Frage 2: Kann bei Personendaten, die veröffentlicht werden sollen, der Personenbezug irreversibel entfernt werden?")
+        st.info("Verarbeite die validierten Daten.")
+        if st.button("Verarbeitung starten"):
+            with st.spinner("Verarbeite..."):
+                # Hier folgt deine Logik
+                st.success("Verarbeitung abgeschlossen.")
+
+    # Tab Frage 3
+    with tabs[3]:
+        st.subheader("Frage 3: Ihre Verantwortung")
+        st.download_button("Ergebnis herunterladen", data="Ergebnisdaten...", file_name="ergebnis.txt")
+
+    # Tab Abschluss
+    with tabs[4]:
+        st.subheader("Zweite Freigabestufe")
+        st.success("Workflow abgeschlossen.")
+
+def dcc_end():
+    # Tabs für Schritt 1 DCC: Vorbereitung
+    tabs = st.tabs(["Freigaben überprüfen", "Einwilligungen ablegen", "Datensatz publizieren", "Abschluss"])
+
+    # Tab Einstieg
+    with tabs[0]:
+        st.subheader("Freigaben überprüfen")
+        st.info("Hier können Benutzereingaben erfasst oder Dateien hochgeladen werden.")
+        uploaded_file = st.file_uploader("Datei hochladen", type=["csv", "xlsx"])
+        if uploaded_file:
+            st.success("Datei erfolgreich hochgeladen.")
+        
+
+    # Tab Leerer Datensatz im Datenportal
+    with tabs[1]:
+        st.subheader("Einwilligungen ablegen")
+        st.warning("Hier erfolgt die Prüfung der Eingabedaten.")
+        # Beispielhafte Validierung
+        st.checkbox("Formatprüfung abgeschlossen")
+        st.checkbox("Inhaltliche Prüfung abgeschlossen")
+
+    # Tab Benutzerkontos im Datenkatalog
+    with tabs[2]:
+        st.subheader("Datensatz publizieren")
+        st.info("Verarbeite die validierten Daten.")
+        if st.button("Verarbeitung starten"):
+            with st.spinner("Verarbeite..."):
+                # Hier folgt deine Logik
+                st.success("Verarbeitung abgeschlossen.")
+
+    # Tab Projekt im Datenkatalog
+    with tabs[3]:
+        st.subheader("Abschluss")
+        st.download_button("Ergebnis herunterladen", data="Ergebnisdaten...", file_name="ergebnis.txt")
 
 #Mögliche Erweiterungen:
 #- Pro Tab eigene Funktionen auslagern, z.B. workflow_step_1(), wenn die Logik umfangreicher wird.
@@ -63,10 +177,13 @@ def main():
         dcc_vorb()
     elif subpages == "2 DS: Erste Prüfung":
         st.header("2 DS: Erste Prüfung")
+        ds_first()
     elif subpages == "3 DO: Zweite Prüfung":
         st.header("3 DO: Zweite Prüfung")
+        do_second()
     else:
         st.header("4 DCC: Abschluss")
+        dcc_end()
 
 if __name__ == "__main__":
     main()
