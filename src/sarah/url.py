@@ -1,0 +1,6 @@
+checkliste = "https://data-bs.ch/stata/opendatabs/OGD-Checkliste.pdf"
+projektverzeichnis = "https://datenkatalog.bs.ch/web/prod/schemes/8386fbc7-2315-4d00-9bf8-47d2b04a6a7d"
+ogd_freigaben = "https://datenkatalog.bs.ch/web/prod/schemes/8386fbc7-2315-4d00-9bf8-47d2b04a6a7d"
+datenkatalog = "https://datenkatalog.bs.ch"
+datennutzungskatalog = "https://datenkatalog.bs.ch/web/prod/schemes/0f16581d-ddff-4815-a423-3628baa326cc"
+datenportal = "https://data.bs.ch"
