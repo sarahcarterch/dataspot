@@ -3,6 +3,7 @@ from streamlit.components.v1 import iframe
 from src.sarah.url import * #checkliste, projektverzeichnis, ogd_freigaben, datenkatalog, datennutzungskatalog, datenportal
 from src.sarah.streamlit.pages.personen_suchen import personen_liste, df
 from src.sarah.streamlit.pages.zuweisungen_filtern import data
+from src.sarah.create_person import erstelle_person
 
 
 def einstieg():
@@ -14,6 +15,7 @@ def einstieg():
     "Sie werden dabei von den *Kantonalen Data Stewards* des DCC Data Competencen Center unterstützt. " \
     "Die Prüfung erfolgt anhand einer Checkliste.**")
     st.write("---")
+    st.write("**Informationen**")
     st.info(''' 
     ***Kantonale Data Stewards (DCC)***: Mitarbeitende des DCC mit Admin-Rechten  
     ***Data Steward (DS)***: Personen mit Fachverantwortung für einen Datensatz  
@@ -130,7 +132,7 @@ def dcc_vorb():
     5. Abschluss des Freigabe-Prozess und Veröffentlichung durch **DCC**
                         """)
         st.subheader("Einstieg")
-        with st.expander(label="Vorbereitungen durch DCC ", expanded=True):
+        with st.expander(label="Vorbereitungen durch DCC ", expanded=False):
             st.markdown("""
         * DS und DO haben ein Konto beim [Datenkatalog]({datenkatalog}) (Person und Benutzer:in erstellen, Link senden, Anmeldung sicherstellen)
         * Freigabe-Projekt pro Datensatz im [Projektverzeichnis des Datenkatalogs]({projektverzeichnis}) erstellt
@@ -151,16 +153,54 @@ def dcc_vorb():
                 *  **Verwendungen**: Verknüpfung zum Datennutzungskatalog herstellen
                                 """)
 
-    # Tab Datensatz im Datenkatalog
+    # Tab Leeren Datensatz anlegen
     with tabs[1]:
         
         st.subheader("Leeren Datensatz anlegen")
         st.info(f"Im Datenportal: {datenportal}")
 
-    # Tab Leerer Datensatz im Datenportal
+    # Tab Person erstellen
     with tabs[2]:
         st.subheader("Person erstellen")
         st.warning(f"Im Datenkatalog: {datenkatalog}")
+
+        st.write("#### 1. Ist Person in Dataspot erfasst?")
+        gesucht = st.text_input(label="Gesucht", label_visibility="hidden", placeholder="Gesuchte Person eingeben", key="first")        
+        if gesucht:
+            if gesucht in personen_liste:
+                st.success("Person ist im Datenkatalog erfasst.")
+            else:
+                st.warning("Gesuchte Person im Datenkatalog nicht gefunden.")
+
+        st.write("#### 2. Fehlende Personen erfassen")
+        givenName = st.text_input(label="Vorname", placeholder="Vornamen eingeben")
+        familyName = st.text_input(label="Nachname", placeholder="Nachnamen eingeben")
+        if st.button(label="Neue Person vorbereiten"):
+            st.write(f"{givenName} {familyName} im Datenkatalog erfassen.")
+        if st.button(label="Im Datenkatalog erfassen"):
+            erstelle_person(family_name=familyName, given_name=givenName)
+            st.success("Person erfolgreich erstellt.")
+
+        st.write("#### 3. Hat Person Rolle in einem Projekt?")
+        
+        gesucht = st.text_input(label="Gesucht", label_visibility="hidden", placeholder="Gesuchte Person eingeben", key="second")        
+        if gesucht:
+            if gesucht in personen_liste:
+                st.success("Person ist im Datenkatalog erfasst.")
+            else:
+                st.warning("Gesuchte Person im Datenkatalog nicht gefunden.")
+        col1,col2 = st.columns(2)
+        with col1:
+            st.write("Projekt1") 
+            st.write("Projekt2") 
+            st.write("...")
+        with col2:
+            st.write("Rolle1") 
+            st.write("Rolle2") 
+            st.write("...")
+
+        st.write("#### 4. Rolle in einem Projekt zuweisen")
+        st.write("... folgt.")
 
     # Tab Benutzerkontos im Datenkatalog
     with tabs[3]:

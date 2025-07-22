@@ -35,8 +35,6 @@ def load_data():
     return pd.read_csv(CSV_PATH, sep=";")
 data = load_data()
 
-print(data.columns.tolist())
-
 persons = lade_personen()
 
 # UI konfigurieren
@@ -53,8 +51,15 @@ for p in persons:
 
 # DataFrame erzeugen
 df = pd.DataFrame(persons)
-df["name"] = df["givenName"].fillna("") + " " + df["familyName"].fillna("")
+df["name"] = (
+    df["givenName"].fillna("").str.replace("\u00a0", " ", regex=False).str.strip() + " " +
+    df["familyName"].fillna("").str.replace("\u00a0", " ", regex=False).str.strip()
+).str.strip()
 df["link"] = df["_links"].apply(lambda x: x.get("self", {}).get("href", ""))
+
+for name in df["name"].unique():
+    if name != name.strip():
+        print(f"Verdächtig: →{repr(name)}←")
 
 # Sidebar-Filter für Posten und Person
 posten_liste = sorted(df["post_label"].dropna().unique())
@@ -64,18 +69,39 @@ personen_liste = sorted(df["name"].dropna().unique())
 personen_liste = [p.strip() for p in personen_liste]
 selected_person = st.sidebar.multiselect("Person auswählen", personen_liste)
 
-# NEU: Person aus Projekten suchen
+# Person aus Projekten suchen
 contact_liste = sorted(
     data["Kontakt"]  # beide Spalten zusammenführen
     .dropna()                                         # NaN entfernen
     .astype(str)                                      # sicherstellen, dass alle Strings sind
+    .str.replace("\u00a0", " ", regex=False)
     .str.strip()                                      # führende/trailing Leerzeichen entfernen
     .loc[lambda x: x != ""]                           # leere Strings rausfiltern
     .unique()                                         # Duplikate entfernen
 )
+contact_II_liste = sorted(
+    data["Kontakt II"]  # beide Spalten zusammenführen
+    .dropna()                                         # NaN entfernen
+    .astype(str)                                      # sicherstellen, dass alle Strings sind
+    .str.replace("\u00a0", " ", regex=False)
+    .str.strip()                                      # führende/trailing Leerzeichen entfernen
+    .loc[lambda x: x != ""]                           # leere Strings rausfiltern
+    .unique()                                         # Duplikate entfernen
+)
+intern_liste = sorted(
+    data["Interne Zuständigkeit"]  # beide Spalten zusammenführen
+    .dropna()                                         # NaN entfernen
+    .astype(str)                                      # sicherstellen, dass alle Strings sind
+    .str.replace("\u00a0", " ", regex=False)
+    .str.strip()                                      # führende/trailing Leerzeichen entfernen
+    .loc[lambda x: x != ""]                           # leere Strings rausfiltern
+    .unique()                                         # Duplikate entfernen
+)
+
+kombiniert = [""] + sorted(set(contact_liste + contact_II_liste + intern_liste))
 selected_project_contact = st.sidebar.selectbox(
     "Person aus Projekten durchsuchen",
-    [""] + contact_liste,  # "" für „nichts gewählt“
+    kombiniert,  # "" für „nichts gewählt“
     index=0
 )
 
@@ -138,7 +164,7 @@ st.dataframe(
 df_gemeinsame = df[~df["name"].isin(projektkontakte)]
 
 # Ergebnis anzeigen
-st.subheader(f"{len(df_gemeinsame)} Personen sind nicht in der API vorhanden")
+st.subheader(f"{len(df_gemeinsame)} Personen sind nicht in der Projektdatei vorhanden")
 st.dataframe(
     df_gemeinsame[["name", "post_label", "link"]].rename(columns={
         "name": "Name",
@@ -148,3 +174,34 @@ st.dataframe(
     use_container_width=True,
     hide_index=True
 )
+
+# Namen aus der API
+api_namen = set(df["name"].dropna().astype(str).str.strip())
+
+# Projektkontakte aus allen relevanten Spalten
+spalten = [col for col in ["Kontakt", "Kontakt II", "Interne Zuständigkeit"] if col in data.columns]
+
+alle_namen = set()  # Set für eindeutige Namen
+
+for col in spalten:
+    werte = (
+        data[col]
+        .dropna()
+        .astype(str)
+        .str.replace("\u00a0", " ", regex=False)
+        .str.strip()
+        .loc[lambda x: x != ""]
+    )
+    alle_namen.update(werte)
+
+# Differenzmenge: Nur in Projektdatei, nicht in API
+nur_in_projektdatei = sorted(alle_namen - api_namen)
+
+# Ergebnis anzeigen
+st.subheader(f"{len(nur_in_projektdatei)} eindeutige Personen aus der Projektdatei wurden nicht in der API gefunden")
+st.dataframe(
+    pd.DataFrame(nur_in_projektdatei, columns=["Name"]),
+    use_container_width=True,
+    hide_index=True
+)
+
