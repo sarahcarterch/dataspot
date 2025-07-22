@@ -1,7 +1,9 @@
 import streamlit as st
 from streamlit.components.v1 import iframe
-from src.sarah.url import *
-#checkliste, projektverzeichnis, ogd_freigaben, datenkatalog, datennutzungskatalog, datenportal
+from src.sarah.url import * #checkliste, projektverzeichnis, ogd_freigaben, datenkatalog, datennutzungskatalog, datenportal
+from src.sarah.streamlit.pages.personen_suchen import personen_liste, df
+from src.sarah.streamlit.pages.zuweisungen_filtern import data
+
 
 def einstieg():
     st.title("Workflow OGD-Freigaben")
@@ -12,14 +14,13 @@ def einstieg():
     "Sie werden dabei von den *Kantonalen Data Stewards* des DCC Data Competencen Center unterstützt. " \
     "Die Prüfung erfolgt anhand einer Checkliste.**")
     st.write("---")
-    st.markdown("#### **Anleitung für:**")
-    st.markdown(''' 
-    *Kantonale Data Stewards (DCC)*: Mitarbeitende des DCC mit Admin-Rechten  
-    *Data Steward (DS)*: Personen mit Fachverantwortung für einen Datensatz  
-    *Data Owner (DO)*: Dienststellenleitung, die den jeweiligen DS vorsteht  
+    st.info(''' 
+    ***Kantonale Data Stewards (DCC)***: Mitarbeitende des DCC mit Admin-Rechten  
+    ***Data Steward (DS)***: Personen mit Fachverantwortung für einen Datensatz  
+    ***Data Owner (DO)***: Dienststellenleitende, die den jeweiligen DS vorstehen  
     ''')
 
-    with st.expander(label="Checkliste", expanded=False):
+    with st.expander(label="Link zur Checkliste", expanded=False):
         st.markdown(checkliste)
 
     with st.expander(label="Freigabe-Ablauf", expanded=False):
@@ -55,18 +56,53 @@ def einstieg():
                             """)
 
     # Die eigene Rolle suchen
+    personen_liste_bereinigt = [p.strip() for p in personen_liste]
+        # --- Rolle nach Name und Projekt suchen ---
     st.write("---")
-    st.markdown("#### **Rolle suchen:**")
-    st.write("Bitte wählen Sie einen Namen.")
-    name = st.selectbox(label="Ihr Name",label_visibility="hidden", options=["", "Hallo"], key="name", help="Bitte einen Namen wählen.")
-    if name == "Hallo":
-        st.write("Ihre Rolle:")
-        st.success("Goodbye")
+    st.markdown("#### **Rolle nach Projekt suchen:**")
+
+    # Name aus Liste auswählen
+    name_input = st.selectbox("Bitte suchen Sie einen Namen", [""] + [f"{v.split(', ')[1]} {v.split(', ')[0]}" for v in data["persons"].values()], key="proj_name")
+
+    # Projekt aus Liste auswählen
+    projekt_input = st.selectbox("Bitte wählen Sie ein Projekt", [""] + list(data["projects"].values()), key="proj_project")
+
+    rolle_auswahl = None
+
+    if name_input and projekt_input:
+        # Name umwandeln in "Nachname, Vorname"
+        teile = name_input.strip().split(" ")
+        if len(teile) >= 2:
+            suchname = f"{' '.join(teile[1:])}, {teile[0]}"
+        else:
+            suchname = name_input.strip()
+
+        # Person-ID finden
+        person_id = next((pid for pid, pname in data["persons"].items() if pname.strip() == suchname), None)
+
+        # Projekt-ID finden
+        projekt_id = next((pid for pid, pname in data["projects"].items() if pname.strip() == projekt_input), None)
+
+        # Rolle für genau dieses Projekt und diese Person suchen
+        if person_id and projekt_id:
+            projekt = data["attributions"].get(projekt_id, {})
+            for eintrag in projekt.get("personen", []):
+                if isinstance(eintrag, dict) and eintrag.get("person") == person_id:
+                    rolle_id = eintrag.get("role")
+                    rolle_auswahl = data["roles"].get(rolle_id)
+                    break
+
+    # Ergebnis anzeigen
+    if rolle_auswahl:
+        st.success(f"Ihre Rolle im Projekt: **{rolle_auswahl}**")
+    elif name_input and projekt_input:
+        st.warning("Für diese Kombination aus Name und Projekt wurde keine Rolle gefunden.")
+
     else:
         st.write("")
         st.write("")
-        st.write("Falls Ihr Name nicht in der Liste erscheint:")
-        st.warning("Melden Sie sich bitte beim DCC, damit Sie im Datenkatalog erfasst werden.")
+        st.warning("**Falls Ihr Name oder Ihre Rolle nicht erscheint**: Melden Sie sich bitte beim DCC, damit Sie im Datenkatalog korrekt erfasst werden.")
+
     # Checklisten-PDF als Iframe einbetten
     st.write("---") # Trennlinie
     st.markdown("#### Vollständige Checkliste")
@@ -363,17 +399,17 @@ def main():
     st.set_page_config(page_title="Workflow", layout="wide")
 
     # Radio-Buttons für die Workflow-Schritte
-    subpages = st.sidebar.radio("Bearbeitungs-Schritt wählen", ["Einstieg", "Vorbereitung","Erste Prüfung","Zweite Prüfung","Abschluss"])
+    subpages = st.sidebar.radio("Bearbeitungs-Schritt wählen", ["Einstieg", "Vorbereitung (DCC)","Erste Prüfung (Data Steward)","Zweite Prüfung (Data Owner)","Abschluss (DCC)"])
 
     if subpages == "Einstieg":
         einstieg()
-    elif subpages == "Vorbereitung":
+    elif subpages == "Vorbereitung (DCC)":
         st.header("Vorbereitung durch DCC")
         dcc_vorb()
-    elif subpages == "Erste Prüfung":
+    elif subpages == "Erste Prüfung (Data Steward)":
         st.header("Erste Prüfung durch Data Steward")
         ds_first()
-    elif subpages == "Zweite Prüfung":
+    elif subpages == "Zweite Prüfung (Data Owner)":
         st.header("Zweite Prüfung durch Data Owner")
         do_second()
     else:

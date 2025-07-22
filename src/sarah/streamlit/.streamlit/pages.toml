@@ -1,0 +1,31 @@
+[[pages]]
+path = "src/sarah/streamlit/pages/projekte_auflisten.py"
+name = "Projekte auflisten"
+
+[[pages]]   
+path = "src/sarah/streamlit/pages/zuweisungen_filtern.py"
+name = "Zuweisungen filtern"
+
+[[pages]]
+path = "src/sarah/streamlit/pages/zuweisungen_erfassen.py"
+name = "Zuweisungen erfassen"
+
+[[pages]]
+path = "src/sarah/streamlit/pages/projektstatus_bearbeiten.py"
+name = "Projektstatus bearbeiten"
+
+[[pages]]
+path = "src/sarah/streamlit/pages/projekte_aufbereiten.py"
+name = "Projekte aufbereiten"
+
+[[pages]]
+path = "src/sarah/streamlit/pages/personen_suchen.py"
+name = "Personen suchen"
+
+[[pages]]
+path = "src/sarah/streamlit/pages/workflow.py"
+name = "Workflow"
+
+[[pages]]
+path = "src/sarah/streamlit/pages/workflow_tests.py"
+name = "Workflow Tests"

@@ -61,6 +61,7 @@ posten_liste = sorted(df["post_label"].dropna().unique())
 selected_posten = st.sidebar.multiselect("Posten auswählen", posten_liste)
 
 personen_liste = sorted(df["name"].dropna().unique())
+personen_liste = [p.strip() for p in personen_liste]
 selected_person = st.sidebar.multiselect("Person auswählen", personen_liste)
 
 # NEU: Person aus Projekten suchen
