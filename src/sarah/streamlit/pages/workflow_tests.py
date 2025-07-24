@@ -4,7 +4,23 @@ from src.sarah.url import * #checkliste, projektverzeichnis, ogd_freigaben, date
 from src.sarah.streamlit.pages.personen_suchen import personen_liste, df
 from src.sarah.streamlit.pages.zuweisungen_filtern import data
 from src.sarah.create_person import erstelle_person
+from src.sarah.create_account import erstelle_konto
+from src.common import requests_get
+import pandas as pd
+from src.dataspot_auth import *
 
+auth = DataspotAuth()
+
+# Daten von der API holen
+@st.cache_data(show_spinner="Lade Konten...")
+def lade_konten():
+    base_url = "https://bs.dataspot.io"
+    # Get Users
+    endpoint_u = "/rest/test-sarah-1/users"
+    response_u = requests_get(f"{base_url}{endpoint_u}", headers=auth.get_headers())
+    data_u = response_u.json()
+    
+    return data_u.get("_embedded", {}).get("users", [])
 
 def einstieg():
     st.title("Workflow OGD-Freigaben")
@@ -160,7 +176,7 @@ def dcc_vorb():
         st.info(f"Im Datenportal: {datenportal}")
 
     # Tab Person erstellen
-    with tabs[2]:
+    with tabs[4]:
         st.subheader("Person erstellen")
         st.warning(f"Im Datenkatalog: {datenkatalog}")
 
@@ -203,22 +219,66 @@ def dcc_vorb():
         st.write("... folgt.")
 
     # Tab Benutzerkontos im Datenkatalog
-    with tabs[3]:
+    with tabs[5]:
         st.subheader("Benutzer:in erstellen")
         st.warning(f"Im Datenkatalog: {datenkatalog}")
 
-    # Tab Projekt im Datenkatalog
-    with tabs[4]:
+        st.write("#### 1. Hat Person in Dataspot ein Benutzerkonto?")
+
+        konten = lade_konten()
+        dfk = pd.DataFrame(konten)
+        # Left merge von df und dfk
+        konten_liste = (
+            df[["id", "name"]].dropna().drop_duplicates()
+            .merge(dfk[["isPerson", "loginId", "accessLevel"]], left_on="id", right_on="isPerson", how="inner")
+            .query("loginId.notnull()")
+            .sort_values("name")
+            .to_dict(orient="records")
+        )
+        for eintrag in konten_liste:
+            eintrag.pop("isPerson", None)
+        print(f"Felder: {konten_liste[0].keys()}")
+
+        name_liste = [eintrag["name"] for eintrag in konten_liste if "name" in eintrag]
+
+
+        gesucht_konto = st.text_input(label="Gesuchtes Konto", label_visibility="hidden", placeholder="Gesuchtes Konto eingeben", key="account")
+        
+        
+        if gesucht_konto in personen_liste:
+            if gesucht_konto:
+                if gesucht_konto in name_liste:
+                    person_obj = next((eintrag for eintrag in konten_liste if eintrag.get("name") == gesucht_konto), None)
+                    person_id = person_obj.get("id") if person_obj else None
+                    st.success("Person ist im Datenkatalog erfasst.")
+                    st.success(f"Person hat im Datenkatalog ein Benutzerkonto.")
+                else:
+                    st.success("Person ist im Datenkatalog erfasst.")
+                    st.warning("Benutzerkonto im Datenkatalog nicht gefunden.")
+        else:
+            st.warning("Gesuchte Person im Datenkatalog nicht gefunden.")
+
+        st.write("#### 2. Benutzerkonto erfassen")
+        email = st.text_input(label="Email", label_visibility="hidden", placeholder="Email für Login-Erstellung eingeben", key="email")
+        if st.button("Neues Konto vorbereiten", key="btn_neue_person_vorbereiten"):
+            st.write(f"{gesucht_konto} mit Login {email} im Datenkatalog erfassen.")
+
+        if st.button("Im Datenkatalog erfassen", key="btn_im_datenkatalog_erfassen"):
+            erstelle_konto(name=gesucht_konto, loginId=email)
+            st.success("Konto erfolgreich erstellt.")
+        
+    # Tab Anmeldung sicherstellen
+    with tabs[6]:
         st.subheader("Anmeldung sicherstellen")
         st.success("Persönlich oder per Mail")
 
     # Tab Datensatz im Datenkatalog
-    with tabs[5]:
+    with tabs[2]:
         st.subheader("Projekt erstellen")
         st.warning(f"Im Datenkatalog: {datenkatalog}")
     
     # Tab Datensatz im Datenkatalog
-    with tabs[6]:
+    with tabs[3]:
         st.subheader("Datenprodukt erstellen")
         st.warning(f"Im Datenkatalog: {datenkatalog}")
 
