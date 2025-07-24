@@ -5,9 +5,14 @@ from src.sarah.streamlit.pages.personen_suchen import personen_liste, df
 from src.sarah.streamlit.pages.zuweisungen_filtern import data
 from src.sarah.create_person import erstelle_person
 from src.sarah.create_account import erstelle_konto
+from src.sarah.create_project_ogd import erstelle_projekt
+from src.sarah.streamlit.pages.projekte_auflisten import projects
 from src.common import requests_get
 import pandas as pd
 from src.dataspot_auth import *
+import subprocess
+import json
+import os
 
 auth = DataspotAuth()
 
@@ -133,7 +138,7 @@ def einstieg():
 
 def dcc_vorb():
     # Tabs für Schritt 1 DCC: Vorbereitung
-    tabs = st.tabs(["Einstieg", "Schritt 1", "Schritt 2", "Schritt 3", "Schritt 4", "Schritt 5", "Schritt 6"])
+    tabs = st.tabs(["Einstieg", "Schritt 1", "Schritt 2", "Schritt 3", "Schritt 4", "Schritt 5", "Schritt 6", "Schritt 7"])
 
     # Tab Einstieg
     with tabs[0]:
@@ -189,34 +194,13 @@ def dcc_vorb():
                 st.warning("Gesuchte Person im Datenkatalog nicht gefunden.")
 
         st.write("#### 2. Fehlende Personen erfassen")
-        givenName = st.text_input(label="Vorname", placeholder="Vornamen eingeben")
-        familyName = st.text_input(label="Nachname", placeholder="Nachnamen eingeben")
+        givenName = st.text_input(label="Vorname", label_visibility="hidden", placeholder="Vornamen eingeben")
+        familyName = st.text_input(label="Nachname", label_visibility="hidden", placeholder="Nachnamen eingeben")
         if st.button(label="Neue Person vorbereiten"):
             st.write(f"{givenName} {familyName} im Datenkatalog erfassen.")
         if st.button(label="Im Datenkatalog erfassen"):
             erstelle_person(family_name=familyName, given_name=givenName)
             st.success("Person erfolgreich erstellt.")
-
-        st.write("#### 3. Hat Person Rolle in einem Projekt?")
-        
-        gesucht = st.text_input(label="Gesucht", label_visibility="hidden", placeholder="Gesuchte Person eingeben", key="second")        
-        if gesucht:
-            if gesucht in personen_liste:
-                st.success("Person ist im Datenkatalog erfasst.")
-            else:
-                st.warning("Gesuchte Person im Datenkatalog nicht gefunden.")
-        col1,col2 = st.columns(2)
-        with col1:
-            st.write("Projekt1") 
-            st.write("Projekt2") 
-            st.write("...")
-        with col2:
-            st.write("Rolle1") 
-            st.write("Rolle2") 
-            st.write("...")
-
-        st.write("#### 4. Rolle in einem Projekt zuweisen")
-        st.write("... folgt.")
 
     # Tab Benutzerkontos im Datenkatalog
     with tabs[5]:
@@ -255,8 +239,8 @@ def dcc_vorb():
                 else:
                     st.success("Person ist im Datenkatalog erfasst.")
                     st.warning("Benutzerkonto im Datenkatalog nicht gefunden.")
-        else:
-            st.warning("Gesuchte Person im Datenkatalog nicht gefunden.")
+            else:
+                st.warning("Gesuchte Person im Datenkatalog nicht gefunden.")
 
         st.write("#### 2. Benutzerkonto erfassen")
         email = st.text_input(label="Email", label_visibility="hidden", placeholder="Email für Login-Erstellung eingeben", key="email")
@@ -268,23 +252,183 @@ def dcc_vorb():
             st.success("Konto erfolgreich erstellt.")
         
     # Tab Anmeldung sicherstellen
-    with tabs[6]:
+    with tabs[7]:
         st.subheader("Anmeldung sicherstellen")
         st.success("Persönlich oder per Mail")
 
-    # Tab Datensatz im Datenkatalog
+    # Tab Projekt in Verzeichnis OGD-Freigaben erstellen
     with tabs[2]:
         st.subheader("Projekt erstellen")
         st.warning(f"Im Datenkatalog: {datenkatalog}")
-    
+
+        st.write("#### 1. Ist Projekt im Projektverzeichnis *OGD-Freigaben* erfasst?")
+        projects_label = [eintrag["label"] for eintrag in projects]
+
+        project_list = st.selectbox(label="Projekt", label_visibility="hidden", placeholder="Gesuchtes Projekt eingeben", key="proj", options=[""]+projects_label, index=0)        
+
+        st.write("#### 2. Falls nicht: Neues Projekt erfassen")
+        label = st.text_input(label="Projekttitel", label_visibility="hidden", placeholder="Neuen Titel eingeben")
+        if st.button(label="Neues Projekt vorbereiten", key="neues_proj_vorb"):
+            st.write(f"{label} im Datenkatalog erfassen.")
+        if st.button(label="Im Datenkatalog erfassen", key="neues_proj_erf"):
+            erstelle_projekt(label=label)
+            st.success("Projekt erfolgreich erstellt.")
+
     # Tab Datensatz im Datenkatalog
     with tabs[3]:
         st.subheader("Datenprodukt erstellen")
         st.warning(f"Im Datenkatalog: {datenkatalog}")
+    
+    # Tab Rolle in einem Projekt zuweisen
+    with tabs[6]:
+        st.subheader("Rollen in einem Projekt zuweisen")
+        st.warning(f"Im Datenkatalog: {datenkatalog}")
+
+        # Get current data from API
+        # Button zum Aktualisieren hinzufügen
+        if st.button("Daten neu laden"):
+            subprocess.run(["python","src\sarah\project_attributions.py"])
+
+        # JSON-Datei laden
+        json_path = "attributions.json"
+        if not os.path.exists(json_path):
+            st.error("Datei attributions.json nicht gefunden.")
+            st.stop()
+
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        # Projekte extrahieren
+        projekt_mapping = {
+            pid: label
+            for pid, label in data.get("projects", {}).items()
+            if (
+                isinstance(data.get("attributions", {}).get(pid), dict)
+                and data["attributions"][pid].get("_type") == "Project"
+            )
+        }
+        projekt_namen = sorted(projekt_mapping.values())
+        projekt_id_lookup = {v: k for k, v in projekt_mapping.items()}
+
+        # Projektwahl
+        gewähltes_projekt = st.selectbox(label = "Projekt auswählen", options=[""]+projekt_namen, index=0)
+
+        if gewähltes_projekt:
+            projekt_id = projekt_id_lookup[gewähltes_projekt]
+            projekt_eintrag = data["attributions"][projekt_id]
+            aktuelle_attributions = projekt_eintrag.get("personen", [])
+
+            # Sicherstellen, dass Attributions existieren
+            if projekt_id not in data["attributions"]:
+                data["attributions"][projekt_id] = {
+                    "status": "",
+                    "personen": []
+                }
+
+            projekt_eintrag = data["attributions"][projekt_id]
+
+            # Optionen
+            # Aus JSON-Datei (bestehende Zuweisungen)
+            personen_liste_ed = df[["id", "name"]].dropna().drop_duplicates().to_dict(orient="records")
+
+            json_persons = data.get("persons", {})
+            name_to_id_json = {v: k for k, v in json_persons.items()}
+
+            # Aus personen_liste
+            name_to_id_neu = {p["name"]: p["id"] for p in personen_liste_ed}
+            id_to_name_neu = {p["id"]: p["name"] for p in personen_liste_ed}
+
+            # Alles kombinieren
+            name_to_person_id = {**name_to_id_neu, **name_to_id_json}
+            person_id_to_name = {v: k for k, v in name_to_person_id.items()}
+            person_names = sorted(name_to_person_id.keys())
+
+            role_options = data.get("roles", {})
+            role_names = list(role_options.values())
+            name_to_role_id = {v: k for k, v in role_options.items()}
+            role_id_to_name = {k: v for k, v in role_options.items()}
+
+            st.subheader("Zugewiesene Personen")
+
+            neue_attributions = []
+            num_rows = len(aktuelle_attributions) + 1  # eine zusätzliche Zeile zum Hinzufügen
+
+            for i in range(num_rows):
+                existing = aktuelle_attributions[i] if i < len(aktuelle_attributions) else {}
+                selected_person = person_id_to_name.get(existing.get("person", ""), "")
+                selected_role = role_id_to_name.get(existing.get("role", ""), "")
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    p = st.selectbox(
+                        f"Person {i+1}",
+                        options=[""] + person_names,
+                        index=([""] + person_names).index(selected_person) if selected_person else 0,
+                        key=f"person_{i}"
+                    )
+                with col2:
+                    r = st.selectbox(
+                        f"Rolle {i+1}",
+                        options=[""] + role_names,
+                        index=([""] + role_names).index(selected_role) if selected_role else 0,
+                        key=f"rolle_{i}"
+                    )
+
+                if p and r:
+                    neue_attributions.append({
+                        "person": name_to_person_id[p],
+                        "role": name_to_role_id[r]
+                    })
+
+            if st.button("Änderungen speichern"):
+                if isinstance(data["attributions"][projekt_id], dict):
+                    data["attributions"][projekt_id]["personen"] = neue_attributions
+                else:
+                    st.error("Fehler: Die Attributions-Struktur ist nicht wie erwartet.")
+                    st.stop()
+                with open(json_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+                st.success("Änderungen gespeichert.")
+
+        def upload_data():
+            script_path = os.path.join("src", "sarah", "project_attr_sync.py")
+
+            result = subprocess.run(
+                ["python", script_path],
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode == 0:
+                st.cache_data.clear()
+                st.success("Daten wurden erfolgreich hochgeladen.")
+                st.text(result.stdout)
+            else:
+                st.error("Fehler beim Upload der Daten:")
+                st.text(result.stderr)
+
+        # Button zum Starten der Synchronisation
+        st.write("---")
+        if st.button("Synchronisation mit Datenplattform starten"):
+            upload_data()
 
 def ds_first():
     # Tabs für Schritt 1 DCC: Vorbereitung
     tabs = st.tabs(["Einstieg", "Punkt 1", "Punkt 2", "Punkt 3", "Freigabe"])
+
+    # === Dateien laden ===
+    json_path = "attributions.json"
+    workflow_path = "workflow_ogd_stati.json"
+
+    if not os.path.exists(json_path) or not os.path.exists(workflow_path):
+        st.error("Benötigte Datei fehlt.")
+        st.stop()
+
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    with open(workflow_path, "r", encoding="utf-8") as f:
+        status_liste = json.load(f)
 
     # Tab Einstieg
     with tabs[0]:
@@ -298,9 +442,51 @@ def ds_first():
     4. Zweite Veröffentlichungs-Freigabe in Dataspot durch **DO**
     5. Abschluss des Freigabe-Prozess und Veröffentlichung durch **DCC**
                         """)
-        st.subheader("Einstieg")
-        
+        st.subheader("Projekt auswählen")
 
+        # Projekte extrahieren
+        projekt_mapping = {
+            pid: label
+            for pid, label in data.get("projects", {}).items()
+            if (
+                isinstance(data.get("attributions", {}).get(pid), dict)
+                and data["attributions"][pid].get("_type") == "Project"
+            )
+        }
+        projekt_namen = sorted(projekt_mapping.values())
+        projekt_id_lookup = {v: k for k, v in projekt_mapping.items()}
+
+        # Projektwahl mit leerer Vorauswahl
+        gewähltes_projekt = st.selectbox(
+            label="Projekt auswählen",
+            options=[""] + projekt_namen,
+            index=0,
+            label_visibility="hidden"
+        )
+
+        if gewähltes_projekt:
+            projekt_id = projekt_id_lookup[gewähltes_projekt]
+            projekt_eintrag = data["attributions"][projekt_id]
+            aktuelle_attributions = projekt_eintrag.get("personen", [])
+
+            # Mapping zur Anzeige der Rollen und Namen
+            person_id_to_name = data.get("persons", {})
+            role_id_to_name = data.get("roles", {})
+
+            st.markdown("#### Zugewiesene Personen")
+
+            if aktuelle_attributions:
+                for eintrag in aktuelle_attributions:
+                    person_id = eintrag.get("person")
+                    role_id = eintrag.get("role")
+
+                    person_name = person_id_to_name.get(person_id, f"(unbekannt: {person_id})")
+                    role_name = role_id_to_name.get(role_id, f"(unbekannt: {role_id})")
+
+                    st.write(f"- **{person_name}** als **{role_name}**")
+            else:
+                st.info("Diesem Projekt sind noch keine Personen mit Rollen zugewiesen.")
+  
     # Tab Frage 1
     with tabs[1]:
         col1, col2 = st.columns(2)
@@ -361,11 +547,79 @@ def ds_first():
     # Tab Abschluss
     with tabs[4]:
         st.subheader("Erste Freigabestufe")
+
+        # Mapping für schnellen Zugriff: {"WORKING": "In Entwurf", ...}
+        status_labels = {entry["status"]: entry["label"] for entry in status_liste}
+
+        # Reine Statuswerte für Dropdown
+        status_options = [entry["status"] for entry in status_liste]
+
+        # === Projekt-Daten vorbereiten ===
+        projekt_mapping = data.get("projects", {})
+        attributions = data.get("attributions", {})
+
+        projekt_namen = sorted(projekt_mapping.values())
+        projekt_id_lookup = {v: k for k, v in projekt_mapping.items()}
+        gewähltes_projekt = st.selectbox("Projekt auswählen", projekt_namen)
+
+        if gewähltes_projekt:
+            projekt_id = projekt_id_lookup[gewähltes_projekt]
+            aktueller_status = attributions.get(projekt_id, {}).get("status", None)
+
+            st.markdown(f"**Aktueller Status:** `{aktueller_status}` - **{status_labels.get(aktueller_status, 'Unbekannt')}**")
+
+            neuer_status = st.selectbox(
+            "Neuen Status wählen",
+            options=status_options,
+            format_func=lambda x: status_labels.get(x, x),
+            index=status_options.index(aktueller_status) if aktueller_status in status_options else 0
+        )
+
+            if st.button("Status aktualisieren und hochladen"):
+                if projekt_id in attributions:
+                    attributions[projekt_id]["status"] = neuer_status
+                else:
+                    st.warning("Projekt nicht in attributions.json gefunden – wird neu angelegt.")
+                    attributions[projekt_id] = {"status": neuer_status, "personen": []}
+                    st.json(attributions[projekt_id])
+
+                data["attributions"] = attributions
+                with open(json_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+
+                result = subprocess.run(["python", "src/sarah/project_attr_sync.py", projekt_id], capture_output=True, text=True)
+                if result.returncode == 0:
+                    st.success("Status gespeichert und zur API übertragen.")
+                else:
+                    # st.error(f"Fehler beim Sync: {result.stderr}")
+                    st.error(f"Fehler beim Sync")
+
+            if st.button("Aktuelle Daten von API laden"):
+                result = subprocess.run(["python", "src/sarah/project_attributions.py"], capture_output=True, text=True)
+                if result.returncode == 0:
+                    st.success("Daten erfolgreich neu geladen. Bitte Seite neu laden.")
+                else:
+                    st.error(f"Fehler beim Neuladen: {result.stderr}")
+    
         st.success("Workflow abgeschlossen.")
 
 def do_second():
     # Tabs für Schritt 1 DCC: Vorbereitung
     tabs = st.tabs(["Einstieg", "Punkt 1", "Punkt 2", "Punkt 3", "Freigabe"])
+
+    # === Dateien laden ===
+    json_path = "attributions.json"
+    workflow_path = "workflow_ogd_stati.json"
+
+    if not os.path.exists(json_path) or not os.path.exists(workflow_path):
+        st.error("Benötigte Datei fehlt.")
+        st.stop()
+
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    with open(workflow_path, "r", encoding="utf-8") as f:
+        status_liste = json.load(f)
 
     # Tab Einstieg
     with tabs[0]:
@@ -379,9 +633,51 @@ def do_second():
     4. Zweite Veröffentlichungs-Freigabe in Dataspot durch **DO**
     5. Abschluss des Freigabe-Prozess und Veröffentlichung durch **DCC**
                         """)
-        st.subheader("Einstieg")
-        
+        st.subheader("Projekt auswählen")
 
+        # Projekte extrahieren
+        projekt_mapping = {
+            pid: label
+            for pid, label in data.get("projects", {}).items()
+            if (
+                isinstance(data.get("attributions", {}).get(pid), dict)
+                and data["attributions"][pid].get("_type") == "Project"
+            )
+        }
+        projekt_namen = sorted(projekt_mapping.values())
+        projekt_id_lookup = {v: k for k, v in projekt_mapping.items()}
+
+        # Projektwahl mit leerer Vorauswahl
+        gewähltes_projekt = st.selectbox(
+            label="Projekt auswählen",
+            options=[""] + projekt_namen,
+            index=0,
+            label_visibility="hidden"
+        )
+
+        if gewähltes_projekt:
+            projekt_id = projekt_id_lookup[gewähltes_projekt]
+            projekt_eintrag = data["attributions"][projekt_id]
+            aktuelle_attributions = projekt_eintrag.get("personen", [])
+
+            # Mapping zur Anzeige der Rollen und Namen
+            person_id_to_name = data.get("persons", {})
+            role_id_to_name = data.get("roles", {})
+
+            st.markdown("#### Zugewiesene Personen")
+
+            if aktuelle_attributions:
+                for eintrag in aktuelle_attributions:
+                    person_id = eintrag.get("person")
+                    role_id = eintrag.get("role")
+
+                    person_name = person_id_to_name.get(person_id, f"(unbekannt: {person_id})")
+                    role_name = role_id_to_name.get(role_id, f"(unbekannt: {role_id})")
+
+                    st.write(f"- **{person_name}** als **{role_name}**")
+            else:
+                st.info("Diesem Projekt sind noch keine Personen mit Rollen zugewiesen.")
+        
     # Tab Frage 1
     with tabs[1]:
         col1, col2 = st.columns(2)
@@ -442,6 +738,60 @@ def do_second():
     # Tab Abschluss
     with tabs[4]:
         st.subheader("Zweite Freigabestufe")
+
+        # Mapping für schnellen Zugriff: {"WORKING": "In Entwurf", ...}
+        status_labels = {entry["status"]: entry["label"] for entry in status_liste}
+
+        # Reine Statuswerte für Dropdown
+        status_options = [entry["status"] for entry in status_liste]
+
+        # === Projekt-Daten vorbereiten ===
+        projekt_mapping = data.get("projects", {})
+        attributions = data.get("attributions", {})
+
+        projekt_namen = sorted(projekt_mapping.values())
+        projekt_id_lookup = {v: k for k, v in projekt_mapping.items()}
+        gewähltes_projekt = st.selectbox("Projekt auswählen", projekt_namen)
+
+        if gewähltes_projekt:
+            projekt_id = projekt_id_lookup[gewähltes_projekt]
+            aktueller_status = attributions.get(projekt_id, {}).get("status", None)
+
+            st.markdown(f"**Aktueller Status:** `{aktueller_status}` - **{status_labels.get(aktueller_status, 'Unbekannt')}**")
+
+            neuer_status = st.selectbox(
+            "Neuen Status wählen",
+            options=status_options,
+            format_func=lambda x: status_labels.get(x, x),
+            index=status_options.index(aktueller_status) if aktueller_status in status_options else 0
+        )
+
+            if st.button("Status aktualisieren und hochladen"):
+                if projekt_id in attributions:
+                    attributions[projekt_id]["status"] = neuer_status
+                else:
+                    st.warning("Projekt nicht in attributions.json gefunden – wird neu angelegt.")
+                    attributions[projekt_id] = {"status": neuer_status, "personen": []}
+                    st.json(attributions[projekt_id])
+
+                data["attributions"] = attributions
+                with open(json_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+
+                result = subprocess.run(["python", "src/sarah/project_attr_sync.py", projekt_id], capture_output=True, text=True)
+                if result.returncode == 0:
+                    st.success("Status gespeichert und zur API übertragen.")
+                else:
+                    # st.error(f"Fehler beim Sync: {result.stderr}")
+                    st.error(f"Fehler beim Sync")
+
+            if st.button("Aktuelle Daten von API laden"):
+                result = subprocess.run(["python", "src/sarah/project_attributions.py"], capture_output=True, text=True)
+                if result.returncode == 0:
+                    st.success("Daten erfolgreich neu geladen. Bitte Seite neu laden.")
+                else:
+                    st.error(f"Fehler beim Neuladen: {result.stderr}")
+    
         st.success("Workflow abgeschlossen.")
 
 def dcc_end():
