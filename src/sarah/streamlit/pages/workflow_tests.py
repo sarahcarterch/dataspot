@@ -63,46 +63,94 @@ def struktur (vorlage_path: str, projektname: str, personenliste: list) -> dict:
     struktur["projekt"]["personen"] = neue_personen
     return struktur
 
-def zeige_aktuelles_projekt():
-    if "aktives_projekt" in st.session_state and st.session_state.aktives_projekt:
-        st.markdown(f"Aktives Projekt: `{st.session_state.aktives_projekt}`")
-        return True
-    else:
-        st.warning("Kein Projekt festgelegt.")
-        return False
+def neue_person_vorlage():
+    return {
+        "person": "",
+        "rolle": "",
+        "status": "",
+        "antworten": {
+            "frage_1": {"kommentar": "", "antwort": ""},
+            "frage_2": {"kommentar": "", "antwort": ""},
+            "frage_3": {"kommentar": "", "antwort": ""}
+        }
+    }
 
-# Hier weiter
-VALIDIERUNGSPFAD = "validierungsstruktur.json"
-
-def prüfe_oder_erzeuge_projektstruktur():
-    projekt_name = st.session_state.get("aktives_projekt", "").strip()
+def projekt_initialisieren_und_anzeigen():
+    projekt_name = (st.session_state.get("aktives_projekt") or "").strip()
 
     if not projekt_name:
-        st.warning("Kein Projekt festgelegt. Bitte zuerst eines auswählen und bestätigen.")
-        st.stop()
+        return None, None
 
-    # Datei laden oder leere Struktur erzeugen
+    st.markdown(f"Aktives Projekt: `{projekt_name}`")
+
+    # Datei einlesen oder leere Datenstruktur erstellen
     if os.path.exists(VALIDIERUNGSPFAD):
-        with open(VALIDIERUNGSPFAD, "r", encoding="utf-8") as f:
-            daten = json.load(f)
+        try:
+            with open(VALIDIERUNGSPFAD, "r", encoding="utf-8") as f:
+                daten = json.load(f)
+        except json.JSONDecodeError:
+            daten = {}
     else:
-        daten = {"projekt": {}}
+        daten = {}
 
-    # Falls Projekt noch nicht vorhanden → hinzufügen
+    # Wenn kein "projekt"-Schlüssel vorhanden ist, initialisiere ihn
+    if "projekt" not in daten or not isinstance(daten["projekt"], dict):
+        daten["projekt"] = {}
+
+    # Projektstruktur anlegen, falls noch nicht vorhanden
     if projekt_name not in daten["projekt"]:
         daten["projekt"][projekt_name] = {
-            "personen": []
+            "personen": [neue_person_vorlage()]
         }
 
         with open(VALIDIERUNGSPFAD, "w", encoding="utf-8") as f:
             json.dump(daten, f, indent=2, ensure_ascii=False)
 
-        st.info(f"Projekt `{projekt_name}` wurde neu in der Struktur erfasst.")
-
-    # Projekt anzeigen
-    st.markdown(f"### Aktives Projekt: `{projekt_name}`")
+        st.info(f"Projekt  `{projekt_name}`  wurde neu mit Grundstruktur erfasst.")
 
     return projekt_name, daten
+
+def zeige_validierungsstruktur():
+    if os.path.exists(VALIDIERUNGSPFAD):
+        with open(VALIDIERUNGSPFAD, "r", encoding="utf-8") as f:
+            daten = json.load(f)
+        if not isinstance(daten, dict) or "projekt" not in daten:
+            daten = {"projekt": {}}
+    else:
+        daten = {"projekt": {}}
+
+    projekte = daten.get("projekt", {})
+
+    zeilen = []
+    for projekt, eintrag in projekte.items():
+        personen = eintrag.get("personen", [])
+        for p in personen:
+            if isinstance(p, dict):
+                antworten = p.get("antworten", {})
+                zeile = {
+                    "Projekt": projekt,
+                    "Person": p.get("person", ""),
+                    "Rolle": p.get("rolle", ""),
+                    "Status": p.get("status", ""),
+                    "Frage 1 - Antwort": antworten.get("frage_1", {}).get("antwort", ""),
+                    "Frage 1 - Kommentar": antworten.get("frage_1", {}).get("kommentar", ""),
+                    "Frage 2 - Antwort": antworten.get("frage_2", {}).get("antwort", ""),
+                    "Frage 2 - Kommentar": antworten.get("frage_2", {}).get("kommentar", ""),
+                    "Frage 3 - Antwort": antworten.get("frage_3", {}).get("antwort", ""),
+                    "Frage 3 - Kommentar": antworten.get("frage_3", {}).get("kommentar", "")
+                }
+                zeilen.append(zeile)
+            else:
+                zeilen.append({
+                    "Projekt": projekt,
+                    "Person": p
+                })
+
+    if zeilen:
+        df = pd.DataFrame(zeilen)
+        st.data_editor(df, use_container_width=True, num_rows="dynamic", key="validierungstabelle")
+    else:
+        st.info("Keine Einträge vorhanden.")
 
 def einstieg():
     st.title("Workflow OGD-Freigaben")
@@ -961,7 +1009,7 @@ def main():
     # 
 
     # Radio-Buttons für die Workflow-Schritte
-    subpages = st.sidebar.radio("Bearbeitungs-Schritt wählen", ["Einstieg", "Vorbereitung (DCC)","Erste Prüfung (Data Steward)","Zweite Prüfung (Data Owner)","Abschluss (DCC)"])
+    subpages = st.sidebar.radio("Bearbeitungs-Schritt wählen", ["Einstieg", "Vorbereitung (DCC)","Erste Prüfung (Data Steward)","Zweite Prüfung (Data Owner)","Abschluss (DCC)","Vorschau"])
 
     if subpages == "Einstieg":
         einstieg()
@@ -970,16 +1018,20 @@ def main():
         dcc_vorb()
     elif subpages == "Erste Prüfung (Data Steward)":
         st.header("Erste Prüfung durch Data Steward")
-        zeige_aktuelles_projekt()
+        projekt_initialisieren_und_anzeigen()
         ds_first()
     elif subpages == "Zweite Prüfung (Data Owner)":
         st.header("Zweite Prüfung durch Data Owner")
-        zeige_aktuelles_projekt()
+        projekt_initialisieren_und_anzeigen()
         do_second()
-    else:
+    elif subpages == "Abschluss (DCC)":
         st.header("Abschluss durch DCC")
-        zeige_aktuelles_projekt()
+        projekt_initialisieren_und_anzeigen()
         dcc_end()
+    else:
+        st.header("Vorschau")
+        projekt_initialisieren_und_anzeigen()
+        zeige_validierungsstruktur()
 
 if __name__ == "__main__":
     main()
