@@ -12,9 +12,11 @@ import pandas as pd
 from src.dataspot_auth import *
 import subprocess
 import json
+from copy import deepcopy
 import os
 
 auth = DataspotAuth()
+VALIDIERUNGSPFAD = "validierungsstruktur.json"
 
 # Daten von der API holen
 @st.cache_data(show_spinner="Lade Konten...")
@@ -26,6 +28,81 @@ def lade_konten():
     data_u = response_u.json()
     
     return data_u.get("_embedded", {}).get("users", [])
+
+def struktur (vorlage_path: str, projektname: str, personenliste: list) -> dict:
+    """
+    Füllt die JSON-Vorlage mit Projektname und Personenangaben.
+    Die leeren Fragen aus der Vorlage werden für jede Person übernommen.
+    
+    :param vorlage_path: Pfad zur JSON-Vorlage
+    :param projektname: Projektname als String
+    :param personenliste: Liste von Personen mit mind. "person", "rolle", "status"
+    :return: Gefüllte Struktur als Dictionary
+    """
+    # Vorlage laden
+    with open(vorlage_path, "r", encoding="utf-8") as f:
+        struktur = json.load(f)
+
+    struktur["projekt"]["projektName"] = projektname
+
+    # Leere Fragenstruktur aus Vorlage holen (vom ersten Personeneintrag)
+    leerer_fragenblock = (
+        struktur["projekt"].get("personen", [{}])[0].get("antworten", {})
+    )
+
+    neue_personen = []
+    for person in personenliste:
+        eintrag = {
+            "person": person["person"],
+            "rolle": person["rolle"],
+            "status": person.get("status", ""),
+            "antworten": deepcopy(leerer_fragenblock)
+        }
+        neue_personen.append(eintrag)
+
+    struktur["projekt"]["personen"] = neue_personen
+    return struktur
+
+def zeige_aktuelles_projekt():
+    if "aktives_projekt" in st.session_state and st.session_state.aktives_projekt:
+        st.markdown(f"Aktives Projekt: `{st.session_state.aktives_projekt}`")
+        return True
+    else:
+        st.warning("Kein Projekt festgelegt.")
+        return False
+
+# Hier weiter
+VALIDIERUNGSPFAD = "validierungsstruktur.json"
+
+def prüfe_oder_erzeuge_projektstruktur():
+    projekt_name = st.session_state.get("aktives_projekt", "").strip()
+
+    if not projekt_name:
+        st.warning("Kein Projekt festgelegt. Bitte zuerst eines auswählen und bestätigen.")
+        st.stop()
+
+    # Datei laden oder leere Struktur erzeugen
+    if os.path.exists(VALIDIERUNGSPFAD):
+        with open(VALIDIERUNGSPFAD, "r", encoding="utf-8") as f:
+            daten = json.load(f)
+    else:
+        daten = {"projekt": {}}
+
+    # Falls Projekt noch nicht vorhanden → hinzufügen
+    if projekt_name not in daten["projekt"]:
+        daten["projekt"][projekt_name] = {
+            "personen": []
+        }
+
+        with open(VALIDIERUNGSPFAD, "w", encoding="utf-8") as f:
+            json.dump(daten, f, indent=2, ensure_ascii=False)
+
+        st.info(f"Projekt `{projekt_name}` wurde neu in der Struktur erfasst.")
+
+    # Projekt anzeigen
+    st.markdown(f"### Aktives Projekt: `{projekt_name}`")
+
+    return projekt_name, daten
 
 def einstieg():
     st.title("Workflow OGD-Freigaben")
@@ -456,13 +533,30 @@ def ds_first():
         projekt_namen = sorted(projekt_mapping.values())
         projekt_id_lookup = {v: k for k, v in projekt_mapping.items()}
 
-        # Projektwahl mit leerer Vorauswahl
+        # Projektwahl
         gewähltes_projekt = st.selectbox(
             label="Projekt auswählen",
             options=[""] + projekt_namen,
             index=0,
-            label_visibility="hidden"
+            label_visibility="hidden",
+            key="active"
         )
+
+    # Session State / Aktives Projekt fixieren
+        # Initialisierung (nur beim ersten Laden)
+        if "aktives_projekt" not in st.session_state:
+            st.session_state.aktives_projekt = None
+
+        # Button zum Fixieren
+        if st.button("Projekt festlegen"):
+            st.session_state.aktives_projekt = st.session_state.active
+            st.write("(Zweimal klicken.)")
+
+        # Anzeige des fixierten Projekts
+        if st.session_state.aktives_projekt:
+            st.success(f"Aktives Projekt: {st.session_state.aktives_projekt}")
+        else:
+            st.info("Kein Projekt festgelegt. Bitte wählen und bestätigen.")
 
         if gewähltes_projekt:
             projekt_id = projekt_id_lookup[gewähltes_projekt]
@@ -486,7 +580,7 @@ def ds_first():
                     st.write(f"- **{person_name}** als **{role_name}**")
             else:
                 st.info("Diesem Projekt sind noch keine Personen mit Rollen zugewiesen.")
-  
+          
     # Tab Frage 1
     with tabs[1]:
         col1, col2 = st.columns(2)
@@ -647,13 +741,30 @@ def do_second():
         projekt_namen = sorted(projekt_mapping.values())
         projekt_id_lookup = {v: k for k, v in projekt_mapping.items()}
 
-        # Projektwahl mit leerer Vorauswahl
+        # Projektwahl
         gewähltes_projekt = st.selectbox(
             label="Projekt auswählen",
             options=[""] + projekt_namen,
             index=0,
-            label_visibility="hidden"
+            label_visibility="hidden",
+            key="active"
         )
+
+    # Session State / Aktives Projekt fixieren
+        # Initialisierung (nur beim ersten Laden)
+        if "aktives_projekt" not in st.session_state:
+            st.session_state.aktives_projekt = None
+
+        # Button zum Fixieren
+        if st.button("Projekt festlegen"):
+            st.session_state.aktives_projekt = st.session_state.active
+            st.write("(Zweimal klicken.)")
+
+        # Anzeige des fixierten Projekts
+        if st.session_state.aktives_projekt:
+            st.success(f"Aktives Projekt: {st.session_state.aktives_projekt}")
+        else:
+            st.info("Kein Projekt festgelegt. Bitte wählen und bestätigen.")
 
         if gewähltes_projekt:
             projekt_id = projekt_id_lookup[gewähltes_projekt]
@@ -847,6 +958,7 @@ def dcc_end():
 
 def main():
     st.set_page_config(page_title="Workflow", layout="wide")
+    # 
 
     # Radio-Buttons für die Workflow-Schritte
     subpages = st.sidebar.radio("Bearbeitungs-Schritt wählen", ["Einstieg", "Vorbereitung (DCC)","Erste Prüfung (Data Steward)","Zweite Prüfung (Data Owner)","Abschluss (DCC)"])
@@ -858,12 +970,15 @@ def main():
         dcc_vorb()
     elif subpages == "Erste Prüfung (Data Steward)":
         st.header("Erste Prüfung durch Data Steward")
+        zeige_aktuelles_projekt()
         ds_first()
     elif subpages == "Zweite Prüfung (Data Owner)":
         st.header("Zweite Prüfung durch Data Owner")
+        zeige_aktuelles_projekt()
         do_second()
     else:
         st.header("Abschluss durch DCC")
+        zeige_aktuelles_projekt()
         dcc_end()
 
 if __name__ == "__main__":
